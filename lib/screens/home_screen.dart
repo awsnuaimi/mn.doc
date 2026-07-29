@@ -26,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = false;
 
   Future<void> _pickAndOpen() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'doc', 'docx'],
     );
