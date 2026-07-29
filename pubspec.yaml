@@ -19,8 +19,8 @@ dependencies:
   open_filex: ^4.5.0                  # فتح الملفات بالتطبيقات الخارجية
 
   # -------- عرض وتحرير PDF --------
-  syncfusion_flutter_pdfviewer: ^26.2.14   # عارض PDF احترافي (تكبير/بحث/تنقل)
-  syncfusion_flutter_pdf: ^26.2.14         # إنشاء/تحرير/كتابة نصوص داخل PDF
+  syncfusion_flutter_pdfviewer: any        # عارض PDF احترافي (تكبير/بحث/تنقل) — أحدث نسخة متوافقة
+  syncfusion_flutter_pdf: any               # إنشاء/تحرير/كتابة نصوص داخل PDF — أحدث نسخة متوافقة
   pdf: ^3.11.1                              # إنشاء ملفات PDF من الصفر
   printing: ^5.13.3                         # معاينة وطباعة/تصدير PDF
 
