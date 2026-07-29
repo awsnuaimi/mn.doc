@@ -1,0 +1,72 @@
+name: mn_doc
+description: "MN-Doc — محرر مستندات احترافي: عرض وتحرير PDF، كتابة نصوص داخل الملفات، والتعرف الضوئي على النصوص (OCR)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # -------- إدارة الملفات --------
+  file_picker: ^8.1.2                 # اختيار ملفات من الجهاز
+  path_provider: ^2.1.4               # مسارات التخزين المحلي
+  permission_handler: ^11.3.1         # صلاحيات التخزين/الكاميرا
+  share_plus: ^10.0.2                 # مشاركة الملفات
+  open_filex: ^4.5.0                  # فتح الملفات بالتطبيقات الخارجية
+
+  # -------- عرض وتحرير PDF --------
+  syncfusion_flutter_pdfviewer: ^26.2.14   # عارض PDF احترافي (تكبير/بحث/تنقل)
+  syncfusion_flutter_pdf: ^26.2.14         # إنشاء/تحرير/كتابة نصوص داخل PDF
+  pdf: ^3.11.1                              # إنشاء ملفات PDF من الصفر
+  printing: ^5.13.3                         # معاينة وطباعة/تصدير PDF
+
+  # -------- عرض وتحرير مستندات أخرى --------
+  syncfusion_flutter_pdfviewer_platform_interface: ^26.2.14
+
+  # -------- OCR (التعرف الضوئي على النصوص) --------
+  google_mlkit_text_recognition: ^0.14.0
+  image_picker: ^1.1.2
+  camera: ^0.11.0+2
+
+  # -------- الذكاء الاصطناعي --------
+  google_mlkit_translation: ^0.13.0     # ترجمة على الجهاز، مجانية بالكامل وبدون إنترنت
+  google_mlkit_language_id: ^0.13.0     # كشف لغة النص تلقائيًا (مجاني وعلى الجهاز)
+  http: ^1.2.2                          # للاتصال بـ Gemini API (الفئة المجانية) للتلخيص/الدردشة
+  shared_preferences: ^2.3.2            # حفظ مفتاح API محليًا على الجهاز
+
+  # -------- الصور والتحرير --------
+  image: ^4.3.0
+
+  # -------- إدارة الحالة --------
+  provider: ^6.1.2
+
+  # -------- واجهة وتصميم --------
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+# ------------------------------------------------------------------
+# إعداد أيقونة التطبيق تلقائيًا من assets/icon/icon.png
+# نفّذ الأمر التالي مرة واحدة بعد flutter pub get:
+#   flutter pub run flutter_launcher_icons
+# ------------------------------------------------------------------
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0D2A4A"
+  adaptive_icon_foreground: "assets/icon/icon.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/
