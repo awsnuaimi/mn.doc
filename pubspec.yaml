@@ -24,9 +24,6 @@ dependencies:
   pdf: ^3.11.1                              # إنشاء ملفات PDF من الصفر
   printing: ^5.13.3                         # معاينة وطباعة/تصدير PDF
 
-  # -------- عرض وتحرير مستندات أخرى --------
-  syncfusion_flutter_pdfviewer_platform_interface: ^26.2.14
-
   # -------- OCR (التعرف الضوئي على النصوص) --------
   google_mlkit_text_recognition: ^0.14.0
   image_picker: ^1.1.2
