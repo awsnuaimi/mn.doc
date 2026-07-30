@@ -15,6 +15,12 @@ import 'rotate_pages_screen.dart';
 import 'tts_reader_screen.dart';
 import 'extract_table_screen.dart';
 import 'manage_signatures_screen.dart';
+import 'word_to_pdf_screen.dart';
+import 'images_to_pdf_screen.dart';
+import 'pdf_to_images_screen.dart';
+import 'print_pdf_screen.dart';
+import 'barcode_scanner_screen.dart';
+import 'redact_edit_screen.dart';
 
 /// مركز أدوات PDF المتقدمة: دمج، حذف/ترتيب صفحات، وتوقيع إلكتروني.
 class PdfToolsScreen extends StatelessWidget {
@@ -88,6 +94,42 @@ class PdfToolsScreen extends StatelessWidget {
         title: 'استخراج جداول PDF إلى Excel',
         subtitle: 'تصدير تقريبي للجداول (طريقة تخمينية)',
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtractTableScreen())),
+      ),
+      _ToolData(
+        icon: Icons.description_rounded,
+        title: 'تحويل Word إلى PDF',
+        subtitle: 'استخراج نص .docx وتحويله لملف PDF (بدون تنسيق)',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WordToPdfScreen())),
+      ),
+      _ToolData(
+        icon: Icons.perm_media_rounded,
+        title: 'تحويل صور إلى PDF',
+        subtitle: 'اجمع عدة صور بملف PDF واحد',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImagesToPdfScreen())),
+      ),
+      _ToolData(
+        icon: Icons.image_rounded,
+        title: 'تحويل PDF إلى صور',
+        subtitle: 'صدّر أي صفحة (أو كل الصفحات) كصورة PNG',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PdfToImagesScreen())),
+      ),
+      _ToolData(
+        icon: Icons.print_rounded,
+        title: 'طباعة PDF',
+        subtitle: 'اطبع مباشرة عبر طابعة لاسلكية أو احفظ كملف',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrintPdfScreen())),
+      ),
+      _ToolData(
+        icon: Icons.qr_code_scanner_rounded,
+        title: 'التعرف على QR والباركود',
+        subtitle: 'من صورة أو من صفحة داخل ملف PDF',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen())),
+      ),
+      _ToolData(
+        icon: Icons.edit_note_rounded,
+        title: 'تعديل/حذف نص موجود بالملف',
+        subtitle: 'اسحب فوق أي نص لتغطيته أو استبداله (طريقة عملية تقريبية)',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RedactEditScreen())),
       ),
     ];
 
