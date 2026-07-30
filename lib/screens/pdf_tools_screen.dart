@@ -14,6 +14,7 @@ import 'compare_pdf_screen.dart';
 import 'rotate_pages_screen.dart';
 import 'tts_reader_screen.dart';
 import 'extract_table_screen.dart';
+import 'manage_signatures_screen.dart';
 
 /// مركز أدوات PDF المتقدمة: دمج، حذف/ترتيب صفحات، وتوقيع إلكتروني.
 class PdfToolsScreen extends StatelessWidget {
@@ -37,8 +38,14 @@ class PdfToolsScreen extends StatelessWidget {
       _ToolData(
         icon: Icons.draw_rounded,
         title: 'توقيع إلكتروني',
-        subtitle: 'ارسم توقيعك وضعه بأي مكان بملف PDF',
+        subtitle: 'اختر توقيع/ختم محفوظ، أو ارسم جديدًا، وضعه بالملف',
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignatureScreen())),
+      ),
+      _ToolData(
+        icon: Icons.badge_rounded,
+        title: 'إدارة التواقيع والأختام',
+        subtitle: 'عرض وحذف التواقيع والأختام المحفوظة',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageSignaturesScreen())),
       ),
       _ToolData(
         icon: Icons.lock_rounded,
