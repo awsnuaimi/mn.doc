@@ -25,7 +25,11 @@ class MnDocApp extends StatelessWidget {
       builder: (context, child) {
         return Directionality(
           textDirection: TextDirection.rtl,
-          child: child ?? const SizedBox.shrink(),
+          child: SafeArea(
+            top: false, // الشريط العلوي (AppBar) يتعامل مع هذا بنفسه
+            bottom: true, // يمنع تغطية أزرار Navigation تبع أندرويد لمحتوى التطبيق
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
       home: const HomeScreen(),
