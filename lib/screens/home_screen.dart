@@ -14,6 +14,7 @@ import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'ai_settings_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'scanner_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -212,6 +213,11 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icons.document_scanner_rounded,
           label: 'التعرف الضوئي (OCR)',
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OcrScreen())),
+        ),
+        _ActionData(
+          icon: Icons.camera_alt_rounded,
+          label: 'مسح ضوئي للمستندات (Scanner)',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen())),
         ),
         _ActionData(
           icon: Icons.note_add_rounded,
