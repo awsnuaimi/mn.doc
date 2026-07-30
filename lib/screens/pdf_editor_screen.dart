@@ -47,6 +47,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   bool _addTextMode = false;
   bool _saving = false;
+  bool _flattenFormsOnSave = false;
+  bool _hasFormFields = false;
   int _currentPage = 1;
 
   // ------- البحث داخل PDF -------
@@ -246,6 +248,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
+  void _onDocumentLoaded(PdfDocumentLoadedDetails details) {
+    final formFields = _controller.getFormFields();
+    if (formFields.isNotEmpty) {
+      setState(() => _hasFormFields = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('هذا الملف يحتوي ${formFields.length} حقل/حقول قابلة للتعبئة — اضغط عليها مباشرة لملئها'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      });
+    }
+  }
+
   void _setAnnotationMode(PdfAnnotationMode mode) {
     setState(() {
       _controller.annotationMode =
@@ -257,8 +275,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     setState(() => _saving = true);
     try {
       // الخطوة 1: احفظ نسخة تتضمن تعليقات العارض المدمجة
-      // (تظليل/تسطير/شطب/ملاحظات لاصقة) التي أضافها المستخدم مباشرة.
-      final List<int> viewerBytes = await _controller.saveDocument();
+      // (تظليل/تسطير/شطب/ملاحظات لاصقة) وبيانات حقول النموذج التي عبّأها المستخدم.
+      final List<int> viewerBytes = await _controller.saveDocument(
+        flattenOption: _flattenFormsOnSave ? PdfFlattenOption.formFields : PdfFlattenOption.none,
+      );
 
       // الخطوة 2: افتح تلك النسخة وأضف فوقها نصوصنا المخصّصة (المربّعات النصية).
       final sf.PdfDocument document = sf.PdfDocument(inputBytes: viewerBytes);
@@ -447,6 +467,26 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               ),
             ),
           ),
+          if (_hasFormFields)
+            Container(
+              width: double.infinity,
+              color: Colors.green.withOpacity(0.1),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.fact_check_rounded, size: 18, color: Colors.green),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('هذا الملف يحتوي نموذجًا قابلاً للتعبئة', style: TextStyle(fontSize: 12)),
+                  ),
+                  const Text('تثبيت عند الحفظ', style: TextStyle(fontSize: 11)),
+                  Switch(
+                    value: _flattenFormsOnSave,
+                    onChanged: (v) => setState(() => _flattenFormsOnSave = v),
+                  ),
+                ],
+              ),
+            ),
           if (_addTextMode)
             Container(
               width: double.infinity,
@@ -474,6 +514,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     onPageChanged: (details) {
                       _currentPage = details.newPageNumber;
                     },
+                    onDocumentLoaded: _onDocumentLoaded,
                   ),
                 ),
                 // طبقة عرض النصوص المضافة على الصفحة الحالية فقط
