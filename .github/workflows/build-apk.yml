@@ -20,6 +20,9 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: تنظيف الملفات المؤقتة القديمة
+        run: flutter clean
+
       - name: تثبيت الاعتماديات
         run: flutter pub get
 
