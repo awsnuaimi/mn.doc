@@ -54,6 +54,7 @@ dependencies:
   google_mlkit_barcode_scanning: any     # التعرف على QR/الباركود (أحدث نسخة متوافقة)
   package_info_plus: ^8.1.2              # قراءة رقم إصدار التطبيق الحالي
   url_launcher: ^6.3.1                    # فتح رابط تنزيل التحديث بالمتصفح
+  speech_to_text: any                     # تحويل الصوت إلى نص (أحدث نسخة متوافقة)
 
 dev_dependencies:
   flutter_test:

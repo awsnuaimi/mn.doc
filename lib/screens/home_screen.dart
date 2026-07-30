@@ -19,6 +19,8 @@ import 'ai_settings_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'scanner_screen.dart';
 import 'settings_screen.dart';
+import 'file_manager_screen.dart';
+import '../services/file_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _recent.removeWhere((d) => d.path == item.path);
       _recent.insert(0, item);
     });
+    FileManagerService.registerOpened(item.path, item.name);
 
     if (!mounted) return;
     _openDocument(item);
@@ -212,6 +215,11 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icons.folder_open_rounded,
           label: t('open_file'),
           onTap: _pickAndOpen,
+        ),
+        _ActionData(
+          icon: Icons.folder_copy_rounded,
+          label: 'مدير الملفات',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen())),
         ),
         _ActionData(
           icon: Icons.picture_as_pdf_rounded,

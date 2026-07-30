@@ -21,6 +21,8 @@ import 'pdf_to_images_screen.dart';
 import 'print_pdf_screen.dart';
 import 'barcode_scanner_screen.dart';
 import 'redact_edit_screen.dart';
+import 'voice_dictation_screen.dart';
+import 'repair_pdf_screen.dart';
 
 /// مركز أدوات PDF المتقدمة: دمج، حذف/ترتيب صفحات، وتوقيع إلكتروني.
 class PdfToolsScreen extends StatelessWidget {
@@ -130,6 +132,18 @@ class PdfToolsScreen extends StatelessWidget {
         title: 'تعديل/حذف نص موجود بالملف',
         subtitle: 'اسحب فوق أي نص لتغطيته أو استبداله (طريقة عملية تقريبية)',
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RedactEditScreen())),
+      ),
+      _ToolData(
+        icon: Icons.mic_rounded,
+        title: 'إملاء صوتي',
+        subtitle: 'حوّل كلامك لنص مباشرة واحفظه كملف PDF',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceDictationScreen())),
+      ),
+      _ToolData(
+        icon: Icons.build_rounded,
+        title: 'إصلاح ملف PDF تالف',
+        subtitle: 'محاولة إصلاح مشاكل الفهرسة الداخلية الشائعة',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RepairPdfScreen())),
       ),
     ];
 
