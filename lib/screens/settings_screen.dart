@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/update_checker.dart';
 import '../theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -14,12 +17,58 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _nameController;
+  bool _checkingUpdate = false;
+  String? _currentVersion;
 
   @override
   void initState() {
     super.initState();
     final settings = context.read<AppSettingsController>();
     _nameController = TextEditingController(text: settings.displayName);
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _currentVersion = info.version);
+  }
+
+  Future<void> _checkForUpdates() async {
+    setState(() => _checkingUpdate = true);
+    final result = await UpdateChecker.check();
+    if (!mounted) return;
+    setState(() => _checkingUpdate = false);
+
+    if (result.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error!)));
+      return;
+    }
+
+    if (result.updateAvailable) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('يوجد تحديث جديد! 🎉'),
+          content: Text('الإصدار الحالي: ${result.currentVersion}\nالإصدار الجديد: ${result.latestVersion}'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('لاحقًا')),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                if (result.downloadUrl != null) {
+                  launchUrl(Uri.parse(result.downloadUrl!), mode: LaunchMode.externalApplication);
+                }
+              },
+              child: const Text('تنزيل التحديث'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('التطبيق محدَّث لآخر إصدار ✅')),
+      );
+    }
   }
 
   @override
@@ -124,6 +173,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(
                     AppText.t('language_note', ar),
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // ---------------- التحديثات ----------------
+            _SectionCard(
+              title: 'التحديثات',
+              icon: Icons.system_update_rounded,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    _currentVersion != null ? 'الإصدار الحالي: $_currentVersion' : 'جارٍ التحقق من رقم الإصدار...',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ElevatedButton.icon(
+                    onPressed: _checkingUpdate ? null : _checkForUpdates,
+                    icon: _checkingUpdate
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.refresh_rounded),
+                    label: Text(_checkingUpdate ? 'جارٍ التحقق...' : 'التحقق من وجود تحديثات'),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(double.infinity, 46)),
                   ),
                 ),
               ],
