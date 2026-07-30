@@ -30,11 +30,12 @@ jobs:
       - name: توليد أيقونة التطبيق
         run: flutter pub run flutter_launcher_icons
 
-      - name: فك تشفير مفتاح التوقيع (إن وُجد)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+- name: فك تشفير مفتاح التوقيع (إن وُجد)
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/release.jks
-          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/release.jks
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
+          fi
 
       - name: بناء ملف APK
         run: flutter build apk --release
