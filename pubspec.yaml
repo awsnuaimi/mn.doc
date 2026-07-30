@@ -49,6 +49,8 @@ dependencies:
   # -------- ميزات إضافية --------
   flutter_tts: ^4.2.2                   # قراءة المستند بصوت (Text-to-Speech)
   excel: ^4.0.6                          # تصدير الجداول المستخرجة إلى Excel
+  archive: ^3.6.1                        # فك ضغط ملفات .docx (Dart خالص، بدون كود أندرويد)
+  xml: ^6.5.0                            # تحليل محتوى XML داخل ملفات .docx
 
 dev_dependencies:
   flutter_test:
