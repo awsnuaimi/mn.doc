@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../theme/app_theme.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import 'merge_pdf_screen.dart';
 import 'manage_pages_screen.dart';
 import 'signature_screen.dart';
@@ -30,146 +33,153 @@ class PdfToolsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     final tools = [
       _ToolData(
         icon: Icons.merge_type_rounded,
-        title: 'دمج ملفات PDF',
-        subtitle: 'اجمع عدة ملفات بملف واحد بالترتيب اللي تحدده',
+        title: tr('tool_merge_t'),
+        subtitle: tr('tool_merge_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MergePdfScreen())),
       ),
       _ToolData(
         icon: Icons.reorder_rounded,
-        title: 'حذف وإعادة ترتيب الصفحات',
-        subtitle: 'احذف صفحات معينة أو رتّب صفحات الملف بالسحب',
+        title: tr('tool_pages_t'),
+        subtitle: tr('tool_pages_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManagePagesScreen())),
       ),
       _ToolData(
         icon: Icons.draw_rounded,
-        title: 'توقيع إلكتروني',
-        subtitle: 'اختر توقيع/ختم محفوظ، أو ارسم جديدًا، وضعه بالملف',
+        title: tr('tool_sign_t'),
+        subtitle: tr('tool_sign_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignatureScreen())),
       ),
       _ToolData(
         icon: Icons.badge_rounded,
-        title: 'إدارة التواقيع والأختام',
-        subtitle: 'عرض وحذف التواقيع والأختام المحفوظة',
+        title: tr('tool_signmanage_t'),
+        subtitle: tr('tool_signmanage_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageSignaturesScreen())),
       ),
       _ToolData(
         icon: Icons.lock_rounded,
-        title: 'حماية بكلمة مرور',
-        subtitle: 'أضف أو أزل كلمة مرور من ملف PDF',
+        title: tr('tool_protect_t'),
+        subtitle: tr('tool_protect_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProtectPdfScreen())),
       ),
       _ToolData(
         icon: Icons.water_drop_rounded,
-        title: 'علامة مائية',
-        subtitle: 'أضف نص علامة مائية بأي زاوية وشفافية',
+        title: tr('tool_watermark_t'),
+        subtitle: tr('tool_watermark_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WatermarkScreen())),
       ),
       _ToolData(
         icon: Icons.compress_rounded,
-        title: 'ضغط حجم PDF',
-        subtitle: 'قلّل حجم الملف قدر الإمكان',
+        title: tr('tool_compress_t'),
+        subtitle: tr('tool_compress_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompressPdfScreen())),
       ),
       _ToolData(
         icon: Icons.compare_arrows_rounded,
-        title: 'مقارنة ملفين PDF',
-        subtitle: 'أظهر الفروقات النصية بين ملفين',
+        title: tr('tool_compare_t'),
+        subtitle: tr('tool_compare_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComparePdfScreen())),
       ),
       _ToolData(
         icon: Icons.rotate_right_rounded,
-        title: 'تدوير وإزالة الصفحات الفارغة',
-        subtitle: 'دوّر أي صفحة واكتشف الصفحات الفارغة تلقائيًا',
+        title: tr('tool_rotate_t'),
+        subtitle: tr('tool_rotate_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RotatePagesScreen())),
       ),
       _ToolData(
         icon: Icons.record_voice_over_rounded,
-        title: 'قراءة المستند بصوت',
-        subtitle: 'اختر ملف PDF واستمع لمحتواه',
+        title: tr('tool_tts_t'),
+        subtitle: tr('tool_tts_s'),
         onTap: () => _openTtsFromPdf(context),
       ),
       _ToolData(
         icon: Icons.table_chart_rounded,
-        title: 'استخراج جداول PDF إلى Excel',
-        subtitle: 'تصدير تقريبي للجداول (طريقة تخمينية)',
+        title: tr('tool_table_t'),
+        subtitle: tr('tool_table_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtractTableScreen())),
       ),
       _ToolData(
         icon: Icons.description_rounded,
-        title: 'تحويل Word إلى PDF',
-        subtitle: 'استخراج نص .docx وتحويله لملف PDF (بدون تنسيق)',
+        title: tr('tool_word_t'),
+        subtitle: tr('tool_word_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WordToPdfScreen())),
       ),
       _ToolData(
         icon: Icons.perm_media_rounded,
-        title: 'تحويل صور إلى PDF',
-        subtitle: 'اجمع عدة صور بملف PDF واحد',
+        title: tr('tool_img2pdf_t'),
+        subtitle: tr('tool_img2pdf_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImagesToPdfScreen())),
       ),
       _ToolData(
         icon: Icons.image_rounded,
-        title: 'تحويل PDF إلى صور',
-        subtitle: 'صدّر أي صفحة (أو كل الصفحات) كصورة PNG',
+        title: tr('tool_pdf2img_t'),
+        subtitle: tr('tool_pdf2img_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PdfToImagesScreen())),
       ),
       _ToolData(
         icon: Icons.print_rounded,
-        title: 'طباعة PDF',
-        subtitle: 'اطبع مباشرة عبر طابعة لاسلكية أو احفظ كملف',
+        title: tr('tool_print_t'),
+        subtitle: tr('tool_print_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrintPdfScreen())),
       ),
       _ToolData(
         icon: Icons.qr_code_scanner_rounded,
-        title: 'التعرف على QR والباركود',
-        subtitle: 'من صورة أو من صفحة داخل ملف PDF',
+        title: tr('tool_barcode_t'),
+        subtitle: tr('tool_barcode_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen())),
       ),
       _ToolData(
         icon: Icons.edit_note_rounded,
-        title: 'تعديل/حذف نص موجود بالملف',
-        subtitle: 'اسحب فوق أي نص لتغطيته أو استبداله (طريقة عملية تقريبية)',
+        title: tr('tool_redact_t'),
+        subtitle: tr('tool_redact_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RedactEditScreen())),
       ),
       _ToolData(
         icon: Icons.mic_rounded,
-        title: 'إملاء صوتي',
-        subtitle: 'حوّل كلامك لنص مباشرة واحفظه كملف PDF',
+        title: tr('tool_dictation_t'),
+        subtitle: tr('tool_dictation_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceDictationScreen())),
       ),
       _ToolData(
         icon: Icons.build_rounded,
-        title: 'إصلاح ملف PDF تالف',
-        subtitle: 'محاولة إصلاح مشاكل الفهرسة الداخلية الشائعة',
+        title: tr('tool_repair_t'),
+        subtitle: tr('tool_repair_s'),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RepairPdfScreen())),
       ),
     ];
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('أدوات PDF المتقدمة')),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: tools.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) {
-          final t = tools[i];
-          return Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: CircleAvatar(
-                radius: 26,
-                backgroundColor: AppColors.primaryDark.withOpacity(0.1),
-                child: Icon(t.icon, color: AppColors.primaryDark),
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(title: Text(tr('pdf_tools_appbar'))),
+        body: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: tools.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, i) {
+            final t = tools[i];
+            return Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: CircleAvatar(
+                  radius: 26,
+                  backgroundColor: AppColors.primaryDark.withOpacity(0.1),
+                  child: Icon(t.icon, color: AppColors.primaryDark),
+                ),
+                title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(t.subtitle, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                trailing: const Icon(Icons.chevron_left_rounded),
+                onTap: t.onTap,
               ),
-              title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(t.subtitle, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-              trailing: const Icon(Icons.chevron_left_rounded),
-              onTap: t.onTap,
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
