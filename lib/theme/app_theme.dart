@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// هوية بصرية موحّدة لتطبيق MN-Doc مستوحاة من ألوان الأيقونة
-/// (كحلي داكن + لمسة ماجنتا/بنفسجي).
+/// هوية بصرية موحّدة لتطبيق MN-Doc مستوحاة من لون الأيقونة الكحلي.
 class AppColors {
   static const Color primaryDark = Color(0xFF0D2A4A); // كحلي الأيقونة
   static const Color primary = Color(0xFF15406B);
-  static const Color accent = Color(0xFFE619D0); // ماجنتا الخلفية
+  static const Color accent = Color(0xFF0D2A4A); // نفس كحلي الأيقونة (بدل الماجنتا سابقًا)
   static const Color background = Color(0xFFF5F7FA);
   static const Color surface = Colors.white;
   static const Color textDark = Color(0xFF1B2430);
