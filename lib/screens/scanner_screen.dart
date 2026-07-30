@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
+import 'document_camera_screen.dart';
 
 class _ScannedPage {
   final File file;
@@ -35,14 +35,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Future<void> _capturePage() async {
     setState(() => _capturing = true);
     try {
-      final picker = ImagePicker();
-      final shot = await picker.pickImage(source: ImageSource.camera, imageQuality: 90);
-      if (shot == null) {
+      final capturedPath = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(builder: (_) => const DocumentCameraScreen()),
+      );
+      if (capturedPath == null) {
         setState(() => _capturing = false);
         return;
       }
 
-      File finalFile = File(shot.path);
+      File finalFile = File(capturedPath);
       if (_autoEnhance) {
         finalFile = await _enhance(finalFile);
       }
