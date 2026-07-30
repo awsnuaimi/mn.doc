@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme/app_theme.dart';
 import 'services/app_settings.dart';
 import 'screens/splash_screen.dart';
@@ -60,8 +61,9 @@ class MnDocApp extends StatelessWidget {
       locale: settings.locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
-        // ملاحظة: أضف flutter_localizations في pubspec إذا رغبت بترجمة
-        // نصوص المكوّنات الافتراضية (أزرار الحوار، إلخ) إلى العربية/الإنجليزية بالكامل.
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
       builder: (context, child) {
         return Directionality(

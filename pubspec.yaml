@@ -10,6 +10,9 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
+  cupertino_icons: ^1.0.6
+  flutter_localizations:
+    sdk: flutter
 
   # -------- إدارة الملفات --------
   file_picker: 10.3.6                 # اختيار ملفات من الجهاز — نسخة مستقرة (تفادي خلل معروف بالإصدارات الأحدث)
