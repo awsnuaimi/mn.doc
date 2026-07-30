@@ -66,4 +66,62 @@ class AppTheme {
       ),
     );
   }
+
+  /// الوضع الليلي — نفس الهوية البصرية (كحلي + تمييز)، بخلفيات وأسطح داكنة
+  /// مريحة للعين، مع الحفاظ على تباين واضح للنصوص.
+  static ThemeData get dark {
+    final base = ThemeData.dark(useMaterial3: true);
+    final textTheme = GoogleFonts.cairoTextTheme(base.textTheme);
+    const darkBackground = Color(0xFF10151C);
+    const darkSurface = Color(0xFF1B2430);
+
+    return base.copyWith(
+      scaffoldBackgroundColor: darkBackground,
+      textTheme: textTheme,
+      colorScheme: base.colorScheme.copyWith(
+        primary: const Color(0xFF3E6C9C), // كحلي أفتح ليتباين على الخلفية الداكنة
+        secondary: const Color(0xFF3E6C9C),
+        surface: darkSurface,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.primaryDark,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: GoogleFonts.cairo(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: Color(0xFF3E6C9C),
+        foregroundColor: Colors.white,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF3E6C9C),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: darkSurface,
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: darkSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+    );
+  }
 }

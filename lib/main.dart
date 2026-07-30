@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
-import 'screens/home_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() {
   runApp(const MnDocApp());
@@ -15,6 +15,8 @@ class MnDocApp extends StatelessWidget {
       title: 'MN-Doc',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system, // يتبع تلقائيًا وضع الموبايل (فاتح/ليلي)
       // دعم اللغة العربية بشكل افتراضي (يمين لليسار)
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar'), Locale('en')],
@@ -32,7 +34,7 @@ class MnDocApp extends StatelessWidget {
           ),
         );
       },
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
