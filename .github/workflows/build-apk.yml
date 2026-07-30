@@ -30,7 +30,7 @@ jobs:
       - name: توليد أيقونة التطبيق
         run: flutter pub run flutter_launcher_icons
 
-- name: فك تشفير مفتاح التوقيع (إن وُجد)
+      - name: فك تشفير مفتاح التوقيع (إن وُجد)
         run: |
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/release.jks
