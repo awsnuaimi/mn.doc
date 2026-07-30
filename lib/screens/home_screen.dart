@@ -13,6 +13,7 @@ import 'translate_screen.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'ai_settings_screen.dart';
+import 'pdf_tools_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -161,6 +162,14 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.picture_as_pdf_rounded,
         label: 'تحرير PDF',
         onTap: _pickAndOpen,
+      ),
+      _ActionData(
+        icon: Icons.construction_rounded,
+        label: 'أدوات PDF (دمج / ترتيب / توقيع)',
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PdfToolsScreen()),
+        ),
       ),
       _ActionData(
         icon: Icons.document_scanner_rounded,
