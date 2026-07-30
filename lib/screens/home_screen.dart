@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:provider/provider.dart';
 
 import '../models/document_item.dart';
 import '../theme/app_theme.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import 'pdf_editor_screen.dart';
 import 'ocr_screen.dart';
 import 'create_document_screen.dart';
@@ -15,6 +18,7 @@ import 'ai_chat_screen.dart';
 import 'ai_settings_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'scanner_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -88,6 +92,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final settings = context.watch<AppSettingsController>();
+    final ar = settings.isArabic;
+    final t = (String key) => AppText.t(key, ar);
 
     return Scaffold(
       body: RefreshIndicator(
@@ -100,23 +107,30 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: AppColors.primaryDark,
               actions: [
                 IconButton(
-                  tooltip: 'حول التطبيق',
+                  tooltip: t('settings'),
+                  icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                ),
+                IconButton(
+                  tooltip: t('about_app'),
                   icon: const Icon(Icons.info_outline_rounded, color: Colors.white),
                   onPressed: () => showAboutDialog(
                     context: context,
                     applicationName: 'MN-Doc',
                     applicationVersion: '1.0.0',
-                    children: const [
-                      Text('محرر مستندات احترافي: عرض وتحرير PDF، كتابة نصوص، وتعرف ضوئي على النصوص (OCR).'),
+                    children: [
+                      Text(ar
+                          ? 'محرر مستندات احترافي: عرض وتحرير PDF، كتابة نصوص، وتعرف ضوئي على النصوص (OCR).'
+                          : 'A professional document editor: view & edit PDFs, add text, and OCR text recognition.'),
                     ],
                   ),
                 ),
               ],
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: const EdgeInsetsDirectional.only(start: 16, bottom: 16),
-                title: const Text(
-                  'MN-Doc',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                title: Text(
+                  settings.displayName.isNotEmpty ? '${t('welcome')}, ${settings.displayName}' : t('app_name'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 background: Container(
                   decoration: const BoxDecoration(
@@ -131,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Align(
                       alignment: AlignmentDirectional.centerStart,
                       child: Text(
-                        'محرر المستندات وأدوات PDF الذكية',
+                        t('app_tagline'),
                         style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13),
                       ),
                     ),
@@ -143,16 +157,16 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(16),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  _SectionTitle(title: 'أدوات المستندات', icon: Icons.description_rounded),
+                  _SectionTitle(title: t('documents_section'), icon: Icons.description_rounded),
                   const SizedBox(height: 12),
-                  _quickActionsGrid(context, _documentActions(context)),
+                  _quickActionsGrid(context, _documentActions(context, t)),
                   const SizedBox(height: 28),
-                  _SectionTitle(title: 'الذكاء الاصطناعي', icon: Icons.auto_awesome_rounded),
+                  _SectionTitle(title: t('ai_section'), icon: Icons.auto_awesome_rounded),
                   const SizedBox(height: 12),
-                  _quickActionsGrid(context, _aiActions(context)),
+                  _quickActionsGrid(context, _aiActions(context, t)),
                   const SizedBox(height: 28),
                   Text(
-                    'الملفات الأخيرة',
+                    t('recent_files'),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: isDark ? Colors.white : AppColors.textDark,
@@ -164,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 30),
                       child: Center(
                         child: Text(
-                          'لا توجد ملفات بعد.\nاضغط "فتح ملف" للبدء.',
+                          t('no_files_yet'),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: AppColors.textMuted),
                         ),
@@ -193,59 +207,59 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  List<_ActionData> _documentActions(BuildContext context) => [
+  List<_ActionData> _documentActions(BuildContext context, String Function(String) t) => [
         _ActionData(
           icon: Icons.folder_open_rounded,
-          label: 'فتح ملف',
+          label: t('open_file'),
           onTap: _pickAndOpen,
         ),
         _ActionData(
           icon: Icons.picture_as_pdf_rounded,
-          label: 'تحرير PDF',
+          label: t('edit_pdf'),
           onTap: _pickAndOpen,
         ),
         _ActionData(
           icon: Icons.construction_rounded,
-          label: 'أدوات PDF (دمج/ترتيب/توقيع)',
+          label: t('pdf_tools'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PdfToolsScreen())),
         ),
         _ActionData(
           icon: Icons.document_scanner_rounded,
-          label: 'التعرف الضوئي (OCR)',
+          label: t('ocr'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OcrScreen())),
         ),
         _ActionData(
           icon: Icons.camera_alt_rounded,
-          label: 'مسح ضوئي للمستندات (Scanner)',
+          label: t('scanner'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen())),
         ),
         _ActionData(
           icon: Icons.note_add_rounded,
-          label: 'إنشاء مستند جديد',
+          label: t('create_document'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateDocumentScreen())),
         ),
       ];
 
-  List<_ActionData> _aiActions(BuildContext context) => [
+  List<_ActionData> _aiActions(BuildContext context, String Function(String) t) => [
         _ActionData(
           icon: Icons.translate_rounded,
-          label: 'ترجمة (مجانية)',
+          label: t('translate'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TranslateScreen())),
         ),
         _ActionData(
           icon: Icons.summarize_rounded,
-          label: 'تلخيص مستند',
+          label: t('summarize'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SummarizeScreen())),
         ),
         _ActionData(
           icon: Icons.smart_toy_rounded,
-          label: 'مساعد ذكي للدردشة',
+          label: t('ai_chat'),
           onTap: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const AiChatScreen(documentText: '', documentTitle: 'مساعد MN-Doc الذكي'))),
+              context, MaterialPageRoute(builder: (_) => const AiChatScreen(documentText: '', documentTitle: 'MN-Doc'))),
         ),
         _ActionData(
           icon: Icons.settings_rounded,
-          label: 'إعدادات الذكاء الاصطناعي',
+          label: t('ai_settings'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiSettingsScreen())),
         ),
       ];

@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
+import 'tts_reader_screen.dart';
 
 /// نص تمت إضافته فوق صفحة معيّنة من ملف PDF.
 /// الإحداثيات dx/dy نسبية (0..1) بالنسبة لأبعاد الصفحة المعروضة،
@@ -245,6 +246,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       case 'translate':
         Navigator.push(context, MaterialPageRoute(builder: (_) => TranslateScreen(initialText: text)));
         break;
+      case 'read_aloud':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => TtsReaderScreen(initialText: text, title: title)));
+        break;
     }
   }
 
@@ -379,6 +383,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               PopupMenuItem(value: 'summarize', child: Text('تلخيص هذا المستند')),
               PopupMenuItem(value: 'chat', child: Text('اسأل عن هذا المستند')),
               PopupMenuItem(value: 'translate', child: Text('ترجمة نص من المستند')),
+              PopupMenuItem(value: 'read_aloud', child: Text('قراءة المستند بصوت')),
             ],
           ),
           _saving

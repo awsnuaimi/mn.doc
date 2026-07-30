@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../theme/app_theme.dart';
 import 'merge_pdf_screen.dart';
@@ -7,6 +10,10 @@ import 'signature_screen.dart';
 import 'protect_pdf_screen.dart';
 import 'watermark_screen.dart';
 import 'compress_pdf_screen.dart';
+import 'compare_pdf_screen.dart';
+import 'rotate_pages_screen.dart';
+import 'tts_reader_screen.dart';
+import 'extract_table_screen.dart';
 
 /// مركز أدوات PDF المتقدمة: دمج، حذف/ترتيب صفحات، وتوقيع إلكتروني.
 class PdfToolsScreen extends StatelessWidget {
@@ -51,6 +58,30 @@ class PdfToolsScreen extends StatelessWidget {
         subtitle: 'قلّل حجم الملف قدر الإمكان',
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompressPdfScreen())),
       ),
+      _ToolData(
+        icon: Icons.compare_arrows_rounded,
+        title: 'مقارنة ملفين PDF',
+        subtitle: 'أظهر الفروقات النصية بين ملفين',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComparePdfScreen())),
+      ),
+      _ToolData(
+        icon: Icons.rotate_right_rounded,
+        title: 'تدوير وإزالة الصفحات الفارغة',
+        subtitle: 'دوّر أي صفحة واكتشف الصفحات الفارغة تلقائيًا',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RotatePagesScreen())),
+      ),
+      _ToolData(
+        icon: Icons.record_voice_over_rounded,
+        title: 'قراءة المستند بصوت',
+        subtitle: 'اختر ملف PDF واستمع لمحتواه',
+        onTap: () => _openTtsFromPdf(context),
+      ),
+      _ToolData(
+        icon: Icons.table_chart_rounded,
+        title: 'استخراج جداول PDF إلى Excel',
+        subtitle: 'تصدير تقريبي للجداول (طريقة تخمينية)',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtractTableScreen())),
+      ),
     ];
 
     return Scaffold(
@@ -87,4 +118,35 @@ class _ToolData {
   final String subtitle;
   final VoidCallback onTap;
   _ToolData({required this.icon, required this.title, required this.subtitle, required this.onTap});
+}
+
+/// يختار المستخدم ملف PDF، يستخرج نصه، ثم يفتح شاشة القراءة الصوتية مباشرة.
+Future<void> _openTtsFromPdf(BuildContext context) async {
+  final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+  if (result == null || result.files.single.path == null) return;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+
+  String text = '';
+  try {
+    final document = sf.PdfDocument(inputBytes: File(result.files.single.path!).readAsBytesSync());
+    text = sf.PdfTextExtractor(document).extractText();
+    document.dispose();
+  } catch (_) {
+    text = '';
+  }
+
+  if (!context.mounted) return;
+  Navigator.pop(context); // إغلاق مؤشر التحميل
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => TtsReaderScreen(initialText: text, title: result.files.single.name),
+    ),
+  );
 }
