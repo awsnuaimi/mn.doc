@@ -4,6 +4,9 @@ import '../theme/app_theme.dart';
 import 'merge_pdf_screen.dart';
 import 'manage_pages_screen.dart';
 import 'signature_screen.dart';
+import 'protect_pdf_screen.dart';
+import 'watermark_screen.dart';
+import 'compress_pdf_screen.dart';
 
 /// مركز أدوات PDF المتقدمة: دمج، حذف/ترتيب صفحات، وتوقيع إلكتروني.
 class PdfToolsScreen extends StatelessWidget {
@@ -29,6 +32,24 @@ class PdfToolsScreen extends StatelessWidget {
         title: 'توقيع إلكتروني',
         subtitle: 'ارسم توقيعك وضعه بأي مكان بملف PDF',
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignatureScreen())),
+      ),
+      _ToolData(
+        icon: Icons.lock_rounded,
+        title: 'حماية بكلمة مرور',
+        subtitle: 'أضف أو أزل كلمة مرور من ملف PDF',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProtectPdfScreen())),
+      ),
+      _ToolData(
+        icon: Icons.water_drop_rounded,
+        title: 'علامة مائية',
+        subtitle: 'أضف نص علامة مائية بأي زاوية وشفافية',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WatermarkScreen())),
+      ),
+      _ToolData(
+        icon: Icons.compress_rounded,
+        title: 'ضغط حجم PDF',
+        subtitle: 'قلّل حجم الملف قدر الإمكان',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompressPdfScreen())),
       ),
     ];
 

@@ -41,12 +41,38 @@ class PdfEditorScreen extends StatefulWidget {
 
 class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final PdfViewerController _controller = PdfViewerController();
+  final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
   final GlobalKey _viewerKey = GlobalKey();
 
   bool _addTextMode = false;
   bool _saving = false;
   int _currentPage = 1;
+
+  // ------- البحث داخل PDF -------
+  bool _searchVisible = false;
+  final TextEditingController _searchController = TextEditingController();
+  PdfTextSearchResult _searchResult = PdfTextSearchResult();
+
+  void _search(String query) {
+    if (query.trim().isEmpty) return;
+    _searchResult = _controller.searchText(query);
+    _searchResult.addListener(_onSearchResultChanged);
+    setState(() {});
+  }
+
+  void _onSearchResultChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _closeSearch() {
+    _searchResult.removeListener(_onSearchResultChanged);
+    _searchResult.clear();
+    setState(() {
+      _searchVisible = false;
+      _searchController.clear();
+    });
+  }
 
   void _handleTapDown(TapDownDetails details) async {
     if (!_addTextMode) return;
@@ -220,11 +246,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
+  void _setAnnotationMode(PdfAnnotationMode mode) {
+    setState(() {
+      _controller.annotationMode =
+          _controller.annotationMode == mode ? PdfAnnotationMode.none : mode;
+    });
+  }
+
   Future<void> _saveDocument() async {
     setState(() => _saving = true);
     try {
-      final bytes = await File(widget.filePath).readAsBytes();
-      final sf.PdfDocument document = sf.PdfDocument(inputBytes: bytes);
+      // الخطوة 1: احفظ نسخة تتضمن تعليقات العارض المدمجة
+      // (تظليل/تسطير/شطب/ملاحظات لاصقة) التي أضافها المستخدم مباشرة.
+      final List<int> viewerBytes = await _controller.saveDocument();
+
+      // الخطوة 2: افتح تلك النسخة وأضف فوقها نصوصنا المخصّصة (المربّعات النصية).
+      final sf.PdfDocument document = sf.PdfDocument(inputBytes: viewerBytes);
 
       for (final ann in _annotations) {
         final pageIndex = ann.pageNumber - 1;
@@ -293,10 +330,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasSearchResult = _searchResult.hasResult;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.filePath.split('/').last, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search_rounded),
+            tooltip: 'بحث داخل المستند',
+            onPressed: () => setState(() => _searchVisible = !_searchVisible),
+          ),
+          IconButton(
+            icon: const Icon(Icons.bookmark_border_rounded),
+            tooltip: 'الفهرس (Bookmarks)',
+            onPressed: () => _pdfViewerStateKey.currentState?.openBookmarkView(),
+          ),
           IconButton(
             icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
             tooltip: 'وضع إضافة نص',
@@ -324,12 +373,80 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               : IconButton(
                   icon: const Icon(Icons.save_rounded),
                   tooltip: 'حفظ',
-                  onPressed: _annotations.isEmpty ? null : _saveDocument,
+                  onPressed: _saveDocument,
                 ),
         ],
       ),
       body: Column(
         children: [
+          if (_searchVisible)
+            Container(
+              color: AppColors.primaryDark.withOpacity(0.06),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'ابحث داخل المستند...',
+                        isDense: true,
+                      ),
+                      onSubmitted: _search,
+                    ),
+                  ),
+                  if (hasSearchResult) ...[
+                    Text('${_searchResult.currentInstanceIndex}/${_searchResult.totalInstanceCount}',
+                        style: const TextStyle(fontSize: 12)),
+                    IconButton(
+                      icon: const Icon(Icons.keyboard_arrow_up_rounded),
+                      onPressed: () => _searchResult.previousInstance(),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                      onPressed: () => _searchResult.nextInstance(),
+                    ),
+                  ],
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: _closeSearch,
+                  ),
+                ],
+              ),
+            ),
+          Container(
+            width: double.infinity,
+            color: AppColors.background,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _annotationChip(
+                    icon: Icons.border_color_rounded,
+                    label: 'تظليل',
+                    mode: PdfAnnotationMode.highlight,
+                  ),
+                  _annotationChip(
+                    icon: Icons.format_underlined_rounded,
+                    label: 'تسطير',
+                    mode: PdfAnnotationMode.underline,
+                  ),
+                  _annotationChip(
+                    icon: Icons.strikethrough_s_rounded,
+                    label: 'شطب',
+                    mode: PdfAnnotationMode.strikethrough,
+                  ),
+                  _annotationChip(
+                    icon: Icons.sticky_note_2_rounded,
+                    label: 'ملاحظة',
+                    mode: PdfAnnotationMode.stickyNote,
+                  ),
+                ],
+              ),
+            ),
+          ),
           if (_addTextMode)
             Container(
               width: double.infinity,
@@ -350,6 +467,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   onTapDown: _handleTapDown,
                   child: SfPdfViewer.file(
                     File(widget.filePath),
+                    key: _pdfViewerStateKey,
                     controller: _controller,
                     // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
                     pageLayoutMode: PdfPageLayoutMode.single,
@@ -366,6 +484,21 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _annotationChip({required IconData icon, required String label, required PdfAnnotationMode mode}) {
+    final active = _controller.annotationMode == mode;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: ChoiceChip(
+        avatar: Icon(icon, size: 18, color: active ? Colors.white : AppColors.primaryDark),
+        label: Text(label),
+        selected: active,
+        selectedColor: AppColors.primaryDark,
+        labelStyle: TextStyle(color: active ? Colors.white : AppColors.textDark, fontSize: 12),
+        onSelected: (_) => _setAnnotationMode(mode),
       ),
     );
   }
