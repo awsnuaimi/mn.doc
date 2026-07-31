@@ -489,6 +489,134 @@ class AppText {
       'ar': 'حدث خطأ أثناء الحفظ:', 'en': 'An error occurred while saving:', 'de': 'Beim Speichern ist ein Fehler aufgetreten:',
       'fr': "Une erreur s'est produite lors de l'enregistrement :", 'tr': 'Kaydedilirken bir hata oluştu:', 'pl': 'Wystąpił błąd podczas zapisywania:',
     },
+
+    // ---------------- عناصر مشتركة ----------------
+    'camera': {
+      'ar': 'كاميرا', 'en': 'Camera', 'de': 'Kamera', 'fr': 'Appareil photo', 'tr': 'Kamera', 'pl': 'Aparat',
+    },
+    'gallery': {
+      'ar': 'المعرض', 'en': 'Gallery', 'de': 'Galerie', 'fr': 'Galerie', 'tr': 'Galeri', 'pl': 'Galeria',
+    },
+    'copy': {
+      'ar': 'نسخ', 'en': 'Copy', 'de': 'Kopieren', 'fr': 'Copier', 'tr': 'Kopyala', 'pl': 'Kopiuj',
+    },
+    'copied': {
+      'ar': 'تم النسخ', 'en': 'Copied', 'de': 'Kopiert', 'fr': 'Copié', 'tr': 'Kopyalandı', 'pl': 'Skopiowano',
+    },
+    'btn_translate': {
+      'ar': 'ترجمة', 'en': 'Translate', 'de': 'Übersetzen', 'fr': 'Traduire', 'tr': 'Çevir', 'pl': 'Tłumacz',
+    },
+    'btn_summarize': {
+      'ar': 'تلخيص', 'en': 'Summarize', 'de': 'Zusammenfassen', 'fr': 'Résumer', 'tr': 'Özetle', 'pl': 'Podsumuj',
+    },
+    'btn_ask': {
+      'ar': 'اسأل', 'en': 'Ask', 'de': 'Fragen', 'fr': 'Demander', 'tr': 'Sor', 'pl': 'Zapytaj',
+    },
+
+    // ---------------- شاشة OCR ----------------
+    'ocr_extracted_label': {
+      'ar': 'النص المستخرج', 'en': 'Extracted Text', 'de': 'Extrahierter Text',
+      'fr': 'Texte extrait', 'tr': 'Çıkarılan Metin', 'pl': 'Wyodrębniony tekst',
+    },
+    'ocr_hint': {
+      'ar': 'سيظهر النص المستخرج هنا، ويمكنك تعديله مباشرة...',
+      'en': 'The extracted text will appear here, and you can edit it directly...',
+      'de': 'Der extrahierte Text erscheint hier und kann direkt bearbeitet werden...',
+      'fr': 'Le texte extrait apparaîtra ici, et vous pouvez le modifier directement...',
+      'tr': 'Çıkarılan metin burada görünecek, doğrudan düzenleyebilirsiniz...',
+      'pl': 'Wyodrębniony tekst pojawi się tutaj i można go bezpośrednio edytować...',
+    },
+    'ocr_save_txt': {
+      'ar': 'حفظ كنص', 'en': 'Save as Text', 'de': 'Als Text speichern',
+      'fr': 'Enregistrer en texte', 'tr': 'Metin Olarak Kaydet', 'pl': 'Zapisz jako tekst',
+    },
+    'ocr_error_prefix': {
+      'ar': 'تعذّر التعرف على النص:', 'en': 'Could not recognize text:', 'de': 'Text konnte nicht erkannt werden:',
+      'fr': 'Impossible de reconnaître le texte :', 'tr': 'Metin tanınamadı:', 'pl': 'Nie można rozpoznać tekstu:',
+    },
+    'ocr_saved_prefix': {
+      'ar': 'تم الحفظ:', 'en': 'Saved:', 'de': 'Gespeichert:', 'fr': 'Enregistré :', 'tr': 'Kaydedildi:', 'pl': 'Zapisano:',
+    },
+    'ocr_ask_title': {
+      'ar': 'اسأل عن هذا النص', 'en': 'Ask about this text', 'de': 'Fragen zu diesem Text stellen',
+      'fr': 'Poser une question sur ce texte', 'tr': 'Bu metin hakkında soru sor', 'pl': 'Zapytaj o ten tekst',
+    },
+
+    // ---------------- شاشة الترجمة ----------------
+    'tr_appbar': {
+      'ar': 'الترجمة (مجانية وبدون إنترنت)', 'en': 'Translate (Free & Offline)', 'de': 'Übersetzen (kostenlos & offline)',
+      'fr': 'Traduire (gratuit et hors ligne)', 'tr': 'Çevir (Ücretsiz ve Çevrimdışı)', 'pl': 'Tłumacz (bezpłatnie i offline)',
+    },
+    'tr_hint_source': {
+      'ar': 'اكتب أو الصق النص هنا...', 'en': 'Type or paste text here...', 'de': 'Text hier eingeben oder einfügen...',
+      'fr': 'Tapez ou collez le texte ici...', 'tr': 'Metni buraya yazın veya yapıştırın...', 'pl': 'Wpisz lub wklej tekst tutaj...',
+    },
+    'tr_downloading': {
+      'ar': 'جارٍ تحميل حزمة اللغة (مرة واحدة فقط)...', 'en': 'Downloading language pack (one time only)...',
+      'de': 'Sprachpaket wird heruntergeladen (einmalig)...', 'fr': 'Téléchargement du pack de langue (une seule fois)...',
+      'tr': 'Dil paketi indiriliyor (yalnızca bir kez)...', 'pl': 'Pobieranie pakietu językowego (jednorazowo)...',
+    },
+    'tr_translating': {
+      'ar': 'جارٍ الترجمة...', 'en': 'Translating...', 'de': 'Wird übersetzt...',
+      'fr': 'Traduction en cours...', 'tr': 'Çevriliyor...', 'pl': 'Tłumaczenie...',
+    },
+    'tr_hint_result': {
+      'ar': 'ستظهر الترجمة هنا...', 'en': 'The translation will appear here...', 'de': 'Die Übersetzung erscheint hier...',
+      'fr': 'La traduction apparaîtra ici...', 'tr': 'Çeviri burada görünecek...', 'pl': 'Tłumaczenie pojawi się tutaj...',
+    },
+    'tr_error_prefix': {
+      'ar': 'تعذّرت الترجمة:', 'en': 'Translation failed:', 'de': 'Übersetzung fehlgeschlagen:',
+      'fr': 'Échec de la traduction :', 'tr': 'Çeviri başarısız oldu:', 'pl': 'Tłumaczenie nie powiodło się:',
+    },
+
+    // ---------------- شاشة التلخيص ----------------
+    'sm_ai_note': {
+      'ar': 'سيتم استخدام تلخيص ذكي (Gemini) — يحتاج إنترنت',
+      'en': 'Smart summary (Gemini) will be used — requires internet',
+      'de': 'Intelligente Zusammenfassung (Gemini) wird verwendet — benötigt Internet',
+      'fr': 'Un résumé intelligent (Gemini) sera utilisé — nécessite internet',
+      'tr': 'Akıllı özet (Gemini) kullanılacak — internet gerektirir',
+      'pl': 'Zostanie użyte inteligentne podsumowanie (Gemini) — wymaga internetu',
+    },
+    'sm_local_note': {
+      'ar': 'سيتم استخدام التلخيص المحلي المجاني (بدون إنترنت)',
+      'en': 'Free local summarization will be used (offline)',
+      'de': 'Kostenlose lokale Zusammenfassung wird verwendet (offline)',
+      'fr': 'Un résumé local gratuit sera utilisé (hors ligne)',
+      'tr': 'Ücretsiz yerel özetleme kullanılacak (çevrimdışı)',
+      'pl': 'Zostanie użyte bezpłatne lokalne podsumowanie (offline)',
+    },
+    'sm_original_label': {
+      'ar': 'النص الأصلي', 'en': 'Original Text', 'de': 'Originaltext',
+      'fr': 'Texte original', 'tr': 'Orijinal Metin', 'pl': 'Tekst oryginalny',
+    },
+    'sm_hint_input': {
+      'ar': 'الصق نص المستند هنا، أو افتحه من محرر PDF مباشرة...',
+      'en': 'Paste the document text here, or open it directly from the PDF editor...',
+      'de': 'Fügen Sie den Dokumenttext hier ein oder öffnen Sie ihn direkt aus dem PDF-Editor...',
+      'fr': "Collez le texte du document ici, ou ouvrez-le directement depuis l'éditeur PDF...",
+      'tr': 'Belge metnini buraya yapıştırın veya PDF düzenleyiciden doğrudan açın...',
+      'pl': 'Wklej tekst dokumentu tutaj lub otwórz go bezpośrednio z edytora PDF...',
+    },
+    'sm_summarizing': {
+      'ar': 'جارٍ التلخيص...', 'en': 'Summarizing...', 'de': 'Wird zusammengefasst...',
+      'fr': 'Résumé en cours...', 'tr': 'Özetleniyor...', 'pl': 'Podsumowywanie...',
+    },
+    'sm_summary_label': {
+      'ar': 'الملخص', 'en': 'Summary', 'de': 'Zusammenfassung', 'fr': 'Résumé', 'tr': 'Özet', 'pl': 'Podsumowanie',
+    },
+    'sm_hint_result': {
+      'ar': 'سيظهر الملخص هنا...', 'en': 'The summary will appear here...', 'de': 'Die Zusammenfassung erscheint hier...',
+      'fr': 'Le résumé apparaîtra ici...', 'tr': 'Özet burada görünecek...', 'pl': 'Podsumowanie pojawi się tutaj...',
+    },
+    'sm_error_prefix': {
+      'ar': 'تعذّر الاتصال بالتلخيص الذكي، تم استخدام التلخيص المحلي بدلاً منه.',
+      'en': 'Could not connect to smart summarization; local summarization was used instead.',
+      'de': 'Verbindung zur intelligenten Zusammenfassung fehlgeschlagen; stattdessen wurde die lokale Zusammenfassung verwendet.',
+      'fr': "Impossible de se connecter au résumé intelligent ; le résumé local a été utilisé à la place.",
+      'tr': 'Akıllı özetlemeye bağlanılamadı; bunun yerine yerel özetleme kullanıldı.',
+      'pl': 'Nie można połączyć się z inteligentnym podsumowaniem; zamiast tego użyto podsumowania lokalnego.',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

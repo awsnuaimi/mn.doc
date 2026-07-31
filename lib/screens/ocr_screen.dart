@@ -5,8 +5,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 
 import '../theme/app_theme.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import 'translate_screen.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
@@ -65,8 +68,9 @@ class _OcrScreenState extends State<OcrScreen> {
     } catch (e) {
       _resultController.text = '';
       if (!mounted) return;
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّر التعرف على النص: $e')),
+        SnackBar(content: Text('${AppText.t('ocr_error_prefix', lang)} $e')),
       );
     } finally {
       if (mounted) setState(() => _processing = false);
@@ -76,8 +80,9 @@ class _OcrScreenState extends State<OcrScreen> {
   Future<void> _copyText() async {
     await Clipboard.setData(ClipboardData(text: _resultController.text));
     if (!mounted) return;
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم نسخ النص')),
+      SnackBar(content: Text(AppText.t('copied', lang))),
     );
   }
 
@@ -87,11 +92,12 @@ class _OcrScreenState extends State<OcrScreen> {
     final file = File(path);
     await file.writeAsString(_resultController.text);
     if (!mounted) return;
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('تم الحفظ: $path'),
+        content: Text('${AppText.t('ocr_saved_prefix', lang)} $path'),
         action: SnackBarAction(
-          label: 'مشاركة',
+          label: AppText.t('ed_share', lang),
           onPressed: () => Share.shareXFiles([XFile(path)]),
         ),
       ),
@@ -100,8 +106,14 @@ class _OcrScreenState extends State<OcrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('التعرف الضوئي على النص (OCR)')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('ocr'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -113,7 +125,7 @@ class _OcrScreenState extends State<OcrScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () => _pickImage(ImageSource.camera),
                     icon: const Icon(Icons.camera_alt_rounded),
-                    label: const Text('كاميرا'),
+                    label: Text(tr('camera')),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -121,7 +133,7 @@ class _OcrScreenState extends State<OcrScreen> {
                   child: OutlinedButton.icon(
                     onPressed: () => _pickImage(ImageSource.gallery),
                     icon: const Icon(Icons.photo_library_rounded),
-                    label: const Text('المعرض'),
+                    label: Text(tr('gallery')),
                   ),
                 ),
               ],
@@ -135,7 +147,7 @@ class _OcrScreenState extends State<OcrScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Text('النص المستخرج', style: Theme.of(context).textTheme.titleMedium),
+                Text(tr('ocr_extracted_label'), style: Theme.of(context).textTheme.titleMedium),
                 const Spacer(),
                 if (_processing) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
               ],
@@ -147,9 +159,7 @@ class _OcrScreenState extends State<OcrScreen> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(
-                  hintText: 'سيظهر النص المستخرج هنا، ويمكنك تعديله مباشرة...',
-                ),
+                decoration: InputDecoration(hintText: tr('ocr_hint')),
               ),
             ),
             const SizedBox(height: 12),
@@ -159,7 +169,7 @@ class _OcrScreenState extends State<OcrScreen> {
                   child: OutlinedButton.icon(
                     onPressed: _resultController.text.isEmpty ? null : _copyText,
                     icon: const Icon(Icons.copy_rounded),
-                    label: const Text('نسخ'),
+                    label: Text(tr('copy')),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -167,7 +177,7 @@ class _OcrScreenState extends State<OcrScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _resultController.text.isEmpty ? null : _saveAsTxt,
                     icon: const Icon(Icons.save_rounded),
-                    label: const Text('حفظ كنص'),
+                    label: Text(tr('ocr_save_txt')),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
                   ),
                 ),
@@ -183,7 +193,7 @@ class _OcrScreenState extends State<OcrScreen> {
                         : () => Navigator.push(context,
                             MaterialPageRoute(builder: (_) => TranslateScreen(initialText: _resultController.text))),
                     icon: const Icon(Icons.translate_rounded),
-                    label: const Text('ترجمة'),
+                    label: Text(tr('btn_translate')),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -194,7 +204,7 @@ class _OcrScreenState extends State<OcrScreen> {
                         : () => Navigator.push(context,
                             MaterialPageRoute(builder: (_) => SummarizeScreen(initialText: _resultController.text))),
                     icon: const Icon(Icons.summarize_rounded),
-                    label: const Text('تلخيص'),
+                    label: Text(tr('btn_summarize')),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -205,15 +215,16 @@ class _OcrScreenState extends State<OcrScreen> {
                         : () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => AiChatScreen(documentText: _resultController.text, documentTitle: 'اسأل عن هذا النص'))),
+                                builder: (_) => AiChatScreen(documentText: _resultController.text, documentTitle: tr('ocr_ask_title')))),
                     icon: const Icon(Icons.smart_toy_rounded),
-                    label: const Text('اسأل'),
+                    label: Text(tr('btn_ask')),
                   ),
                 ),
               ],
             ),
           ],
         ),
+      ),
       ),
     );
   }
