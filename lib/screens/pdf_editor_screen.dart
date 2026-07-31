@@ -404,7 +404,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                Share.shareXFiles([XFile(outPath)], text: 'ملف من MN-Doc');
+                Share.shareXFiles([XFile(outPath)], text: '${tr('file_from_app_prefix')} MN-Doc');
               },
               child: Text(tr('ed_share')),
             ),

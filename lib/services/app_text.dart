@@ -807,6 +807,15 @@ class AppText {
     'scanner_brightness_label': {
       'ar': 'السطوع:', 'en': 'Brightness:', 'de': 'Helligkeit:', 'fr': 'Luminosité :', 'tr': 'Parlaklık:', 'pl': 'Jasność:',
     },
+    'undo': {
+      'ar': 'تراجع', 'en': 'Undo', 'de': 'Rückgängig', 'fr': 'Annuler', 'tr': 'Geri Al', 'pl': 'Cofnij',
+    },
+    'redo': {
+      'ar': 'إعادة', 'en': 'Redo', 'de': 'Wiederholen', 'fr': 'Rétablir', 'tr': 'Yinele', 'pl': 'Ponów',
+    },
+    'file_from_app_prefix': {
+      'ar': 'ملف من', 'en': 'A file from', 'de': 'Eine Datei von', 'fr': 'Un fichier de', 'tr': "Şuradan bir dosya:", 'pl': 'Plik z',
+    },
 
     // ---------------- عناصر مشتركة إضافية ----------------
     'select_pdf_btn': {

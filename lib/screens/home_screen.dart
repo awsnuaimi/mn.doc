@@ -224,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         _ActionData(
           icon: Icons.folder_copy_rounded,
-          label: 'مدير الملفات',
+          label: t('fm_appbar'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen())),
         ),
         _ActionData(
