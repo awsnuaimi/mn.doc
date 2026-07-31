@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
 import '../services/docx_text_extractor.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -40,16 +43,20 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
     } catch (e) {
       setState(() => _extracting = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذّر قراءة الملف: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('read_error_prefix', lang)} $e')));
     }
   }
 
   Future<void> _exportToPdf() async {
     if (_textController.text.trim().isEmpty) return;
     setState(() => _saving = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final doc = pw.Document();
-      final title = (_fileName ?? 'مستند').replaceAll('.docx', '');
+      final title = (_fileName ?? tr('create_doc_default_title')).replaceAll('.docx', '');
 
       doc.addPage(
         pw.MultiPage(
@@ -73,20 +80,20 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم التحويل بنجاح'),
-          content: const Text('تذكير: النص فقط تم تحويله، بدون تنسيق أو صور من الملف الأصلي.'),
+          title: Text(tr('word_converted_title')),
+          content: Text(tr('word_converted_note')),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
             ElevatedButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)));
               },
-              child: const Text('فتح'),
+              child: Text(tr('scanner_open_file')),
             ),
           ],
         ),
@@ -94,14 +101,20 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('تحويل Word إلى PDF')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_word_t'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -110,9 +123,9 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Text(
-                'ملاحظة: يستخرج النص فقط من ملف Word، بدون تنسيق أو صور أو جداول من الملف الأصلي.',
-                style: TextStyle(fontSize: 12),
+              child: Text(
+                tr('word_note'),
+                style: const TextStyle(fontSize: 12),
               ),
             ),
             const SizedBox(height: 12),
@@ -121,7 +134,7 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
               icon: _extracting
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.folder_open_rounded),
-              label: Text(_fileName ?? 'اختيار ملف Word (.docx)', overflow: TextOverflow.ellipsis),
+              label: Text(_fileName ?? tr('word_pick_hint'), overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -130,7 +143,7 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(hintText: 'سيظهر النص المستخرج هنا، ويمكنك تعديله قبل التصدير...'),
+                decoration: InputDecoration(hintText: tr('sm_hint_input')),
               ),
             ),
             const SizedBox(height: 12),
@@ -139,11 +152,12 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
               icon: _saving
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.picture_as_pdf_rounded),
-              label: Text(_saving ? 'جارٍ التصدير...' : 'تصدير كـ PDF'),
+              label: Text(_saving ? tr('word_exporting') : tr('word_export_btn')),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(double.infinity, 50)),
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// تحويل صفحات PDF إلى صور PNG منفصلة (صفحة واحدة أو كل الصفحات).
@@ -47,6 +50,9 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
       _converting = true;
       _outputPaths = [];
     });
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final bytes = await File(_filePath!).readAsBytes();
       final dir = await getApplicationDocumentsDirectory();
@@ -72,14 +78,20 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
     } catch (e) {
       setState(() => _converting = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ أثناء التحويل: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('pdf2img_convert_error')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('تحويل PDF إلى صور')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_pdf2img_t'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -88,16 +100,16 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
             OutlinedButton.icon(
               onPressed: _pickFile,
               icon: const Icon(Icons.folder_open_rounded),
-              label: Text(_filePath == null ? 'اختيار ملف PDF' : _filePath!.split('/').last, overflow: TextOverflow.ellipsis),
+              label: Text(_filePath == null ? tr('select_pdf_btn') : _filePath!.split('/').last, overflow: TextOverflow.ellipsis),
             ),
             if (_filePath != null) ...[
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
                 value: _selectedPage,
-                decoration: const InputDecoration(labelText: 'الصفحة'),
+                decoration: InputDecoration(labelText: tr('page_field_label')),
                 items: [
-                  const DropdownMenuItem(value: -1, child: Text('كل الصفحات')),
-                  ...List.generate(_pageCount, (i) => DropdownMenuItem(value: i, child: Text('صفحة ${i + 1}'))),
+                  DropdownMenuItem(value: -1, child: Text(tr('table_all_pages'))),
+                  ...List.generate(_pageCount, (i) => DropdownMenuItem(value: i, child: Text('${tr('scanner_page_label')} ${i + 1}'))),
                 ],
                 onChanged: (v) => setState(() => _selectedPage = v!),
               ),
@@ -107,13 +119,13 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
                 icon: _converting
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.image_rounded),
-                label: Text(_converting ? 'جارٍ التحويل...' : 'تحويل إلى صور'),
+                label: Text(_converting ? tr('pdf2img_converting') : tr('pdf2img_convert_btn')),
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(double.infinity, 50)),
               ),
             ],
             if (_outputPaths.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text('${_outputPaths.length} صورة جاهزة', style: Theme.of(context).textTheme.titleMedium),
+              Text('${_outputPaths.length} ${tr('pdf2img_ready_suffix')}', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 10),
               Expanded(
                 child: GridView.builder(
@@ -129,11 +141,12 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
               ElevatedButton.icon(
                 onPressed: () => Share.shareXFiles(_outputPaths.map((p) => XFile(p)).toList()),
                 icon: const Icon(Icons.share_rounded),
-                label: const Text('مشاركة/حفظ الصور'),
+                label: Text(tr('pdf2img_share_btn')),
               ),
             ],
           ],
         ),
+      ),
       ),
     );
   }

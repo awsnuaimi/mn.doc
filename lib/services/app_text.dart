@@ -1189,6 +1189,307 @@ class AppText {
       'tr': 'Not: bu araç eski metni beyaz bir dikdörtgenle "kapatır" ve isteğe bağlı olarak üzerine değiştirme metni yazar — çoğu PDF düzenleyicinin mevcut içeriği değiştirmek için kullandığı aynı yaklaşım.',
       'pl': 'Uwaga: to narzędzie „zakrywa" stary tekst białym prostokątem i opcjonalnie zapisuje na nim tekst zastępczy — takie samo podejście stosuje większość edytorów PDF do modyfikowania istniejącej zawartości.',
     },
+
+    // ---------------- التوقيع الإلكتروني ----------------
+    'sig_stamp_default_name': {
+      'ar': 'ختم', 'en': 'Stamp', 'de': 'Stempel', 'fr': 'Tampon', 'tr': 'Kaşe', 'pl': 'Pieczątka',
+    },
+    'sig_saved_prefix': {
+      'ar': 'تم حفظ', 'en': 'Saved', 'de': 'Gespeichert:', 'fr': 'Enregistré :', 'tr': 'Kaydedildi:', 'pl': 'Zapisano:',
+    },
+    'sig_saved_suffix': {
+      'ar': 'بمكتبة الأختام', 'en': 'to the stamp library', 'de': 'in der Stempelbibliothek',
+      'fr': 'dans la bibliothèque de tampons', 'tr': 'kaşe kitaplığına', 'pl': 'w bibliotece pieczątek',
+    },
+    'sig_name_dialog_title': {
+      'ar': 'اسم للحفظ (اختياري)', 'en': 'Name to save (optional)', 'de': 'Name zum Speichern (optional)',
+      'fr': 'Nom à enregistrer (facultatif)', 'tr': 'Kaydedilecek isim (isteğe bağlı)', 'pl': 'Nazwa do zapisania (opcjonalnie)',
+    },
+    'cancel': {
+      'ar': 'إلغاء', 'en': 'Cancel', 'de': 'Abbrechen', 'fr': 'Annuler', 'tr': 'İptal', 'pl': 'Anuluj',
+    },
+    'sig_draw_first': {
+      'ar': 'ارسم توقيعك أولًا', 'en': 'Draw your signature first', 'de': 'Zeichnen Sie zuerst Ihre Unterschrift',
+      'fr': "Dessinez d'abord votre signature", 'tr': 'Önce imzanızı çizin', 'pl': 'Najpierw narysuj swój podpis',
+    },
+    'sig_save_question_title': {
+      'ar': 'حفظ التوقيع؟', 'en': 'Save Signature?', 'de': 'Unterschrift speichern?',
+      'fr': 'Enregistrer la signature ?', 'tr': 'İmza Kaydedilsin mi?', 'pl': 'Zapisać podpis?',
+    },
+    'sig_save_question_body': {
+      'ar': 'هل تريد حفظ هذا التوقيع لاستخدامه لاحقًا بدون رسمه من جديد؟',
+      'en': 'Do you want to save this signature to use it later without drawing it again?',
+      'de': 'Möchten Sie diese Unterschrift speichern, um sie später zu verwenden, ohne sie erneut zu zeichnen?',
+      'fr': 'Voulez-vous enregistrer cette signature pour l\'utiliser plus tard sans la redessiner ?',
+      'tr': 'Bu imzayı tekrar çizmeden daha sonra kullanmak için kaydetmek ister misiniz?',
+      'pl': 'Czy chcesz zapisać ten podpis, aby użyć go później bez ponownego rysowania?',
+    },
+    'sig_use_once': {
+      'ar': 'استخدام مرة واحدة فقط', 'en': 'Use Once Only', 'de': 'Nur einmal verwenden',
+      'fr': 'Utiliser une seule fois', 'tr': 'Sadece Bir Kez Kullan', 'pl': 'Użyj tylko raz',
+    },
+    'sig_save_future': {
+      'ar': 'حفظ للمستقبل', 'en': 'Save for Later', 'de': 'Für später speichern',
+      'fr': 'Enregistrer pour plus tard', 'tr': 'Sonrası İçin Kaydet', 'pl': 'Zapisz na później',
+    },
+    'sig_default_name': {
+      'ar': 'توقيعي', 'en': 'My Signature', 'de': 'Meine Unterschrift',
+      'fr': 'Ma signature', 'tr': 'İmzam', 'pl': 'Mój podpis',
+    },
+    'sig_place_first': {
+      'ar': 'اضغط على مكان العلامة بالصفحة أولًا', 'en': 'Tap the placement location on the page first', 'de': 'Tippen Sie zuerst auf die Platzierungsstelle auf der Seite',
+      'fr': "Appuyez d'abord sur l'emplacement sur la page", 'tr': 'Önce sayfadaki yerleştirme konumuna dokunun', 'pl': 'Najpierw dotknij miejsca umieszczenia na stronie',
+    },
+    'sig_invalid_page': {
+      'ar': 'رقم صفحة غير صالح', 'en': 'Invalid page number', 'de': 'Ungültige Seitenzahl',
+      'fr': 'Numéro de page invalide', 'tr': 'Geçersiz sayfa numarası', 'pl': 'Nieprawidłowy numer strony',
+    },
+    'sig_signed_title': {
+      'ar': 'تم التوقيع بنجاح', 'en': 'Signed Successfully', 'de': 'Erfolgreich signiert',
+      'fr': 'Signé avec succès', 'tr': 'Başarıyla İmzalandı', 'pl': 'Pomyślnie podpisano',
+    },
+    'sig_draw_new': {
+      'ar': 'رسم توقيع جديد', 'en': 'Draw New Signature', 'de': 'Neue Unterschrift zeichnen',
+      'fr': 'Dessiner une nouvelle signature', 'tr': 'Yeni İmza Çiz', 'pl': 'Narysuj nowy podpis',
+    },
+    'sig_add_stamp_image': {
+      'ar': 'إضافة ختم من صورة', 'en': 'Add Stamp from Image', 'de': 'Stempel aus Bild hinzufügen',
+      'fr': "Ajouter un tampon depuis une image", 'tr': 'Görselden Kaşe Ekle', 'pl': 'Dodaj pieczątkę ze zdjęcia',
+    },
+    'sig_saved_marks_title': {
+      'ar': 'التواقيع والأختام المحفوظة', 'en': 'Saved Signatures & Stamps', 'de': 'Gespeicherte Unterschriften & Stempel',
+      'fr': 'Signatures et tampons enregistrés', 'tr': 'Kayıtlı İmzalar ve Kaşeler', 'pl': 'Zapisane podpisy i pieczątki',
+    },
+    'sig_no_marks': {
+      'ar': 'ما في توقيعات أو أختام محفوظة بعد', 'en': 'No saved signatures or stamps yet', 'de': 'Noch keine gespeicherten Unterschriften oder Stempel',
+      'fr': 'Aucune signature ou tampon enregistré pour le moment', 'tr': 'Henüz kayıtlı imza veya kaşe yok', 'pl': 'Brak zapisanych podpisów lub pieczątek',
+    },
+    'sig_draw_appbar': {
+      'ar': 'ارسم توقيعك', 'en': 'Draw Your Signature', 'de': 'Zeichnen Sie Ihre Unterschrift',
+      'fr': 'Dessinez votre signature', 'tr': 'İmzanızı Çizin', 'pl': 'Narysuj swój podpis',
+    },
+    'clear': {
+      'ar': 'مسح', 'en': 'Clear', 'de': 'Löschen', 'fr': 'Effacer', 'tr': 'Temizle', 'pl': 'Wyczyść',
+    },
+    'continue_btn': {
+      'ar': 'متابعة', 'en': 'Continue', 'de': 'Weiter', 'fr': 'Continuer', 'tr': 'Devam Et', 'pl': 'Kontynuuj',
+    },
+    'sig_place_appbar': {
+      'ar': 'اضغط لتحديد مكان العلامة', 'en': 'Tap to Set Mark Position', 'de': 'Tippen, um die Position der Markierung festzulegen',
+      'fr': "Appuyez pour définir l'emplacement de la marque", 'tr': 'İşaretin Konumunu Belirlemek İçin Dokunun', 'pl': 'Dotknij, aby ustawić pozycję znaku',
+    },
+
+    // ---------------- إدارة التواقيع ----------------
+    'manage_sig_empty': {
+      'ar': 'لا يوجد توقيعات أو أختام محفوظة بعد.\nاحفظ واحدًا من شاشة "توقيع إلكتروني".',
+      'en': 'No saved signatures or stamps yet.\nSave one from the "E-Signature" screen.',
+      'de': 'Noch keine gespeicherten Unterschriften oder Stempel.\nSpeichern Sie eine über den Bildschirm „Elektronische Signatur".',
+      'fr': 'Aucune signature ou tampon enregistré pour le moment.\nEnregistrez-en un depuis l\'écran « Signature électronique ».',
+      'tr': 'Henüz kayıtlı imza veya kaşe yok.\n"Elektronik İmza" ekranından bir tane kaydedin.',
+      'pl': 'Brak zapisanych podpisów lub pieczątek.\nZapisz jeden na ekranie "Podpis elektroniczny".',
+    },
+    'mark_type_signature': {
+      'ar': 'توقيع', 'en': 'Signature', 'de': 'Unterschrift', 'fr': 'Signature', 'tr': 'İmza', 'pl': 'Podpis',
+    },
+    'mark_type_stamp': {
+      'ar': 'ختم', 'en': 'Stamp', 'de': 'Stempel', 'fr': 'Tampon', 'tr': 'Kaşe', 'pl': 'Pieczątka',
+    },
+
+    // ---------------- تحويل Word ----------------
+    'word_note': {
+      'ar': 'ملاحظة: يستخرج النص فقط من ملف Word، بدون تنسيق أو صور أو جداول من الملف الأصلي.',
+      'en': 'Note: extracts text only from the Word file, without formatting, images, or tables from the original.',
+      'de': 'Hinweis: extrahiert nur den Text aus der Word-Datei, ohne Formatierung, Bilder oder Tabellen aus dem Original.',
+      'fr': "Remarque : extrait uniquement le texte du fichier Word, sans mise en forme, images ou tableaux de l'original.",
+      'tr': 'Not: yalnızca Word dosyasından metni çıkarır, orijinaldeki biçimlendirme, görsel veya tablolar olmadan.',
+      'pl': 'Uwaga: wyodrębnia tylko tekst z pliku Word, bez formatowania, obrazów lub tabel z oryginału.',
+    },
+    'word_pick_hint': {
+      'ar': 'اختيار ملف Word (.docx)', 'en': 'Select Word File (.docx)', 'de': 'Word-Datei auswählen (.docx)',
+      'fr': 'Sélectionner un fichier Word (.docx)', 'tr': 'Word Dosyası Seç (.docx)', 'pl': 'Wybierz plik Word (.docx)',
+    },
+    'word_exporting': {
+      'ar': 'جارٍ التصدير...', 'en': 'Exporting...', 'de': 'Wird exportiert...',
+      'fr': "Exportation en cours...", 'tr': 'Dışa aktarılıyor...', 'pl': 'Eksportowanie...',
+    },
+    'word_export_btn': {
+      'ar': 'تصدير كـ PDF', 'en': 'Export as PDF', 'de': 'Als PDF exportieren',
+      'fr': 'Exporter en PDF', 'tr': 'PDF Olarak Dışa Aktar', 'pl': 'Eksportuj jako PDF',
+    },
+    'word_converted_title': {
+      'ar': 'تم التحويل بنجاح', 'en': 'Converted Successfully', 'de': 'Erfolgreich konvertiert',
+      'fr': 'Converti avec succès', 'tr': 'Başarıyla Dönüştürüldü', 'pl': 'Pomyślnie przekonwertowano',
+    },
+    'word_converted_note': {
+      'ar': 'تذكير: النص فقط تم تحويله، بدون تنسيق أو صور من الملف الأصلي.',
+      'en': 'Reminder: only the text was converted, without formatting or images from the original file.',
+      'de': 'Hinweis: Nur der Text wurde konvertiert, ohne Formatierung oder Bilder aus der Originaldatei.',
+      'fr': "Rappel : seul le texte a été converti, sans mise en forme ni images du fichier original.",
+      'tr': 'Hatırlatma: yalnızca metin dönüştürüldü, orijinal dosyadaki biçimlendirme veya görseller olmadan.',
+      'pl': 'Przypomnienie: przekonwertowano tylko tekst, bez formatowania lub obrazów z oryginalnego pliku.',
+    },
+
+    // ---------------- صور ↔ PDF ----------------
+    'img2pdf_add_images': {
+      'ar': 'إضافة صور', 'en': 'Add Images', 'de': 'Bilder hinzufügen',
+      'fr': 'Ajouter des images', 'tr': 'Görsel Ekle', 'pl': 'Dodaj obrazy',
+    },
+    'img2pdf_hint': {
+      'ar': 'أضف صورة أو أكثر، ورتّبهم بالسحب حسب ترتيب صفحات PDF',
+      'en': 'Add one or more images, and reorder them by dragging to set the PDF page order',
+      'de': 'Fügen Sie ein oder mehrere Bilder hinzu und ordnen Sie sie per Ziehen für die PDF-Seitenreihenfolge an',
+      'fr': "Ajoutez une ou plusieurs images, et réorganisez-les par glisser-déposer pour définir l'ordre des pages PDF",
+      'tr': 'Bir veya daha fazla görsel ekleyin ve PDF sayfa sırasını ayarlamak için sürükleyerek düzenleyin',
+      'pl': 'Dodaj jeden lub więcej obrazów i zmień ich kolejność, przeciągając, aby ustawić kolejność stron PDF',
+    },
+    'img2pdf_creating': {
+      'ar': 'جارٍ الإنشاء...', 'en': 'Creating...', 'de': 'Wird erstellt...',
+      'fr': 'Création en cours...', 'tr': 'Oluşturuluyor...', 'pl': 'Tworzenie...',
+    },
+    'img2pdf_create_btn': {
+      'ar': 'إنشاء PDF', 'en': 'Create PDF', 'de': 'PDF erstellen',
+      'fr': 'Créer un PDF', 'tr': 'PDF Oluştur', 'pl': 'Utwórz PDF',
+    },
+
+    // ---------------- PDF إلى صور ----------------
+    'pdf2img_convert_error': {
+      'ar': 'خطأ أثناء التحويل:', 'en': 'Error during conversion:', 'de': 'Fehler bei der Konvertierung:',
+      'fr': 'Erreur lors de la conversion :', 'tr': 'Dönüştürme sırasında hata:', 'pl': 'Błąd podczas konwersji:',
+    },
+    'pdf2img_converting': {
+      'ar': 'جارٍ التحويل...', 'en': 'Converting...', 'de': 'Wird konvertiert...',
+      'fr': 'Conversion en cours...', 'tr': 'Dönüştürülüyor...', 'pl': 'Konwertowanie...',
+    },
+    'pdf2img_convert_btn': {
+      'ar': 'تحويل إلى صور', 'en': 'Convert to Images', 'de': 'In Bilder konvertieren',
+      'fr': 'Convertir en images', 'tr': "Görsellere Dönüştür", 'pl': 'Konwertuj na obrazy',
+    },
+    'pdf2img_ready_suffix': {
+      'ar': 'صورة جاهزة', 'en': 'image(s) ready', 'de': 'Bild(er) fertig',
+      'fr': 'image(s) prête(s)', 'tr': 'görsel hazır', 'pl': 'obraz(y) gotowe',
+    },
+    'pdf2img_share_btn': {
+      'ar': 'مشاركة/حفظ الصور', 'en': 'Share/Save Images', 'de': 'Bilder teilen/speichern',
+      'fr': 'Partager/enregistrer les images', 'tr': 'Görselleri Paylaş/Kaydet', 'pl': 'Udostępnij/zapisz obrazy',
+    },
+
+    // ---------------- الباركود ----------------
+    'barcode_none_found': {
+      'ar': 'لم يتم العثور على أي رمز بالصورة', 'en': 'No code found in the image', 'de': 'Kein Code im Bild gefunden',
+      'fr': "Aucun code trouvé dans l'image", 'tr': 'Görselde kod bulunamadı', 'pl': 'Nie znaleziono kodu na obrazie',
+    },
+    'barcode_scan_error': {
+      'ar': 'خطأ أثناء المسح:', 'en': 'Error while scanning:', 'de': 'Fehler beim Scannen:',
+      'fr': 'Erreur lors du scan :', 'tr': 'Tarama sırasında hata:', 'pl': 'Błąd podczas skanowania:',
+    },
+    'barcode_scan_from_pdf': {
+      'ar': 'مسح من صفحة PDF', 'en': 'Scan from PDF Page', 'de': 'Von PDF-Seite scannen',
+      'fr': 'Scanner depuis une page PDF', 'tr': 'PDF Sayfasından Tara', 'pl': 'Skanuj ze strony PDF',
+    },
+    'barcode_pick_page_title': {
+      'ar': 'اختر صفحة للمسح', 'en': 'Choose a Page to Scan', 'de': 'Wählen Sie eine zu scannende Seite',
+      'fr': 'Choisissez une page à scanner', 'tr': 'Taranacak Sayfayı Seçin', 'pl': 'Wybierz stronę do zeskanowania',
+    },
+
+    // ---------------- الإملاء الصوتي ----------------
+    'dict_unavailable': {
+      'ar': 'التعرف الصوتي غير متاح على هذا الجهاز', 'en': 'Speech recognition is not available on this device',
+      'de': 'Spracherkennung ist auf diesem Gerät nicht verfügbar', 'fr': "La reconnaissance vocale n'est pas disponible sur cet appareil",
+      'tr': 'Ses tanıma bu cihazda mevcut değil', 'pl': 'Rozpoznawanie mowy nie jest dostępne na tym urządzeniu',
+    },
+    'dict_hint': {
+      'ar': 'اضغط زر الميكروفون وابدأ الكلام...', 'en': 'Tap the microphone button and start speaking...',
+      'de': 'Tippen Sie auf die Mikrofontaste und beginnen Sie zu sprechen...',
+      'fr': 'Appuyez sur le bouton du microphone et commencez à parler...',
+      'tr': 'Mikrofon düğmesine dokunun ve konuşmaya başlayın...',
+      'pl': 'Dotknij przycisku mikrofonu i zacznij mówić...',
+    },
+    'dict_listening': {
+      'ar': '...جارٍ الاستماع', 'en': 'Listening...', 'de': 'Wird zugehört...',
+      'fr': 'Écoute en cours...', 'tr': 'Dinleniyor...', 'pl': 'Słuchanie...',
+    },
+    'dict_default_title': {
+      'ar': 'نص مُملى صوتيًا', 'en': 'Voice-Dictated Text', 'de': 'Sprachdiktierter Text',
+      'fr': 'Texte dicté vocalement', 'tr': 'Sesli Dikte Edilen Metin', 'pl': 'Tekst dyktowany głosowo',
+    },
+
+    // ---------------- كاميرا المستندات ----------------
+    'cam_permission_needed': {
+      'ar': 'التطبيق يحتاج إذن الوصول للكاميرا لاستخدام هذه الميزة',
+      'en': 'The app needs camera access permission to use this feature',
+      'de': 'Die App benötigt die Kameraberechtigung, um diese Funktion zu nutzen',
+      'fr': "L'application a besoin de l'autorisation d'accès à la caméra pour utiliser cette fonctionnalité",
+      'tr': 'Uygulamanın bu özelliği kullanabilmesi için kamera erişim izni gerekir',
+      'pl': 'Aplikacja potrzebuje uprawnień dostępu do aparatu, aby korzystać z tej funkcji',
+    },
+    'cam_no_camera': {
+      'ar': 'لا توجد كاميرا متاحة على هذا الجهاز', 'en': 'No camera available on this device',
+      'de': 'Keine Kamera auf diesem Gerät verfügbar', 'fr': "Aucune caméra disponible sur cet appareil",
+      'tr': 'Bu cihazda kullanılabilir kamera yok', 'pl': 'Brak dostępnego aparatu na tym urządzeniu',
+    },
+    'cam_open_error': {
+      'ar': 'تعذّر فتح الكاميرا:', 'en': 'Could not open the camera:', 'de': 'Kamera konnte nicht geöffnet werden:',
+      'fr': "Impossible d'ouvrir la caméra :", 'tr': 'Kamera açılamadı:', 'pl': 'Nie można otworzyć aparatu:',
+    },
+    'cam_capture_error': {
+      'ar': 'تعذّر الالتقاط:', 'en': 'Could not capture:', 'de': 'Aufnahme fehlgeschlagen:',
+      'fr': 'Impossible de capturer :', 'tr': 'Yakalama başarısız:', 'pl': 'Nie można przechwycić:',
+    },
+    'cam_appbar': {
+      'ar': 'صوّر المستند', 'en': 'Photograph the Document', 'de': 'Dokument fotografieren',
+      'fr': 'Photographier le document', 'tr': 'Belgeyi Fotoğrafla', 'pl': 'Sfotografuj dokument',
+    },
+    'cam_align_hint': {
+      'ar': 'حاذِ حواف الورقة مع الإطار', 'en': 'Align the paper edges with the frame', 'de': 'Richten Sie die Papierkanten am Rahmen aus',
+      'fr': 'Alignez les bords du papier avec le cadre', 'tr': 'Kağıt kenarlarını çerçeveyle hizalayın', 'pl': 'Wyrównaj krawędzie papieru z ramką',
+    },
+
+    // ---------------- مدير الملفات ----------------
+    'fm_appbar': {
+      'ar': 'مدير الملفات', 'en': 'File Manager', 'de': 'Dateimanager',
+      'fr': 'Gestionnaire de fichiers', 'tr': 'Dosya Yöneticisi', 'pl': 'Menedżer plików',
+    },
+    'fm_tab_all': {
+      'ar': 'الكل', 'en': 'All', 'de': 'Alle', 'fr': 'Tous', 'tr': 'Tümü', 'pl': 'Wszystkie',
+    },
+    'fm_tab_favorites': {
+      'ar': 'المفضلة', 'en': 'Favorites', 'de': 'Favoriten', 'fr': 'Favoris', 'tr': 'Favoriler', 'pl': 'Ulubione',
+    },
+    'fm_tab_trash': {
+      'ar': 'سلة المحذوفات', 'en': 'Trash', 'de': 'Papierkorb', 'fr': 'Corbeille', 'tr': 'Çöp Kutusu', 'pl': 'Kosz',
+    },
+    'fm_search_hint': {
+      'ar': 'ابحث باسم الملف...', 'en': 'Search by file name...', 'de': 'Nach Dateiname suchen...',
+      'fr': 'Rechercher par nom de fichier...', 'tr': 'Dosya adına göre ara...', 'pl': 'Szukaj według nazwy pliku...',
+    },
+    'fm_trash_empty': {
+      'ar': 'سلة المحذوفات فارغة', 'en': 'Trash is empty', 'de': 'Papierkorb ist leer',
+      'fr': 'La corbeille est vide', 'tr': 'Çöp kutusu boş', 'pl': 'Kosz jest pusty',
+    },
+    'fm_no_files': {
+      'ar': 'لا توجد ملفات هنا بعد', 'en': 'No files here yet', 'de': 'Noch keine Dateien hier',
+      'fr': "Pas encore de fichiers ici", 'tr': 'Burada henüz dosya yok', 'pl': 'Brak plików tutaj',
+    },
+    'fm_file_missing': {
+      'ar': 'الملف غير موجود على الجهاز', 'en': 'File not found on device', 'de': 'Datei nicht auf dem Gerät gefunden',
+      'fr': "Fichier introuvable sur l'appareil", 'tr': 'Dosya cihazda bulunamadı', 'pl': 'Nie znaleziono pliku na urządzeniu',
+    },
+    'fm_moved_to_trash': {
+      'ar': 'انتقل لسلة المحذوفات', 'en': 'Moved to trash', 'de': 'In den Papierkorb verschoben',
+      'fr': 'Déplacé vers la corbeille', 'tr': 'Çöp kutusuna taşındı', 'pl': 'Przeniesiono do kosza',
+    },
+    'fm_delete_permanent_title': {
+      'ar': 'حذف نهائي', 'en': 'Permanent Delete', 'de': 'Endgültig löschen',
+      'fr': 'Suppression définitive', 'tr': 'Kalıcı Silme', 'pl': 'Trwałe usunięcie',
+    },
+    'fm_delete_permanent_body_prefix': {
+      'ar': 'هل تريد حذف', 'en': 'Do you want to delete', 'de': 'Möchten Sie',
+      'fr': 'Voulez-vous supprimer', 'tr': 'Silmek istiyor musunuz:', 'pl': 'Czy chcesz usunąć',
+    },
+    'fm_delete_permanent_body_suffix': {
+      'ar': 'نهائيًا؟ لا يمكن التراجع عن هذا.', 'en': 'permanently? This cannot be undone.', 'de': 'endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
+      'fr': 'définitivement ? Cette action est irréversible.', 'tr': 'kalıcı olarak? Bu geri alınamaz.', 'pl': 'trwale? Tego nie można cofnąć.',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -47,10 +50,11 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
   }
 
   Future<void> _toggleListening() async {
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     if (!_speechAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('التعرف الصوتي غير متاح على هذا الجهاز')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('dict_unavailable'))));
       return;
     }
 
@@ -74,13 +78,16 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
 
   Future<void> _saveAsPdf() async {
     if (_textController.text.trim().isEmpty) return;
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final doc = pw.Document();
       doc.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           build: (context) => [
-            pw.Text('نص مُملى صوتيًا', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Text(tr('dict_default_title'), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 16),
             pw.Text(_textController.text, style: const pw.TextStyle(fontSize: 13)),
           ],
@@ -96,31 +103,37 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم الحفظ'),
+          title: Text(tr('saved')),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
-            ElevatedButton(onPressed: () => Share.shareXFiles([XFile(outPath)]), child: const Text('مشاركة')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
+            ElevatedButton(onPressed: () => Share.shareXFiles([XFile(outPath)]), child: Text(tr('ed_share'))),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)));
               },
-              child: const Text('فتح'),
+              child: Text(tr('scanner_open_file')),
             ),
           ],
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
-        title: const Text('إملاء صوتي'),
+        title: Text(tr('tool_dictation_t')),
         actions: [
           DropdownButton<String>(
             value: _localeId,
@@ -147,7 +160,7 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(hintText: 'اضغط زر الميكروفون وابدأ الكلام...'),
+                decoration: InputDecoration(hintText: tr('dict_hint')),
               ),
             ),
             const SizedBox(height: 16),
@@ -166,9 +179,9 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
               ),
             ),
             if (_listening)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text('...جارٍ الاستماع', textAlign: TextAlign.center),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(tr('dict_listening'), textAlign: TextAlign.center),
               ),
             const SizedBox(height: 16),
             Row(
@@ -179,10 +192,10 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
                         ? null
                         : () {
                             Clipboard.setData(ClipboardData(text: _textController.text));
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم النسخ')));
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('copied'))));
                           },
                     icon: const Icon(Icons.copy_rounded),
-                    label: const Text('نسخ'),
+                    label: Text(tr('copy')),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -190,7 +203,7 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _textController.text.isEmpty ? null : _saveAsPdf,
                     icon: const Icon(Icons.picture_as_pdf_rounded),
-                    label: const Text('حفظ كـ PDF'),
+                    label: Text(tr('scanner_save_tooltip')),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
                   ),
                 ),
@@ -198,6 +211,7 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

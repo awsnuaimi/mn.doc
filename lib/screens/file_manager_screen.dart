@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:open_filex/open_filex.dart';
 
 import '../services/file_manager.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 import 'text_viewer_screen.dart';
@@ -20,6 +23,9 @@ class _FileManagerScreenState extends State<FileManagerScreen> with SingleTicker
   List<DocumentRecord> _all = [];
   final _searchController = TextEditingController();
   String _query = '';
+
+  String get _lang => Provider.of<AppSettingsController>(context, listen: false).languageCode;
+  String tr(String key) => AppText.t(key, _lang);
 
   @override
   void initState() {
@@ -66,7 +72,7 @@ class _FileManagerScreenState extends State<FileManagerScreen> with SingleTicker
     await FileManagerService.moveToTrash(record.path);
     _load();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('انتقل لسلة المحذوفات')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('fm_moved_to_trash'))));
   }
 
   Future<void> _restore(DocumentRecord record) async {
@@ -78,14 +84,14 @@ class _FileManagerScreenState extends State<FileManagerScreen> with SingleTicker
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('حذف نهائي'),
-        content: Text('هل تريد حذف "${record.name}" نهائيًا؟ لا يمكن التراجع عن هذا.'),
+        title: Text(tr('fm_delete_permanent_title')),
+        content: Text('${tr('fm_delete_permanent_body_prefix')} "${record.name}" ${tr('fm_delete_permanent_body_suffix')}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('cancel'))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('حذف نهائي'),
+            child: Text(tr('fm_delete_permanent_title')),
           ),
         ],
       ),
@@ -98,47 +104,51 @@ class _FileManagerScreenState extends State<FileManagerScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<AppSettingsController>();
     final activeRecords = _all.where((r) => !r.isDeleted).toList();
     final favoriteRecords = activeRecords.where((r) => r.isFavorite).toList();
     final trashRecords = _all.where((r) => r.isDeleted).toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('مدير الملفات'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'الكل'),
-            Tab(text: 'المفضلة'),
-            Tab(text: 'سلة المحذوفات'),
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(tr('fm_appbar')),
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: [
+              Tab(text: tr('fm_tab_all')),
+              Tab(text: tr('fm_tab_favorites')),
+              Tab(text: tr('fm_tab_trash')),
+            ],
+          ),
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  hintText: tr('fm_search_hint'),
+                  isDense: true,
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildList(_filtered(activeRecords), isTrash: false),
+                  _buildList(_filtered(favoriteRecords), isTrash: false),
+                  _buildList(_filtered(trashRecords), isTrash: true),
+                ],
+              ),
+            ),
           ],
         ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search_rounded),
-                hintText: 'ابحث باسم الملف...',
-                isDense: true,
-              ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildList(_filtered(activeRecords), isTrash: false),
-                _buildList(_filtered(favoriteRecords), isTrash: false),
-                _buildList(_filtered(trashRecords), isTrash: true),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -147,7 +157,7 @@ class _FileManagerScreenState extends State<FileManagerScreen> with SingleTicker
     if (records.isEmpty) {
       return Center(
         child: Text(
-          isTrash ? 'سلة المحذوفات فارغة' : 'لا توجد ملفات هنا بعد',
+          isTrash ? tr('fm_trash_empty') : tr('fm_no_files'),
           style: TextStyle(color: AppColors.textMuted),
         ),
       );
@@ -170,7 +180,7 @@ class _FileManagerScreenState extends State<FileManagerScreen> with SingleTicker
             ),
             title: Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
-              exists ? DateTime.fromMillisecondsSinceEpoch(r.addedAt).toString().split('.').first : 'الملف غير موجود على الجهاز',
+              exists ? DateTime.fromMillisecondsSinceEpoch(r.addedAt).toString().split('.').first : tr('fm_file_missing'),
               style: TextStyle(fontSize: 11, color: exists ? null : Colors.red),
             ),
             onTap: exists && !isTrash ? () => _openRecord(r) : null,

@@ -2,11 +2,14 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -45,6 +48,9 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
   Future<void> _exportToPdf() async {
     if (_images.isEmpty) return;
     setState(() => _saving = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final doc = pw.Document();
       for (final img in _images) {
@@ -68,20 +74,20 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم إنشاء الملف بنجاح'),
-          content: Text('عدد الصفحات: ${_images.length}'),
+          title: Text(tr('scanner_success_title')),
+          content: Text('${tr('scanner_pagecount_label')} ${_images.length}'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
             ElevatedButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)));
               },
-              child: const Text('فتح'),
+              child: Text(tr('scanner_open_file')),
             ),
           ],
         ),
@@ -89,14 +95,20 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('تحويل صور إلى PDF')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_img2pdf_t'))),
       body: Column(
         children: [
           Padding(
@@ -104,12 +116,12 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
             child: ElevatedButton.icon(
               onPressed: _addImages,
               icon: const Icon(Icons.add_photo_alternate_rounded),
-              label: const Text('إضافة صور'),
+              label: Text(tr('img2pdf_add_images')),
             ),
           ),
           Expanded(
             child: _images.isEmpty
-                ? Center(child: Text('أضف صورة أو أكثر، ورتّبهم بالسحب حسب ترتيب صفحات PDF', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)))
+                ? Center(child: Text(tr('img2pdf_hint'), textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)))
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _images.length,
@@ -127,7 +139,7 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.memory(img.bytes, width: 45, height: 55, fit: BoxFit.cover)),
-                          title: Text('صفحة ${index + 1}'),
+                          title: Text('${tr('scanner_page_label')} ${index + 1}'),
                           subtitle: Text(img.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
@@ -145,11 +157,12 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
               icon: _saving
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.picture_as_pdf_rounded),
-              label: Text(_saving ? 'جارٍ الإنشاء...' : 'إنشاء PDF (${_images.length} صفحة)'),
+              label: Text(_saving ? tr('img2pdf_creating') : '${tr('img2pdf_create_btn')} (${_images.length} ${tr('pages_word')})'),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(double.infinity, 50)),
             ),
           ),
         ],
+      ),
       ),
     );
   }

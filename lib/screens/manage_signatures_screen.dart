@@ -1,7 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../services/signature_library.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// إدارة التواقيع والأختام المحفوظة: عرض، حذف.
@@ -38,14 +41,20 @@ class _ManageSignaturesScreenState extends State<ManageSignaturesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('التواقيع والأختام المحفوظة')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_signmanage_t'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _marks.isEmpty
               ? Center(
                   child: Text(
-                    'لا يوجد توقيعات أو أختام محفوظة بعد.\nاحفظ واحدًا من شاشة "توقيع إلكتروني".',
+                    tr('manage_sig_empty'),
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textMuted),
                   ),
@@ -79,7 +88,7 @@ class _ManageSignaturesScreenState extends State<ManageSignaturesScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(mark.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                      Text(mark.type == MarkType.signature ? 'توقيع' : 'ختم', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                                      Text(mark.type == MarkType.signature ? tr('mark_type_signature') : tr('mark_type_stamp'), style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
                                     ],
                                   ),
                                 ),
@@ -95,6 +104,7 @@ class _ManageSignaturesScreenState extends State<ManageSignaturesScreen> {
                     );
                   },
                 ),
+      ),
     );
   }
 }

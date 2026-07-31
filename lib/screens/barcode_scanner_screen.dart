@@ -2,12 +2,15 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// التعرف على رموز QR والباركود من صورة، أو من صفحة داخل ملف PDF.
@@ -36,6 +39,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       _scanning = true;
       _results = [];
     });
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final input = InputImage.fromFilePath(path);
       final barcodes = await _scanner.processImage(input);
@@ -44,12 +50,12 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         _scanning = false;
       });
       if (barcodes.isEmpty && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لم يتم العثور على أي رمز بالصورة')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('barcode_none_found'))));
       }
     } catch (e) {
       setState(() => _scanning = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ أثناء المسح: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('barcode_scan_error')} $e')));
     }
   }
 
@@ -65,6 +71,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     if (result == null || result.files.single.path == null) return;
 
     setState(() => _scanning = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final bytes = await File(result.files.single.path!).readAsBytes();
       final doc = sf.PdfDocument(inputBytes: bytes);
@@ -75,12 +84,12 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       final chosenPage = await showDialog<int>(
         context: context,
         builder: (context) => SimpleDialog(
-          title: const Text('اختر صفحة للمسح'),
+          title: Text(tr('barcode_pick_page_title')),
           children: List.generate(
             pageCount,
             (i) => SimpleDialogOption(
               onPressed: () => Navigator.pop(context, i),
-              child: Text('صفحة ${i + 1}'),
+              child: Text('${tr('scanner_page_label')} ${i + 1}'),
             ),
           ),
         ),
@@ -107,14 +116,20 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     } catch (e) {
       setState(() => _scanning = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('التعرف على QR والباركود')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_barcode_t'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -126,7 +141,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () => _pickImage(ImageSource.camera),
                     icon: const Icon(Icons.camera_alt_rounded),
-                    label: const Text('كاميرا'),
+                    label: Text(tr('camera')),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -134,7 +149,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                   child: OutlinedButton.icon(
                     onPressed: () => _pickImage(ImageSource.gallery),
                     icon: const Icon(Icons.photo_library_rounded),
-                    label: const Text('صورة'),
+                    label: Text(tr('gallery')),
                   ),
                 ),
               ],
@@ -143,7 +158,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             OutlinedButton.icon(
               onPressed: _scanFromPdf,
               icon: const Icon(Icons.picture_as_pdf_rounded),
-              label: const Text('مسح من صفحة PDF'),
+              label: Text(tr('barcode_scan_from_pdf')),
             ),
             const SizedBox(height: 16),
             if (_imagePath != null)
@@ -168,7 +183,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                           icon: const Icon(Icons.copy_rounded),
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: b.displayValue ?? b.rawValue ?? ''));
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم النسخ')));
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('copied'))));
                           },
                         ),
                       ),
@@ -178,6 +193,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               ),
           ],
         ),
+      ),
       ),
     );
   }

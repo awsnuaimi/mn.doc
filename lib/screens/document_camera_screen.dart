@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// شاشة كاميرا مخصّصة لمسح المستندات — تعرض إطار إرشادي (خطوط زوايا)
@@ -21,6 +24,9 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
   bool _capturing = false;
   String? _error;
 
+  String get _lang => Provider.of<AppSettingsController>(context, listen: false).languageCode;
+  String tr(String key) => AppText.t(key, _lang);
+
   @override
   void initState() {
     super.initState();
@@ -31,13 +37,13 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
     try {
       final status = await Permission.camera.request();
       if (!status.isGranted) {
-        setState(() => _error = 'التطبيق يحتاج إذن الوصول للكاميرا لاستخدام هذه الميزة');
+        setState(() => _error = tr('cam_permission_needed'));
         return;
       }
 
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        setState(() => _error = 'لا توجد كاميرا متاحة على هذا الجهاز');
+        setState(() => _error = tr('cam_no_camera'));
         return;
       }
       final backCamera = cameras.firstWhere(
@@ -48,7 +54,7 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
       await _controller!.initialize();
       if (mounted) setState(() {});
     } catch (e) {
-      setState(() => _error = 'تعذّر فتح الكاميرا: $e');
+      setState(() => _error = '${tr('cam_open_error')} $e');
     }
   }
 
@@ -68,18 +74,21 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
     } catch (e) {
       setState(() => _capturing = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذّر الالتقاط: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('cam_capture_error')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final settings = context.watch<AppSettingsController>();
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('صوّر المستند'),
+        title: Text(tr('cam_appbar')),
       ),
       body: FutureBuilder<void>(
         future: _initFuture,
@@ -115,7 +124,7 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-                    child: const Text('حاذِ حواف الورقة مع الإطار', style: TextStyle(color: Colors.white, fontSize: 13)),
+                    child: Text(tr('cam_align_hint'), style: const TextStyle(color: Colors.white, fontSize: 13)),
                   ),
                 ),
               ),
@@ -149,6 +158,7 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
             ],
           );
         },
+      ),
       ),
     );
   }
