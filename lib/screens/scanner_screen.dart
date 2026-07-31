@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../theme/app_theme.dart';
 import '../services/app_settings.dart';
+import '../services/isolate_helpers.dart';
 import '../services/app_text.dart';
 import 'pdf_editor_screen.dart';
 import 'document_camera_screen.dart';
@@ -65,18 +66,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
 
   /// يحوّل الصورة لشكل "ممسوح ضوئيًا": أبيض وأسود مع رفع التباين والحدة.
+  /// تتم المعالجة بخيط منفصل (Isolate) عبر compute() لتفادي تجميد
+  /// الواجهة أثناء تصوير عدة صفحات متتالية.
   Future<File> _enhance(File original) async {
     final bytes = await original.readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return original;
-
-    var processed = img.grayscale(decoded);
-    processed = img.adjustColor(processed, contrast: 1.4, brightness: 1.05);
+    final processedBytes = await compute(enhanceImageIsolate, bytes);
 
     final dir = await getTemporaryDirectory();
     final outPath = '${dir.path}/scan_enhanced_${DateTime.now().microsecondsSinceEpoch}.jpg';
     final outFile = File(outPath);
-    await outFile.writeAsBytes(img.encodeJpg(processed, quality: 90));
+    await outFile.writeAsBytes(processedBytes);
     return outFile;
   }
 

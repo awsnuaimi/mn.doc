@@ -1,12 +1,13 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../theme/app_theme.dart';
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/isolate_helpers.dart';
 import 'merge_pdf_screen.dart';
 import 'manage_pages_screen.dart';
 import 'signature_screen.dart';
@@ -263,9 +264,7 @@ Future<void> _openTtsFromPdf(BuildContext context) async {
   String text = '';
   try {
     final fileBytes = await File(result.files.single.path!).readAsBytes();
-    final document = sf.PdfDocument(inputBytes: fileBytes);
-    text = sf.PdfTextExtractor(document).extractText();
-    document.dispose();
+    text = await compute(extractPdfTextIsolate, fileBytes);
   } catch (_) {
     text = '';
   }

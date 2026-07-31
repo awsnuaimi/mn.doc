@@ -1,12 +1,13 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../services/text_diff.dart';
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/isolate_helpers.dart';
 import '../theme/app_theme.dart';
 
 /// مقارنة ملفي PDF نصيًا وإظهار الإضافات والحذف بينهما.
@@ -42,10 +43,7 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
 
   Future<String> _extractText(String path) async {
     final bytes = await File(path).readAsBytes();
-    final document = sf.PdfDocument(inputBytes: bytes);
-    final text = sf.PdfTextExtractor(document).extractText();
-    document.dispose();
-    return text;
+    return compute(extractPdfTextIsolate, bytes);
   }
 
   Future<void> _compare() async {

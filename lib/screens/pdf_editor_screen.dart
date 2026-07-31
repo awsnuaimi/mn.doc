@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -9,6 +10,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 import '../theme/app_theme.dart';
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/isolate_helpers.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
@@ -222,15 +224,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     });
   }
 
-  /// يستخرج كامل النص من ملف الـPDF الحالي (عبر Syncfusion PdfTextExtractor)
-  /// لاستخدامه في ميزات الذكاء الاصطناعي (التلخيص/الدردشة/الترجمة).
+  /// يستخرج كامل النص من ملف الـPDF الحالي بخيط منفصل (Isolate) بالخلفية
+  /// عبر compute() — لتفادي تجميد الواجهة مع ملفات PDF كبيرة، لاستخدامه
+  /// بميزات الذكاء الاصطناعي (التلخيص/الدردشة/الترجمة/القراءة الصوتية).
   Future<String> _extractFullText() async {
     final bytes = await File(widget.filePath).readAsBytes();
-    final document = sf.PdfDocument(inputBytes: bytes);
-    final extractor = sf.PdfTextExtractor(document);
-    final text = extractor.extractText();
-    document.dispose();
-    return text;
+    return compute(extractPdfTextIsolate, bytes);
   }
 
   Future<void> _openAiFeature(String feature) async {
