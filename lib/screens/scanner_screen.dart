@@ -179,10 +179,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text(
-                        tr('scanner_empty_hint'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppColors.textMuted),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.camera_alt_outlined, size: 48, color: AppColors.textMuted.withOpacity(0.4)),
+                          const SizedBox(height: 10),
+                          Text(
+                            tr('scanner_empty_hint'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: AppColors.textMuted),
+                          ),
+                        ],
                       ),
                     ),
                   )

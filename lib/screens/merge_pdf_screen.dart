@@ -142,10 +142,20 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
           if (_files.isEmpty)
             Expanded(
               child: Center(
-                child: Text(
-                  tr('merge_hint'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textMuted),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.merge_type_rounded, size: 48, color: AppColors.textMuted.withOpacity(0.4)),
+                      const SizedBox(height: 10),
+                      Text(
+                        tr('merge_hint'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             )

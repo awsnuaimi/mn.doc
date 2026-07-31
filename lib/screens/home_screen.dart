@@ -179,10 +179,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 30),
                       child: Center(
-                        child: Text(
-                          t('no_files_yet'),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.textMuted),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.folder_open_rounded, size: 48, color: AppColors.textMuted.withOpacity(0.4)),
+                            const SizedBox(height: 10),
+                            Text(
+                              t('no_files_yet'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: AppColors.textMuted),
+                            ),
+                          ],
                         ),
                       ),
                     )

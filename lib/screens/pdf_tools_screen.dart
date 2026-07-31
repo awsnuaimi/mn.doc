@@ -27,7 +27,7 @@ import 'redact_edit_screen.dart';
 import 'voice_dictation_screen.dart';
 import 'repair_pdf_screen.dart';
 
-/// مركز أدوات PDF المتقدمة: دمج، حذف/ترتيب صفحات، وتوقيع إلكتروني.
+/// مركز أدوات PDF المتقدمة، مقسّم لفئات لتسهيل الوصول السريع.
 class PdfToolsScreen extends StatelessWidget {
   const PdfToolsScreen({super.key});
 
@@ -37,120 +37,150 @@ class PdfToolsScreen extends StatelessWidget {
     final lang = settings.languageCode;
     String tr(String key) => AppText.t(key, lang);
 
-    final tools = [
-      _ToolData(
-        icon: Icons.merge_type_rounded,
-        title: tr('tool_merge_t'),
-        subtitle: tr('tool_merge_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MergePdfScreen())),
-      ),
-      _ToolData(
-        icon: Icons.reorder_rounded,
-        title: tr('tool_pages_t'),
-        subtitle: tr('tool_pages_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManagePagesScreen())),
-      ),
-      _ToolData(
-        icon: Icons.draw_rounded,
-        title: tr('tool_sign_t'),
-        subtitle: tr('tool_sign_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignatureScreen())),
-      ),
-      _ToolData(
-        icon: Icons.badge_rounded,
-        title: tr('tool_signmanage_t'),
-        subtitle: tr('tool_signmanage_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageSignaturesScreen())),
-      ),
-      _ToolData(
-        icon: Icons.lock_rounded,
-        title: tr('tool_protect_t'),
-        subtitle: tr('tool_protect_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProtectPdfScreen())),
-      ),
-      _ToolData(
-        icon: Icons.water_drop_rounded,
-        title: tr('tool_watermark_t'),
-        subtitle: tr('tool_watermark_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WatermarkScreen())),
-      ),
-      _ToolData(
-        icon: Icons.compress_rounded,
-        title: tr('tool_compress_t'),
-        subtitle: tr('tool_compress_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompressPdfScreen())),
-      ),
-      _ToolData(
-        icon: Icons.compare_arrows_rounded,
-        title: tr('tool_compare_t'),
-        subtitle: tr('tool_compare_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComparePdfScreen())),
-      ),
-      _ToolData(
-        icon: Icons.rotate_right_rounded,
-        title: tr('tool_rotate_t'),
-        subtitle: tr('tool_rotate_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RotatePagesScreen())),
-      ),
-      _ToolData(
-        icon: Icons.record_voice_over_rounded,
-        title: tr('tool_tts_t'),
-        subtitle: tr('tool_tts_s'),
-        onTap: () => _openTtsFromPdf(context),
-      ),
-      _ToolData(
-        icon: Icons.table_chart_rounded,
-        title: tr('tool_table_t'),
-        subtitle: tr('tool_table_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtractTableScreen())),
-      ),
-      _ToolData(
-        icon: Icons.description_rounded,
-        title: tr('tool_word_t'),
-        subtitle: tr('tool_word_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WordToPdfScreen())),
-      ),
-      _ToolData(
-        icon: Icons.perm_media_rounded,
-        title: tr('tool_img2pdf_t'),
-        subtitle: tr('tool_img2pdf_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImagesToPdfScreen())),
-      ),
-      _ToolData(
-        icon: Icons.image_rounded,
-        title: tr('tool_pdf2img_t'),
-        subtitle: tr('tool_pdf2img_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PdfToImagesScreen())),
-      ),
-      _ToolData(
-        icon: Icons.print_rounded,
-        title: tr('tool_print_t'),
-        subtitle: tr('tool_print_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrintPdfScreen())),
-      ),
-      _ToolData(
-        icon: Icons.qr_code_scanner_rounded,
-        title: tr('tool_barcode_t'),
-        subtitle: tr('tool_barcode_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen())),
-      ),
-      _ToolData(
+    final categories = <_ToolCategory>[
+      _ToolCategory(
+        title: tr('cat_editing'),
         icon: Icons.edit_note_rounded,
-        title: tr('tool_redact_t'),
-        subtitle: tr('tool_redact_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RedactEditScreen())),
+        tools: [
+          _ToolData(
+            icon: Icons.merge_type_rounded,
+            title: tr('tool_merge_t'),
+            subtitle: tr('tool_merge_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MergePdfScreen())),
+          ),
+          _ToolData(
+            icon: Icons.reorder_rounded,
+            title: tr('tool_pages_t'),
+            subtitle: tr('tool_pages_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManagePagesScreen())),
+          ),
+          _ToolData(
+            icon: Icons.rotate_right_rounded,
+            title: tr('tool_rotate_t'),
+            subtitle: tr('tool_rotate_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RotatePagesScreen())),
+          ),
+          _ToolData(
+            icon: Icons.compare_arrows_rounded,
+            title: tr('tool_compare_t'),
+            subtitle: tr('tool_compare_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComparePdfScreen())),
+          ),
+          _ToolData(
+            icon: Icons.edit_note_rounded,
+            title: tr('tool_redact_t'),
+            subtitle: tr('tool_redact_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RedactEditScreen())),
+          ),
+        ],
       ),
-      _ToolData(
-        icon: Icons.mic_rounded,
-        title: tr('tool_dictation_t'),
-        subtitle: tr('tool_dictation_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceDictationScreen())),
+      _ToolCategory(
+        title: tr('cat_signing'),
+        icon: Icons.draw_rounded,
+        tools: [
+          _ToolData(
+            icon: Icons.draw_rounded,
+            title: tr('tool_sign_t'),
+            subtitle: tr('tool_sign_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignatureScreen())),
+          ),
+          _ToolData(
+            icon: Icons.badge_rounded,
+            title: tr('tool_signmanage_t'),
+            subtitle: tr('tool_signmanage_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageSignaturesScreen())),
+          ),
+        ],
       ),
-      _ToolData(
+      _ToolCategory(
+        title: tr('cat_security'),
+        icon: Icons.lock_rounded,
+        tools: [
+          _ToolData(
+            icon: Icons.lock_rounded,
+            title: tr('tool_protect_t'),
+            subtitle: tr('tool_protect_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProtectPdfScreen())),
+          ),
+          _ToolData(
+            icon: Icons.water_drop_rounded,
+            title: tr('tool_watermark_t'),
+            subtitle: tr('tool_watermark_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WatermarkScreen())),
+          ),
+        ],
+      ),
+      _ToolCategory(
+        title: tr('cat_conversion'),
+        icon: Icons.swap_horiz_rounded,
+        tools: [
+          _ToolData(
+            icon: Icons.description_rounded,
+            title: tr('tool_word_t'),
+            subtitle: tr('tool_word_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WordToPdfScreen())),
+          ),
+          _ToolData(
+            icon: Icons.perm_media_rounded,
+            title: tr('tool_img2pdf_t'),
+            subtitle: tr('tool_img2pdf_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImagesToPdfScreen())),
+          ),
+          _ToolData(
+            icon: Icons.image_rounded,
+            title: tr('tool_pdf2img_t'),
+            subtitle: tr('tool_pdf2img_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PdfToImagesScreen())),
+          ),
+          _ToolData(
+            icon: Icons.table_chart_rounded,
+            title: tr('tool_table_t'),
+            subtitle: tr('tool_table_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtractTableScreen())),
+          ),
+        ],
+      ),
+      _ToolCategory(
+        title: tr('cat_utilities'),
         icon: Icons.build_rounded,
-        title: tr('tool_repair_t'),
-        subtitle: tr('tool_repair_s'),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RepairPdfScreen())),
+        tools: [
+          _ToolData(
+            icon: Icons.compress_rounded,
+            title: tr('tool_compress_t'),
+            subtitle: tr('tool_compress_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompressPdfScreen())),
+          ),
+          _ToolData(
+            icon: Icons.print_rounded,
+            title: tr('tool_print_t'),
+            subtitle: tr('tool_print_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrintPdfScreen())),
+          ),
+          _ToolData(
+            icon: Icons.qr_code_scanner_rounded,
+            title: tr('tool_barcode_t'),
+            subtitle: tr('tool_barcode_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen())),
+          ),
+          _ToolData(
+            icon: Icons.mic_rounded,
+            title: tr('tool_dictation_t'),
+            subtitle: tr('tool_dictation_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceDictationScreen())),
+          ),
+          _ToolData(
+            icon: Icons.record_voice_over_rounded,
+            title: tr('tool_tts_t'),
+            subtitle: tr('tool_tts_s'),
+            onTap: () => _openTtsFromPdf(context),
+          ),
+          _ToolData(
+            icon: Icons.build_rounded,
+            title: tr('tool_repair_t'),
+            subtitle: tr('tool_repair_s'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RepairPdfScreen())),
+          ),
+        ],
       ),
     ];
 
@@ -158,24 +188,43 @@ class PdfToolsScreen extends StatelessWidget {
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         appBar: AppBar(title: Text(tr('pdf_tools_appbar'))),
-        body: ListView.separated(
+        body: ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: tools.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, i) {
-            final t = tools[i];
-            return Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: CircleAvatar(
-                  radius: 26,
-                  backgroundColor: AppColors.primaryDark.withOpacity(0.1),
-                  child: Icon(t.icon, color: AppColors.primaryDark),
-                ),
-                title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(t.subtitle, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                trailing: const Icon(Icons.chevron_left_rounded),
-                onTap: t.onTap,
+          itemCount: categories.length,
+          itemBuilder: (context, catIndex) {
+            final category = categories[catIndex];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(category.icon, size: 18, color: AppColors.primaryDark),
+                      const SizedBox(width: 8),
+                      Text(
+                        category.title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...category.tools.map((t) => Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: CircleAvatar(
+                            radius: 24,
+                            backgroundColor: AppColors.primaryDark.withOpacity(0.1),
+                            child: Icon(t.icon, color: AppColors.primaryDark, size: 20),
+                          ),
+                          title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          subtitle: Text(t.subtitle, style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                          trailing: const Icon(Icons.chevron_left_rounded),
+                          onTap: t.onTap,
+                        ),
+                      )),
+                ],
               ),
             );
           },
@@ -183,6 +232,13 @@ class PdfToolsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ToolCategory {
+  final String title;
+  final IconData icon;
+  final List<_ToolData> tools;
+  _ToolCategory({required this.title, required this.icon, required this.tools});
 }
 
 class _ToolData {

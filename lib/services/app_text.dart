@@ -1530,6 +1530,27 @@ class AppText {
       'ar': 'التطبيق محدَّث لآخر إصدار ✅', 'en': 'The app is up to date ✅', 'de': 'Die App ist auf dem neuesten Stand ✅',
       'fr': "L'application est à jour ✅", 'tr': 'Uygulama güncel ✅', 'pl': 'Aplikacja jest aktualna ✅',
     },
+
+    // ---------------- فئات مركز أدوات PDF ----------------
+    'cat_editing': {
+      'ar': 'تحرير ومحتوى', 'en': 'Editing & Content', 'de': 'Bearbeitung & Inhalt',
+      'fr': 'Édition et contenu', 'tr': 'Düzenleme ve İçerik', 'pl': 'Edycja i zawartość',
+    },
+    'cat_security': {
+      'ar': 'الحماية والأمان', 'en': 'Security & Protection', 'de': 'Sicherheit & Schutz',
+      'fr': 'Sécurité et protection', 'tr': 'Güvenlik ve Koruma', 'pl': 'Bezpieczeństwo i ochrona',
+    },
+    'cat_signing': {
+      'ar': 'التوقيع', 'en': 'Signing', 'de': 'Signieren', 'fr': 'Signature', 'tr': 'İmzalama', 'pl': 'Podpisywanie',
+    },
+    'cat_conversion': {
+      'ar': 'تحويل الصيغ', 'en': 'Format Conversion', 'de': 'Formatkonvertierung',
+      'fr': 'Conversion de format', 'tr': 'Format Dönüştürme', 'pl': 'Konwersja formatu',
+    },
+    'cat_utilities': {
+      'ar': 'أدوات إضافية', 'en': 'Additional Tools', 'de': 'Zusätzliche Werkzeuge',
+      'fr': 'Outils supplémentaires', 'tr': 'Ek Araçlar', 'pl': 'Dodatkowe narzędzia',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

@@ -156,9 +156,20 @@ class _FileManagerScreenState extends State<FileManagerScreen> with SingleTicker
   Widget _buildList(List<DocumentRecord> records, {required bool isTrash}) {
     if (records.isEmpty) {
       return Center(
-        child: Text(
-          isTrash ? tr('fm_trash_empty') : tr('fm_no_files'),
-          style: TextStyle(color: AppColors.textMuted),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isTrash ? Icons.delete_outline_rounded : Icons.folder_open_rounded,
+              size: 48,
+              color: AppColors.textMuted.withOpacity(0.4),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isTrash ? tr('fm_trash_empty') : tr('fm_no_files'),
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          ],
         ),
       );
     }

@@ -163,9 +163,16 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
           ] else
             Expanded(
               child: Center(
-                child: Text(
-                  tr('compare_empty_hint'),
-                  style: TextStyle(color: AppColors.textMuted),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.compare_arrows_rounded, size: 48, color: AppColors.textMuted.withOpacity(0.4)),
+                    const SizedBox(height: 10),
+                    Text(
+                      tr('compare_empty_hint'),
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                  ],
                 ),
               ),
             ),

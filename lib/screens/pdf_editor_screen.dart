@@ -463,7 +463,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             ),
           Container(
             width: double.infinity,
-            color: AppColors.background,
+            color: Theme.of(context).scaffoldBackgroundColor,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -565,7 +565,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         label: Text(label),
         selected: active,
         selectedColor: AppColors.primaryDark,
-        labelStyle: TextStyle(color: active ? Colors.white : AppColors.textDark, fontSize: 12),
+        labelStyle: TextStyle(
+          color: active ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : AppColors.textDark),
+          fontSize: 12,
+        ),
         onSelected: (_) => _setAnnotationMode(mode),
       ),
     );
