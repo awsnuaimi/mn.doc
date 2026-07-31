@@ -35,6 +35,15 @@ class _TextAnnotation {
     this.fontSize = 16,
     this.color = Colors.black,
   });
+
+  _TextAnnotation copy() => _TextAnnotation(
+        pageNumber: pageNumber,
+        dx: dx,
+        dy: dy,
+        text: text,
+        fontSize: fontSize,
+        color: color,
+      );
 }
 
 class PdfEditorScreen extends StatefulWidget {
@@ -56,6 +65,49 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   bool _flattenFormsOnSave = false;
   bool _hasFormFields = false;
   int _currentPage = 1;
+  double _zoomLevel = 1.0;
+
+  // ------- تراجع/إعادة (Undo/Redo) لتعليقات النص المضافة -------
+  final List<List<_TextAnnotation>> _undoStack = [];
+  final List<List<_TextAnnotation>> _redoStack = [];
+
+  void _pushUndoState() {
+    _undoStack.add(_annotations.map((a) => a.copy()).toList());
+    _redoStack.clear();
+    if (_undoStack.length > 20) _undoStack.removeAt(0); // حد أقصى لتفادي استهلاك ذاكرة زائد
+  }
+
+  void _undo() {
+    if (_undoStack.isEmpty) return;
+    _redoStack.add(_annotations.map((a) => a.copy()).toList());
+    final prev = _undoStack.removeLast();
+    setState(() {
+      _annotations
+        ..clear()
+        ..addAll(prev);
+    });
+  }
+
+  void _redo() {
+    if (_redoStack.isEmpty) return;
+    _undoStack.add(_annotations.map((a) => a.copy()).toList());
+    final next = _redoStack.removeLast();
+    setState(() {
+      _annotations
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  void _zoomIn() {
+    setState(() => _zoomLevel = (_zoomLevel + 0.25).clamp(1.0, 3.0));
+    _controller.zoomLevel = _zoomLevel;
+  }
+
+  void _zoomOut() {
+    setState(() => _zoomLevel = (_zoomLevel - 0.25).clamp(1.0, 3.0));
+    _controller.zoomLevel = _zoomLevel;
+  }
 
   // ------- البحث داخل PDF -------
   bool _searchVisible = false;
@@ -103,6 +155,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final result = await _showTextDialog();
     if (result == null || result.text.trim().isEmpty) return;
 
+    _pushUndoState();
     setState(() {
       _annotations.add(_TextAnnotation(
         pageNumber: _currentPage,
@@ -213,6 +266,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       initialColor: ann.color,
     );
     if (result == null) return;
+    _pushUndoState();
     setState(() {
       if (result.text.trim().isEmpty) {
         _annotations.remove(ann);
@@ -381,6 +435,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         title: Text(widget.filePath.split('/').last, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
+            icon: const Icon(Icons.undo_rounded),
+            tooltip: tr('undo'),
+            onPressed: _undoStack.isEmpty ? null : _undo,
+          ),
+          IconButton(
+            icon: const Icon(Icons.redo_rounded),
+            tooltip: tr('redo'),
+            onPressed: _redoStack.isEmpty ? null : _redo,
+          ),
+          IconButton(
             icon: const Icon(Icons.search_rounded),
             tooltip: tr('ed_search_tooltip'),
             onPressed: () => setState(() => _searchVisible = !_searchVisible),
@@ -546,6 +610,28 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._annotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildAnnotationOverlay(ann)),
+                // أزرار التكبير/التصغير العائمة
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: Column(
+                    children: [
+                      FloatingActionButton.small(
+                        heroTag: 'zoom_in',
+                        onPressed: _zoomIn,
+                        backgroundColor: AppColors.primaryDark,
+                        child: const Icon(Icons.add_rounded, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      FloatingActionButton.small(
+                        heroTag: 'zoom_out',
+                        onPressed: _zoomOut,
+                        backgroundColor: AppColors.primaryDark,
+                        child: const Icon(Icons.remove_rounded, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -581,6 +667,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       top: ann.dy * size.height,
       child: GestureDetector(
         onTap: () => _editAnnotation(ann),
+        onPanStart: (_) => _pushUndoState(),
+        onPanUpdate: (details) {
+          setState(() {
+            ann.dx = (ann.dx + details.delta.dx / size.width).clamp(0.0, 1.0);
+            ann.dy = (ann.dy + details.delta.dy / size.height).clamp(0.0, 1.0);
+          });
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
