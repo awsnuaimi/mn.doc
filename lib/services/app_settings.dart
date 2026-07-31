@@ -16,8 +16,10 @@ class AppSettingsController extends ChangeNotifier {
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
+  String get languageCode => _locale.languageCode;
   String get displayName => _displayName;
   bool get isArabic => _locale.languageCode == 'ar';
+  bool get isRtl => _locale.languageCode == 'ar';
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();

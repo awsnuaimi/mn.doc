@@ -80,41 +80,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsController>();
-    final ar = settings.isArabic;
+    final lang = settings.languageCode;
+    final rtl = settings.isRtl;
+    String tr(String key) => AppText.t(key, lang);
 
     return Directionality(
-      textDirection: ar ? TextDirection.rtl : TextDirection.ltr,
+      textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        appBar: AppBar(title: Text(AppText.t('settings', ar))),
+        appBar: AppBar(title: Text(tr('settings'))),
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             // ---------------- الملف الشخصي ----------------
             _SectionCard(
-              title: AppText.t('profile', ar),
+              title: tr('profile'),
               icon: Icons.person_rounded,
               children: [
                 TextField(
                   controller: _nameController,
                   decoration: InputDecoration(
-                    labelText: AppText.t('display_name', ar),
-                    hintText: AppText.t('display_name_hint', ar),
+                    labelText: tr('display_name'),
+                    hintText: tr('display_name_hint'),
                   ),
                   onSubmitted: (v) => settings.setDisplayName(v.trim()),
                 ),
                 const SizedBox(height: 10),
                 Align(
-                  alignment: ar ? Alignment.centerLeft : Alignment.centerRight,
+                  alignment: rtl ? Alignment.centerLeft : Alignment.centerRight,
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       await settings.setDisplayName(_nameController.text.trim());
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(AppText.t('saved', ar))),
+                        SnackBar(content: Text(tr('saved'))),
                       );
                     },
                     icon: const Icon(Icons.check_rounded),
-                    label: Text(AppText.t('save', ar)),
+                    label: Text(tr('save')),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
                   ),
                 ),
@@ -125,25 +127,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // ---------------- المظهر ----------------
             _SectionCard(
-              title: AppText.t('appearance', ar),
+              title: tr('appearance'),
               icon: Icons.palette_rounded,
               children: [
                 RadioListTile<ThemeMode>(
                   value: ThemeMode.system,
                   groupValue: settings.themeMode,
-                  title: Text(AppText.t('theme_system', ar)),
+                  title: Text(tr('theme_system')),
                   onChanged: (v) => settings.setThemeMode(v!),
                 ),
                 RadioListTile<ThemeMode>(
                   value: ThemeMode.light,
                   groupValue: settings.themeMode,
-                  title: Text(AppText.t('theme_light', ar)),
+                  title: Text(tr('theme_light')),
                   onChanged: (v) => settings.setThemeMode(v!),
                 ),
                 RadioListTile<ThemeMode>(
                   value: ThemeMode.dark,
                   groupValue: settings.themeMode,
-                  title: Text(AppText.t('theme_dark', ar)),
+                  title: Text(tr('theme_dark')),
                   onChanged: (v) => settings.setThemeMode(v!),
                 ),
               ],
@@ -153,25 +155,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // ---------------- اللغة ----------------
             _SectionCard(
-              title: AppText.t('language', ar),
+              title: tr('language'),
               icon: Icons.language_rounded,
               children: [
-                RadioListTile<String>(
-                  value: 'ar',
-                  groupValue: settings.locale.languageCode,
-                  title: const Text('العربية'),
-                  onChanged: (v) => settings.setLocale(const Locale('ar')),
-                ),
-                RadioListTile<String>(
-                  value: 'en',
-                  groupValue: settings.locale.languageCode,
-                  title: const Text('English'),
-                  onChanged: (v) => settings.setLocale(const Locale('en')),
+                ...AppText.supportedLanguages.map(
+                  (language) => RadioListTile<String>(
+                    value: language.code,
+                    groupValue: settings.locale.languageCode,
+                    title: Text(language.nativeName),
+                    onChanged: (v) => settings.setLocale(Locale(v!)),
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
-                    AppText.t('language_note', ar),
+                    tr('language_note'),
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                 ),

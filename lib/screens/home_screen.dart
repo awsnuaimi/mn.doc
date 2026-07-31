@@ -96,8 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final settings = context.watch<AppSettingsController>();
-    final ar = settings.isArabic;
-    final t = (String key) => AppText.t(key, ar);
+    final t = (String key) => AppText.t(key, settings.languageCode);
 
     return Scaffold(
       body: RefreshIndicator(
@@ -122,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     applicationName: 'MN-Doc',
                     applicationVersion: '1.0.0',
                     children: [
-                      Text(ar
+                      Text(settings.isArabic
                           ? 'محرر مستندات احترافي: عرض وتحرير PDF، كتابة نصوص، وتعرف ضوئي على النصوص (OCR).'
                           : 'A professional document editor: view & edit PDFs, add text, and OCR text recognition.'),
                     ],
