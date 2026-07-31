@@ -7,16 +7,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
 
-import '../theme/app_theme.dart';
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/gemini_service.dart';
+import '../services/ai_settings.dart';
+import '../theme/app_theme.dart';
 import 'translate_screen.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
+import 'ai_settings_screen.dart';
 
-/// شاشة "Text Erkennung" — التعرف الضوئي على النصوص (OCR).
-/// تدعم التقاط صورة بالكاميرا أو اختيارها من المعرض، ثم استخراج
-/// النص منها عبر Google ML Kit وتحرير النتيجة أو حفظها/مشاركتها.
+/// شاشة التعرف الضوئي على النصوص (OCR) — بوضعين:
+/// 1) مجاني وبدون إنترنت (Google ML Kit) — يدعم الإنجليزي/الصيني/الياباني/الكوري فقط.
+/// 2) بالذكاء الاصطناعي (Gemini) — يدعم العربية وكل اللغات، يحتاج إنترنت ومفتاح مجاني.
 class OcrScreen extends StatefulWidget {
   final String? initialImagePath;
   const OcrScreen({super.key, this.initialImagePath});
@@ -30,6 +33,7 @@ class _OcrScreenState extends State<OcrScreen> {
   final TextEditingController _resultController = TextEditingController();
   String? _imagePath;
   bool _processing = false;
+  bool _useAiMode = false;
 
   @override
   void initState() {
@@ -61,16 +65,32 @@ class _OcrScreenState extends State<OcrScreen> {
   Future<void> _runOcr() async {
     if (_imagePath == null) return;
     setState(() => _processing = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
-      final inputImage = InputImage.fromFilePath(_imagePath!);
-      final RecognizedText recognized = await _recognizer.processImage(inputImage);
-      _resultController.text = recognized.text;
+      if (_useAiMode) {
+        final hasKey = await AiSettings.hasApiKey();
+        if (!hasKey) {
+          if (!mounted) return;
+          final ok = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AiSettingsScreen()));
+          if (ok == null || !(await AiSettings.hasApiKey())) {
+            setState(() => _processing = false);
+            return;
+          }
+        }
+        final bytes = await File(_imagePath!).readAsBytes();
+        _resultController.text = await GeminiService.extractTextFromImage(bytes);
+      } else {
+        final inputImage = InputImage.fromFilePath(_imagePath!);
+        final RecognizedText recognized = await _recognizer.processImage(inputImage);
+        _resultController.text = recognized.text;
+      }
     } catch (e) {
       _resultController.text = '';
       if (!mounted) return;
-      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppText.t('ocr_error_prefix', lang)} $e')),
+        SnackBar(content: Text('${tr('ocr_error_prefix')} $e')),
       );
     } finally {
       if (mounted) setState(() => _processing = false);
@@ -119,6 +139,27 @@ class _OcrScreenState extends State<OcrScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(value: false, label: Text(tr('ocr_mode_free')), icon: const Icon(Icons.offline_bolt_rounded)),
+                ButtonSegment(value: true, label: Text(tr('ocr_mode_ai')), icon: const Icon(Icons.smart_toy_rounded)),
+              ],
+              selected: {_useAiMode},
+              onSelectionChanged: (s) => setState(() => _useAiMode = s.first),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (_useAiMode ? AppColors.accent : Colors.green).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _useAiMode ? tr('ocr_ai_note') : tr('ocr_free_note'),
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -142,7 +183,7 @@ class _OcrScreenState extends State<OcrScreen> {
             if (_imagePath != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.file(File(_imagePath!), height: 180, fit: BoxFit.cover, width: double.infinity),
+                child: Image.file(File(_imagePath!), height: 160, fit: BoxFit.cover, width: double.infinity),
               ),
             const SizedBox(height: 16),
             Row(

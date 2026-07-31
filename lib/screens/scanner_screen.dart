@@ -33,6 +33,8 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen> {
   final List<_ScannedPage> _pages = [];
   bool _autoEnhance = true;
+  double _contrast = 1.4;
+  double _brightness = 1.05;
   bool _capturing = false;
   bool _saving = false;
 
@@ -70,7 +72,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
   /// الواجهة أثناء تصوير عدة صفحات متتالية.
   Future<File> _enhance(File original) async {
     final bytes = await original.readAsBytes();
-    final processedBytes = await compute(enhanceImageIsolate, bytes);
+    final processedBytes = await compute(
+      enhanceImageIsolate,
+      EnhanceParams(bytes: bytes, contrast: _contrast, brightness: _brightness),
+    );
 
     final dir = await getTemporaryDirectory();
     final outPath = '${dir.path}/scan_enhanced_${DateTime.now().microsecondsSinceEpoch}.jpg';
@@ -172,6 +177,40 @@ class _ScannerScreenState extends State<ScannerScreen> {
             subtitle: Text(tr('scanner_enhance_subtitle')),
             activeThumbColor: AppColors.primaryDark,
           ),
+          if (_autoEnhance)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Text(tr('scanner_contrast_label'), style: const TextStyle(fontSize: 12)),
+                      Expanded(
+                        child: Slider(
+                          value: _contrast,
+                          min: 1.0,
+                          max: 2.0,
+                          onChanged: (v) => setState(() => _contrast = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Text(tr('scanner_brightness_label'), style: const TextStyle(fontSize: 12)),
+                      Expanded(
+                        child: Slider(
+                          value: _brightness,
+                          min: 0.7,
+                          max: 1.5,
+                          onChanged: (v) => setState(() => _brightness = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1),
           Expanded(
             child: _pages.isEmpty

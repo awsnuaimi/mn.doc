@@ -14,12 +14,21 @@ String extractPdfTextIsolate(Uint8List bytes) {
   return text;
 }
 
-/// يحوّل صورة إلى شكل "ممسوح ضوئيًا" (أبيض وأسود بتباين أعلى) — يعمل
-/// بخيط منفصل عبر compute() لتفادي تجميد الواجهة أثناء التقاط عدة صفحات.
-Uint8List enhanceImageIsolate(Uint8List bytes) {
-  final decoded = img.decodeImage(bytes);
-  if (decoded == null) return bytes;
+/// معطيات تحسين الصورة — يجب أن تبقى قابلة للتسلسل بين الـ Isolates
+/// (لا كائنات معقّدة)، لذا نستخدم كلاسًا بسيطًا فيه القيم الأساسية فقط.
+class EnhanceParams {
+  final Uint8List bytes;
+  final double contrast;
+  final double brightness;
+  EnhanceParams({required this.bytes, this.contrast = 1.4, this.brightness = 1.05});
+}
+
+/// يحوّل صورة إلى شكل "ممسوح ضوئيًا" (أبيض وأسود) بتباين وسطوع قابلين
+/// للتعديل — يعمل بخيط منفصل عبر compute() لتفادي تجميد الواجهة.
+Uint8List enhanceImageIsolate(EnhanceParams params) {
+  final decoded = img.decodeImage(params.bytes);
+  if (decoded == null) return params.bytes;
   var processed = img.grayscale(decoded);
-  processed = img.adjustColor(processed, contrast: 1.4, brightness: 1.05);
+  processed = img.adjustColor(processed, contrast: params.contrast, brightness: params.brightness);
   return Uint8List.fromList(img.encodeJpg(processed, quality: 90));
 }

@@ -541,6 +541,34 @@ class AppText {
       'ar': 'اسأل عن هذا النص', 'en': 'Ask about this text', 'de': 'Fragen zu diesem Text stellen',
       'fr': 'Poser une question sur ce texte', 'tr': 'Bu metin hakkında soru sor', 'pl': 'Zapytaj o ten tekst',
     },
+    'ocr_mode_free': {
+      'ar': 'مجاني (بدون إنترنت)', 'en': 'Free (Offline)', 'de': 'Kostenlos (Offline)',
+      'fr': 'Gratuit (Hors ligne)', 'tr': 'Ücretsiz (Çevrimdışı)', 'pl': 'Bezpłatnie (Offline)',
+    },
+    'ocr_mode_ai': {
+      'ar': 'بالذكاء الاصطناعي (يدعم العربية)', 'en': 'AI-Powered (Supports Arabic)', 'de': 'KI-gestützt (unterstützt Arabisch)',
+      'fr': "Propulsé par l'IA (prend en charge l'arabe)", 'tr': 'Yapay Zeka Destekli (Arapça Destekler)', 'pl': 'Wspomagane AI (obsługuje arabski)',
+    },
+    'ocr_script_label': {
+      'ar': 'لغة/نص التعرف', 'en': 'Recognition Script', 'de': 'Erkennungsschrift',
+      'fr': 'Script de reconnaissance', 'tr': 'Tanıma Yazısı', 'pl': 'Skrypt rozpoznawania',
+    },
+    'ocr_free_note': {
+      'ar': 'مجاني تمامًا وبدون إنترنت — يدعم الإنجليزي والصيني والياباني والكوري فقط (لا يدعم العربية).',
+      'en': 'Completely free and offline — supports English, Chinese, Japanese, and Korean only (does not support Arabic).',
+      'de': 'Völlig kostenlos und offline — unterstützt nur Englisch, Chinesisch, Japanisch und Koreanisch (kein Arabisch).',
+      'fr': "Entièrement gratuit et hors ligne — prend en charge uniquement l'anglais, le chinois, le japonais et le coréen (pas l'arabe).",
+      'tr': 'Tamamen ücretsiz ve çevrimdışı — yalnızca İngilizce, Çince, Japonca ve Korece destekler (Arapça desteklemez).',
+      'pl': 'Całkowicie bezpłatne i offline — obsługuje tylko angielski, chiński, japoński i koreański (nie obsługuje arabskiego).',
+    },
+    'ocr_ai_note': {
+      'ar': 'يحتاج مفتاح Gemini المجاني واتصال إنترنت — يدعم العربية وكل اللغات.',
+      'en': 'Requires a free Gemini key and internet connection — supports Arabic and all languages.',
+      'de': 'Benötigt einen kostenlosen Gemini-Schlüssel und eine Internetverbindung — unterstützt Arabisch und alle Sprachen.',
+      'fr': "Nécessite une clé Gemini gratuite et une connexion internet — prend en charge l'arabe et toutes les langues.",
+      'tr': 'Ücretsiz bir Gemini anahtarı ve internet bağlantısı gerektirir — Arapça ve tüm dilleri destekler.',
+      'pl': 'Wymaga bezpłatnego klucza Gemini i połączenia internetowego — obsługuje arabski i wszystkie języki.',
+    },
 
     // ---------------- شاشة الترجمة ----------------
     'tr_appbar': {
@@ -772,6 +800,12 @@ class AppText {
     'scanner_capture_error': {
       'ar': 'تعذّر التقاط الصورة:', 'en': 'Could not capture the image:', 'de': 'Bild konnte nicht aufgenommen werden:',
       'fr': "Impossible de capturer l'image :", 'tr': 'Görüntü yakalanamadı:', 'pl': 'Nie można przechwycić obrazu:',
+    },
+    'scanner_contrast_label': {
+      'ar': 'التباين:', 'en': 'Contrast:', 'de': 'Kontrast:', 'fr': 'Contraste :', 'tr': 'Kontrast:', 'pl': 'Kontrast:',
+    },
+    'scanner_brightness_label': {
+      'ar': 'السطوع:', 'en': 'Brightness:', 'de': 'Helligkeit:', 'fr': 'Luminosité :', 'tr': 'Parlaklık:', 'pl': 'Jasność:',
     },
 
     // ---------------- عناصر مشتركة إضافية ----------------

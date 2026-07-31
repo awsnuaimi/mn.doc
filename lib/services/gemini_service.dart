@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'ai_settings.dart';
 
@@ -87,5 +88,49 @@ class GeminiService {
         'فيما يلي محتوى مستند. أجب عن سؤال المستخدم بالاعتماد عليه فقط، وإن لم تجد الإجابة فيه قل ذلك بوضوح.\n\n'
         '--- محتوى المستند ---\n$trimmed\n--- نهاية المستند ---\n\nسؤال المستخدم: $question';
     return _generate(prompt: prompt, history: history);
+  }
+
+  /// تعرف ضوئي على النص داخل صورة عبر الذكاء الاصطناعي — يدعم العربية
+  /// وأي لغة أخرى (بعكس التعرف الضوئي المجاني المحلي المحدود بلغات معيّنة).
+  /// يحتاج اتصال إنترنت ومفتاح Gemini API مجاني.
+  static Future<String> extractTextFromImage(Uint8List imageBytes) async {
+    final apiKey = await AiSettings.getApiKey();
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception('لم يتم إدخال مفتاح Gemini API بعد. اذهب إلى الإعدادات لإضافته (مجاني).');
+    }
+
+    final uri = Uri.parse('$_baseUrl/$_model:generateContent?key=$apiKey');
+    final base64Image = base64Encode(imageBytes);
+
+    final body = jsonEncode({
+      'contents': [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': 'استخرج كل النص الموجود بهذه الصورة بالضبط كما هو، بدون أي تعليق أو مقدمة أو ترجمة — فقط النص الخام كما يظهر بالصورة.'},
+            {
+              'inline_data': {'mime_type': 'image/jpeg', 'data': base64Image}
+            },
+          ],
+        },
+      ],
+    });
+
+    final response = await http.post(uri, headers: {'Content-Type': 'application/json'}, body: body);
+
+    if (response.statusCode != 200) {
+      throw Exception('خطأ من خدمة Gemini (${response.statusCode}): ${response.body}');
+    }
+
+    final data = jsonDecode(response.body);
+    final candidates = data['candidates'] as List?;
+    if (candidates == null || candidates.isEmpty) {
+      throw Exception('لم يتم استلام رد من النموذج.');
+    }
+    final parts = candidates[0]['content']?['parts'] as List?;
+    if (parts == null || parts.isEmpty) {
+      throw Exception('رد فارغ من النموذج.');
+    }
+    return parts.map((p) => p['text'] ?? '').join('\n').trim();
   }
 }
