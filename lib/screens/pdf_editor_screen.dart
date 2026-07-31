@@ -481,7 +481,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: PopScope(
         canPop: !_hasUnsavedChanges,
-        onPopInvokedWithPop: (didPop, result) async {
+        onPopInvoked: (didPop) async {
           if (didPop) return;
           final shouldDiscard = await showDialog<bool>(
             context: context,
