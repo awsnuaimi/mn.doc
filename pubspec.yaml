@@ -79,3 +79,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
+    - assets/fonts/
+  fonts:
+    - family: NotoNaskhArabic
+      fonts:
+        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf

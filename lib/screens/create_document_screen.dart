@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/arabic_font_loader.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -29,6 +30,7 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
   Future<void> _createPdf() async {
     setState(() => _saving = true);
     try {
+      final arabicFont = await ArabicFontLoader.loadPwFont();
       final doc = pw.Document();
       doc.addPage(
         pw.Page(
@@ -38,10 +40,10 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
             children: [
               pw.Text(
                 _titleController.text,
-                style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(font: arabicFont, fontSize: 22, fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 16),
-              pw.Text(_bodyController.text, style: const pw.TextStyle(fontSize: 14)),
+              pw.Text(_bodyController.text, style: pw.TextStyle(font: arabicFont, fontSize: 14)),
             ],
           ),
         ),

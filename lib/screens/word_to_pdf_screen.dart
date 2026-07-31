@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../services/docx_text_extractor.dart';
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/arabic_font_loader.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -55,6 +56,7 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
     String tr(String key) => AppText.t(key, lang);
 
     try {
+      final arabicFont = await ArabicFontLoader.loadPwFont();
       final doc = pw.Document();
       final title = (_fileName ?? tr('create_doc_default_title')).replaceAll('.docx', '');
 
@@ -62,9 +64,9 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           build: (context) => [
-            pw.Text(title, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+            pw.Text(title, style: pw.TextStyle(font: arabicFont, fontSize: 20, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 16),
-            pw.Text(_textController.text, style: const pw.TextStyle(fontSize: 12)),
+            pw.Text(_textController.text, style: pw.TextStyle(font: arabicFont, fontSize: 12)),
           ],
         ),
       );

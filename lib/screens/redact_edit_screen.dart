@@ -9,6 +9,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/arabic_font_loader.dart';
 import '../theme/app_theme.dart';
 
 class _RedactBox {
@@ -155,7 +156,7 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
         );
 
         if (b.replacementText.trim().isNotEmpty) {
-          final font = sf.PdfStandardFont(sf.PdfFontFamily.helvetica, (rect.height * 0.6).clamp(8, 24));
+          final font = await ArabicFontLoader.loadSyncfusionFont((rect.height * 0.6).clamp(8, 24));
           page.graphics.drawString(
             b.replacementText,
             font,

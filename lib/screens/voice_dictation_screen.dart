@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/arabic_font_loader.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -82,14 +83,15 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
     String tr(String key) => AppText.t(key, lang);
 
     try {
+      final arabicFont = await ArabicFontLoader.loadPwFont();
       final doc = pw.Document();
       doc.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           build: (context) => [
-            pw.Text(tr('dict_default_title'), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Text(tr('dict_default_title'), style: pw.TextStyle(font: arabicFont, fontSize: 18, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 16),
-            pw.Text(_textController.text, style: const pw.TextStyle(fontSize: 13)),
+            pw.Text(_textController.text, style: pw.TextStyle(font: arabicFont, fontSize: 13)),
           ],
         ),
       );

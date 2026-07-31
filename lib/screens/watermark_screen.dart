@@ -9,6 +9,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
+import '../services/arabic_font_loader.dart';
 import '../theme/app_theme.dart';
 
 /// إضافة علامة مائية نصية لكل صفحات ملف PDF.
@@ -43,7 +44,7 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
       final bytes = await File(_filePath!).readAsBytes();
       final document = sf.PdfDocument(inputBytes: bytes);
 
-      final font = sf.PdfStandardFont(sf.PdfFontFamily.helvetica, _fontSize, style: sf.PdfFontStyle.bold);
+      final font = await ArabicFontLoader.loadSyncfusionFont(_fontSize, bold: true);
       final brush = sf.PdfSolidBrush(sf.PdfColor(150, 150, 150));
 
       for (int i = 0; i < document.pages.count; i++) {

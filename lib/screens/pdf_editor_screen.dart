@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
 import '../services/isolate_helpers.dart';
+import '../services/arabic_font_loader.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
@@ -359,7 +360,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final page = document.pages[pageIndex];
         final pageSize = page.getClientSize();
 
-        final font = sf.PdfStandardFont(sf.PdfFontFamily.helvetica, ann.fontSize);
+        final font = await ArabicFontLoader.loadSyncfusionFont(ann.fontSize);
         final brush = sf.PdfSolidBrush(
           sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue),
         );
