@@ -617,6 +617,162 @@ class AppText {
       'tr': 'Akıllı özetlemeye bağlanılamadı; bunun yerine yerel özetleme kullanıldı.',
       'pl': 'Nie można połączyć się z inteligentnym podsumowaniem; zamiast tego użyto podsumowania lokalnego.',
     },
+
+    // ---------------- المساعد الذكي للدردشة ----------------
+    'chat_error_prefix': {
+      'ar': 'حدث خطأ:', 'en': 'An error occurred:', 'de': 'Ein Fehler ist aufgetreten:',
+      'fr': "Une erreur s'est produite :", 'tr': 'Bir hata oluştu:', 'pl': 'Wystąpił błąd:',
+    },
+    'chat_no_text': {
+      'ar': 'لم يتم العثور على نص داخل هذا المستند بعد — قد تحتاج لاستخراج النص أولًا.',
+      'en': 'No text found in this document yet — you may need to extract the text first.',
+      'de': 'Noch kein Text in diesem Dokument gefunden — Sie müssen den Text möglicherweise zuerst extrahieren.',
+      'fr': "Aucun texte trouvé dans ce document pour l'instant — vous devrez peut-être d'abord extraire le texte.",
+      'tr': 'Bu belgede henüz metin bulunamadı — önce metni çıkarmanız gerekebilir.',
+      'pl': 'Nie znaleziono jeszcze tekstu w tym dokumencie — może być konieczne najpierw wyodrębnienie tekstu.',
+    },
+    'chat_empty_hint': {
+      'ar': 'اسأل أي سؤال عن محتوى هذا المستند، مثل:\n"لخّص لي الفكرة الرئيسية"\n"ما أهم الأرقام المذكورة؟"',
+      'en': 'Ask any question about this document\'s content, such as:\n"Summarize the main idea"\n"What are the key figures mentioned?"',
+      'de': 'Stellen Sie eine beliebige Frage zum Inhalt dieses Dokuments, z. B.:\n„Fasse die Hauptidee zusammen"\n„Welche wichtigen Zahlen werden genannt?"',
+      'fr': "Posez n'importe quelle question sur le contenu de ce document, par exemple :\n« Résume l'idée principale »\n« Quels sont les chiffres clés mentionnés ? »",
+      'tr': 'Bu belgenin içeriği hakkında herhangi bir soru sorun, örneğin:\n"Ana fikri özetle"\n"Bahsedilen önemli rakamlar neler?"',
+      'pl': 'Zadaj dowolne pytanie dotyczące treści tego dokumentu, na przykład:\n"Podsumuj główną myśl"\n"Jakie są kluczowe liczby wymienione w dokumencie?"',
+    },
+    'chat_input_hint': {
+      'ar': 'اكتب سؤالك...', 'en': 'Type your question...', 'de': 'Stellen Sie Ihre Frage...',
+      'fr': 'Tapez votre question...', 'tr': 'Sorunuzu yazın...', 'pl': 'Wpisz swoje pytanie...',
+    },
+
+    // ---------------- إعدادات الذكاء الاصطناعي ----------------
+    'aisettings_card_title': {
+      'ar': 'مفتاح Gemini API (مجاني)', 'en': 'Gemini API Key (Free)', 'de': 'Gemini-API-Schlüssel (kostenlos)',
+      'fr': 'Clé API Gemini (gratuite)', 'tr': 'Gemini API Anahtarı (Ücretsiz)', 'pl': 'Klucz API Gemini (bezpłatny)',
+    },
+    'aisettings_desc1': {
+      'ar': 'يُستخدم فقط لميزتيّ "التلخيص الذكي" و"المساعد الذكي للدردشة"، وتحتاج فيهما اتصال إنترنت. أما الترجمة والتعرف الضوئي على النصوص فيعملان بالكامل بدون إنترنت وبدون أي مفتاح.',
+      'en': 'Used only for "Smart Summary" and "AI Chat Assistant", both of which need internet. Translation and OCR work fully offline without any key.',
+      'de': 'Wird nur für „Intelligente Zusammenfassung" und „KI-Chat-Assistent" verwendet, die beide Internet benötigen. Übersetzung und Texterkennung funktionieren vollständig offline ohne Schlüssel.',
+      'fr': "Utilisé uniquement pour le « Résumé intelligent » et l'« Assistant de chat IA », qui nécessitent tous deux internet. La traduction et l'OCR fonctionnent entièrement hors ligne sans clé.",
+      'tr': '"Akıllı Özet" ve "Yapay Zeka Sohbet Asistanı" için kullanılır, ikisi de internet gerektirir. Çeviri ve OCR herhangi bir anahtar olmadan tamamen çevrimdışı çalışır.',
+      'pl': 'Używany tylko dla funkcji "Inteligentne podsumowanie" i "Asystent czatu AI", które wymagają internetu. Tłumaczenie i OCR działają całkowicie offline bez klucza.',
+    },
+    'aisettings_desc2': {
+      'ar': 'للحصول على مفتاح مجاني (بدون بطاقة ائتمان):\n1) افتح aistudio.google.com/apikey\n2) سجّل الدخول بحساب Google\n3) اضغط "Create API key" وانسخه هنا',
+      'en': 'To get a free key (no credit card required):\n1) Open aistudio.google.com/apikey\n2) Sign in with your Google account\n3) Click "Create API key" and paste it here',
+      'de': 'So erhalten Sie einen kostenlosen Schlüssel (keine Kreditkarte erforderlich):\n1) Öffnen Sie aistudio.google.com/apikey\n2) Melden Sie sich mit Ihrem Google-Konto an\n3) Klicken Sie auf „Create API key" und fügen Sie ihn hier ein',
+      'fr': 'Pour obtenir une clé gratuite (aucune carte de crédit requise) :\n1) Ouvrez aistudio.google.com/apikey\n2) Connectez-vous avec votre compte Google\n3) Cliquez sur « Create API key » et collez-la ici',
+      'tr': 'Ücretsiz anahtar almak için (kredi kartı gerekmez):\n1) aistudio.google.com/apikey adresini açın\n2) Google hesabınızla giriş yapın\n3) "Create API key"e tıklayın ve buraya yapıştırın',
+      'pl': 'Aby uzyskać bezpłatny klucz (bez karty kredytowej):\n1) Otwórz aistudio.google.com/apikey\n2) Zaloguj się swoim kontem Google\n3) Kliknij "Create API key" i wklej go tutaj',
+    },
+    'aisettings_field_label': {
+      'ar': 'الصق مفتاح API هنا', 'en': 'Paste your API key here', 'de': 'Fügen Sie Ihren API-Schlüssel hier ein',
+      'fr': 'Collez votre clé API ici', 'tr': 'API anahtarınızı buraya yapıştırın', 'pl': 'Wklej tutaj swój klucz API',
+    },
+    'delete': {
+      'ar': 'حذف', 'en': 'Delete', 'de': 'Löschen', 'fr': 'Supprimer', 'tr': 'Sil', 'pl': 'Usuń',
+    },
+    'aisettings_saved_msg': {
+      'ar': 'تم حفظ المفتاح على جهازك', 'en': 'Key saved on your device', 'de': 'Schlüssel auf Ihrem Gerät gespeichert',
+      'fr': 'Clé enregistrée sur votre appareil', 'tr': 'Anahtar cihazınıza kaydedildi', 'pl': 'Klucz zapisany na Twoim urządzeniu',
+    },
+    'aisettings_deleted_msg': {
+      'ar': 'تم حذف المفتاح', 'en': 'Key deleted', 'de': 'Schlüssel gelöscht',
+      'fr': 'Clé supprimée', 'tr': 'Anahtar silindi', 'pl': 'Klucz usunięty',
+    },
+
+    // ---------------- إنشاء مستند ----------------
+    'create_doc_default_title': {
+      'ar': 'مستند بدون عنوان', 'en': 'Untitled Document', 'de': 'Unbenanntes Dokument',
+      'fr': 'Document sans titre', 'tr': 'Adsız Belge', 'pl': 'Dokument bez tytułu',
+    },
+    'create_doc_title_label': {
+      'ar': 'عنوان المستند', 'en': 'Document Title', 'de': 'Dokumenttitel',
+      'fr': 'Titre du document', 'tr': 'Belge Başlığı', 'pl': 'Tytuł dokumentu',
+    },
+    'create_doc_body_label': {
+      'ar': 'المحتوى', 'en': 'Content', 'de': 'Inhalt', 'fr': 'Contenu', 'tr': 'İçerik', 'pl': 'Zawartość',
+    },
+    'create_doc_creating': {
+      'ar': 'جارٍ الإنشاء...', 'en': 'Creating...', 'de': 'Wird erstellt...',
+      'fr': 'Création en cours...', 'tr': 'Oluşturuluyor...', 'pl': 'Tworzenie...',
+    },
+    'create_doc_button': {
+      'ar': 'إنشاء ملف PDF', 'en': 'Create PDF File', 'de': 'PDF-Datei erstellen',
+      'fr': 'Créer un fichier PDF', 'tr': 'PDF Dosyası Oluştur', 'pl': 'Utwórz plik PDF',
+    },
+    'create_doc_success_title': {
+      'ar': 'تم إنشاء المستند', 'en': 'Document Created', 'de': 'Dokument erstellt',
+      'fr': 'Document créé', 'tr': 'Belge Oluşturuldu', 'pl': 'Utworzono dokument',
+    },
+    'create_doc_success_body': {
+      'ar': 'ماذا تريد أن تفعل الآن؟', 'en': 'What would you like to do now?', 'de': 'Was möchten Sie jetzt tun?',
+      'fr': 'Que souhaitez-vous faire maintenant ?', 'tr': 'Şimdi ne yapmak istersiniz?', 'pl': 'Co chcesz teraz zrobić?',
+    },
+    'create_doc_open_edit': {
+      'ar': 'فتح للتحرير', 'en': 'Open to Edit', 'de': 'Zum Bearbeiten öffnen',
+      'fr': 'Ouvrir pour modifier', 'tr': 'Düzenlemek için Aç', 'pl': 'Otwórz do edycji',
+    },
+    'error_prefix': {
+      'ar': 'خطأ:', 'en': 'Error:', 'de': 'Fehler:', 'fr': 'Erreur :', 'tr': 'Hata:', 'pl': 'Błąd:',
+    },
+
+    // ---------------- المسح الضوئي ----------------
+    'scanner_save_tooltip': {
+      'ar': 'حفظ كـ PDF', 'en': 'Save as PDF', 'de': 'Als PDF speichern',
+      'fr': 'Enregistrer en PDF', 'tr': 'PDF Olarak Kaydet', 'pl': 'Zapisz jako PDF',
+    },
+    'scanner_enhance_title': {
+      'ar': 'تحسين تلقائي (أبيض وأسود بوضوح أعلى)', 'en': 'Auto Enhance (Higher-Contrast B&W)', 'de': 'Automatische Verbesserung (Schwarz-Weiß)',
+      'fr': 'Amélioration automatique (Noir et blanc)', 'tr': 'Otomatik İyileştirme (Siyah Beyaz)', 'pl': 'Automatyczne ulepszanie (czarno-białe)',
+    },
+    'scanner_enhance_subtitle': {
+      'ar': 'يُطبَّق على الصفحات الجديدة فقط', 'en': 'Applied to new pages only', 'de': 'Wird nur auf neue Seiten angewendet',
+      'fr': 'Appliqué uniquement aux nouvelles pages', 'tr': 'Yalnızca yeni sayfalara uygulanır', 'pl': 'Stosowane tylko do nowych stron',
+    },
+    'scanner_empty_hint': {
+      'ar': 'اضغط الزر بالأسفل لالتقاط أول صفحة بالكاميرا',
+      'en': 'Tap the button below to capture your first page with the camera',
+      'de': 'Tippen Sie unten, um Ihre erste Seite mit der Kamera aufzunehmen',
+      'fr': "Appuyez sur le bouton ci-dessous pour capturer votre première page",
+      'tr': 'Kamerayla ilk sayfanızı yakalamak için aşağıdaki düğmeye dokunun',
+      'pl': 'Dotknij przycisku poniżej, aby uchwycić pierwszą stronę aparatem',
+    },
+    'scanner_page_label': {
+      'ar': 'صفحة', 'en': 'Page', 'de': 'Seite', 'fr': 'Page', 'tr': 'Sayfa', 'pl': 'Strona',
+    },
+    'scanner_enhanced': {
+      'ar': 'محسّنة (أبيض وأسود)', 'en': 'Enhanced (B&W)', 'de': 'Verbessert (Schwarz-Weiß)',
+      'fr': 'Améliorée (Noir et blanc)', 'tr': 'İyileştirildi (Siyah Beyaz)', 'pl': 'Ulepszona (czarno-biała)',
+    },
+    'scanner_original': {
+      'ar': 'أصلية بالألوان', 'en': 'Original (Color)', 'de': 'Original (Farbe)',
+      'fr': 'Originale (Couleur)', 'tr': 'Orijinal (Renkli)', 'pl': 'Oryginalna (kolor)',
+    },
+    'scanner_capturing': {
+      'ar': 'جارٍ الالتقاط...', 'en': 'Capturing...', 'de': 'Wird aufgenommen...',
+      'fr': 'Capture en cours...', 'tr': 'Yakalanıyor...', 'pl': 'Przechwytywanie...',
+    },
+    'scanner_capture_btn': {
+      'ar': 'التقاط صفحة', 'en': 'Capture Page', 'de': 'Seite aufnehmen',
+      'fr': 'Capturer une page', 'tr': 'Sayfa Yakala', 'pl': 'Przechwyć stronę',
+    },
+    'scanner_success_title': {
+      'ar': 'تم إنشاء الملف بنجاح', 'en': 'File created successfully', 'de': 'Datei erfolgreich erstellt',
+      'fr': 'Fichier créé avec succès', 'tr': 'Dosya başarıyla oluşturuldu', 'pl': 'Plik utworzony pomyślnie',
+    },
+    'scanner_pagecount_label': {
+      'ar': 'عدد الصفحات:', 'en': 'Number of pages:', 'de': 'Anzahl der Seiten:',
+      'fr': 'Nombre de pages :', 'tr': 'Sayfa sayısı:', 'pl': 'Liczba stron:',
+    },
+    'scanner_open_file': {
+      'ar': 'فتح الملف', 'en': 'Open File', 'de': 'Datei öffnen',
+      'fr': 'Ouvrir le fichier', 'tr': 'Dosyayı Aç', 'pl': 'Otwórz plik',
+    },
+    'scanner_capture_error': {
+      'ar': 'تعذّر التقاط الصورة:', 'en': 'Could not capture the image:', 'de': 'Bild konnte nicht aufgenommen werden:',
+      'fr': "Impossible de capturer l'image :", 'tr': 'Görüntü yakalanamadı:', 'pl': 'Nie można przechwycić obrazu:',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

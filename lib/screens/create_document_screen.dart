@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -18,9 +21,10 @@ class CreateDocumentScreen extends StatefulWidget {
 }
 
 class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
-  final _titleController = TextEditingController(text: 'مستند بدون عنوان');
+  final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
   bool _saving = false;
+  bool _titleInit = false;
 
   Future<void> _createPdf() async {
     setState(() => _saving = true);
@@ -51,16 +55,18 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
 
       if (!mounted) return;
       setState(() => _saving = false);
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      String tr(String key) => AppText.t(key, lang);
 
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم إنشاء المستند'),
-          content: const Text('ماذا تريد أن تفعل الآن؟'),
+          title: Text(tr('create_doc_success_title')),
+          content: Text(tr('create_doc_success_body')),
           actions: [
             TextButton(
               onPressed: () => Share.shareXFiles([XFile(path)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
             ElevatedButton(
               onPressed: () {
@@ -70,7 +76,7 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
                   MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: path)),
                 );
               },
-              child: const Text('فتح للتحرير'),
+              child: Text(tr('create_doc_open_edit')),
             ),
           ],
         ),
@@ -78,14 +84,26 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('error_prefix', lang)} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('إنشاء مستند جديد')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    if (!_titleInit) {
+      _titleController.text = tr('create_doc_default_title');
+      _titleInit = true;
+    }
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('create_document'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -93,7 +111,7 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
           children: [
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(labelText: 'عنوان المستند'),
+              decoration: InputDecoration(labelText: tr('create_doc_title_label')),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -102,8 +120,8 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(
-                  labelText: 'المحتوى',
+                decoration: InputDecoration(
+                  labelText: tr('create_doc_body_label'),
                   alignLabelWithHint: true,
                 ),
               ),
@@ -118,11 +136,12 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.picture_as_pdf_rounded),
-              label: Text(_saving ? 'جارٍ الإنشاء...' : 'إنشاء ملف PDF'),
+              label: Text(_saving ? tr('create_doc_creating') : tr('create_doc_button')),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
             ),
           ],
         ),
+      ),
       ),
     );
   }

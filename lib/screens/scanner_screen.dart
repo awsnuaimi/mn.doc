@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -8,6 +9,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
 import '../theme/app_theme.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import 'pdf_editor_screen.dart';
 import 'document_camera_screen.dart';
 
@@ -56,7 +59,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
     } catch (e) {
       setState(() => _capturing = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذّر التقاط الصورة: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('scanner_capture_error', lang)} $e')));
     }
   }
 
@@ -101,16 +105,18 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
       if (!mounted) return;
       setState(() => _saving = false);
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      String tr(String key) => AppText.t(key, lang);
 
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم إنشاء الملف بنجاح'),
-          content: Text('عدد الصفحات: ${_pages.length}'),
+          title: Text(tr('scanner_success_title')),
+          content: Text('${tr('scanner_pagecount_label')} ${_pages.length}'),
           actions: [
             TextButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
             ElevatedButton(
               onPressed: () {
@@ -120,7 +126,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
                 );
               },
-              child: const Text('فتح الملف'),
+              child: Text(tr('scanner_open_file')),
             ),
           ],
         ),
@@ -128,15 +134,22 @@ class _ScannerScreenState extends State<ScannerScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ أثناء الحفظ: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('ed_save_error_prefix', lang)} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
-        title: const Text('مسح ضوئي للمستندات'),
+        title: Text(tr('scanner')),
         actions: [
           if (_pages.isNotEmpty)
             _saving
@@ -146,7 +159,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   )
                 : IconButton(
                     icon: const Icon(Icons.picture_as_pdf_rounded),
-                    tooltip: 'حفظ كـ PDF',
+                    tooltip: tr('scanner_save_tooltip'),
                     onPressed: _saveAsPdf,
                   ),
         ],
@@ -156,8 +169,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
           SwitchListTile(
             value: _autoEnhance,
             onChanged: (v) => setState(() => _autoEnhance = v),
-            title: const Text('تحسين تلقائي (أبيض وأسود بوضوح أعلى)'),
-            subtitle: const Text('يُطبَّق على الصفحات الجديدة فقط'),
+            title: Text(tr('scanner_enhance_title')),
+            subtitle: Text(tr('scanner_enhance_subtitle')),
             activeThumbColor: AppColors.primaryDark,
           ),
           const Divider(height: 1),
@@ -167,7 +180,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'اضغط الزر بالأسفل لالتقاط أول صفحة بالكاميرا',
+                        tr('scanner_empty_hint'),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: AppColors.textMuted),
                       ),
@@ -193,8 +206,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: Image.file(p.file, width: 50, height: 60, fit: BoxFit.cover),
                           ),
-                          title: Text('صفحة ${index + 1}'),
-                          subtitle: Text(p.enhanced ? 'محسّنة (أبيض وأسود)' : 'أصلية بالألوان'),
+                          title: Text('${tr('scanner_page_label')} ${index + 1}'),
+                          subtitle: Text(p.enhanced ? tr('scanner_enhanced') : tr('scanner_original')),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
                             onPressed: () => setState(() => _pages.removeAt(index)),
@@ -211,7 +224,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
               icon: _capturing
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.camera_alt_rounded),
-              label: Text(_capturing ? 'جارٍ الالتقاط...' : 'التقاط صفحة (${_pages.length})'),
+              label: Text(_capturing ? tr('scanner_capturing') : '${tr('scanner_capture_btn')} (${_pages.length})'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryDark,
                 minimumSize: const Size(double.infinity, 50),
@@ -219,6 +232,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

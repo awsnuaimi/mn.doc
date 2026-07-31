@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 
 class TextViewerScreen extends StatefulWidget {
   final String filePath;
@@ -28,12 +31,16 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
   Future<void> _save() async {
     await File(widget.filePath).writeAsString(_controller.text);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحفظ')));
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.t('saved', lang))));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final settings = context.watch<AppSettingsController>();
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(widget.filePath.split('/').last),
         actions: [
@@ -52,6 +59,7 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
                 decoration: const InputDecoration(border: InputBorder.none),
               ),
             ),
+      ),
     );
   }
 }
