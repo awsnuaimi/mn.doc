@@ -60,6 +60,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final TextEditingController _searchController = TextEditingController();
   PdfTextSearchResult _searchResult = PdfTextSearchResult();
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    _searchController.dispose();
+    _searchResult.removeListener(_onSearchResultChanged);
+    super.dispose();
+  }
+
   void _search(String query) {
     if (query.trim().isEmpty) return;
     _searchResult = _controller.searchText(query);

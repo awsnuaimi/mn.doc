@@ -1490,6 +1490,46 @@ class AppText {
       'ar': 'نهائيًا؟ لا يمكن التراجع عن هذا.', 'en': 'permanently? This cannot be undone.', 'de': 'endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
       'fr': 'définitivement ? Cette action est irréversible.', 'tr': 'kalıcı olarak? Bu geri alınamaz.', 'pl': 'trwale? Tego nie można cofnąć.',
     },
+
+    // ---------------- التحقق من التحديثات ----------------
+    'updates_section_title': {
+      'ar': 'التحديثات', 'en': 'Updates', 'de': 'Updates', 'fr': 'Mises à jour', 'tr': 'Güncellemeler', 'pl': 'Aktualizacje',
+    },
+    'current_version_label': {
+      'ar': 'الإصدار الحالي:', 'en': 'Current version:', 'de': 'Aktuelle Version:',
+      'fr': 'Version actuelle :', 'tr': 'Mevcut sürüm:', 'pl': 'Bieżąca wersja:',
+    },
+    'new_version_label': {
+      'ar': 'الإصدار الجديد:', 'en': 'New version:', 'de': 'Neue Version:',
+      'fr': 'Nouvelle version :', 'tr': 'Yeni sürüm:', 'pl': 'Nowa wersja:',
+    },
+    'checking_version': {
+      'ar': 'جارٍ التحقق من رقم الإصدار...', 'en': 'Checking version number...', 'de': 'Versionsnummer wird geprüft...',
+      'fr': 'Vérification du numéro de version...', 'tr': 'Sürüm numarası kontrol ediliyor...', 'pl': 'Sprawdzanie numeru wersji...',
+    },
+    'checking_updates': {
+      'ar': 'جارٍ التحقق...', 'en': 'Checking...', 'de': 'Wird geprüft...',
+      'fr': 'Vérification...', 'tr': 'Kontrol ediliyor...', 'pl': 'Sprawdzanie...',
+    },
+    'check_updates_btn': {
+      'ar': 'التحقق من وجود تحديثات', 'en': 'Check for Updates', 'de': 'Nach Updates suchen',
+      'fr': 'Rechercher des mises à jour', 'tr': 'Güncellemeleri Kontrol Et', 'pl': 'Sprawdź aktualizacje',
+    },
+    'update_available_title': {
+      'ar': 'يوجد تحديث جديد! 🎉', 'en': 'A new update is available! 🎉', 'de': 'Ein neues Update ist verfügbar! 🎉',
+      'fr': 'Une nouvelle mise à jour est disponible ! 🎉', 'tr': 'Yeni bir güncelleme mevcut! 🎉', 'pl': 'Dostępna jest nowa aktualizacja! 🎉',
+    },
+    'later': {
+      'ar': 'لاحقًا', 'en': 'Later', 'de': 'Später', 'fr': 'Plus tard', 'tr': 'Daha Sonra', 'pl': 'Później',
+    },
+    'download_update_btn': {
+      'ar': 'تنزيل التحديث', 'en': 'Download Update', 'de': 'Update herunterladen',
+      'fr': 'Télécharger la mise à jour', 'tr': 'Güncellemeyi İndir', 'pl': 'Pobierz aktualizację',
+    },
+    'update_uptodate_msg': {
+      'ar': 'التطبيق محدَّث لآخر إصدار ✅', 'en': 'The app is up to date ✅', 'de': 'Die App ist auf dem neuesten Stand ✅',
+      'fr': "L'application est à jour ✅", 'tr': 'Uygulama güncel ✅', 'pl': 'Aplikacja jest aktualna ✅',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

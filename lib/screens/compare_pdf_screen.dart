@@ -40,8 +40,8 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
     });
   }
 
-  String _extractText(String path) {
-    final bytes = File(path).readAsBytesSync();
+  Future<String> _extractText(String path) async {
+    final bytes = await File(path).readAsBytes();
     final document = sf.PdfDocument(inputBytes: bytes);
     final text = sf.PdfTextExtractor(document).extractText();
     document.dispose();
@@ -55,8 +55,8 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
     String tr(String key) => AppText.t(key, lang);
 
     try {
-      var textA = _extractText(_fileA!);
-      var textB = _extractText(_fileB!);
+      var textA = await _extractText(_fileA!);
+      var textB = await _extractText(_fileB!);
 
       final wordsA = textA.split(RegExp(r'\s+')).length;
       final wordsB = textB.split(RegExp(r'\s+')).length;

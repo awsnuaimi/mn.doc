@@ -206,7 +206,8 @@ Future<void> _openTtsFromPdf(BuildContext context) async {
 
   String text = '';
   try {
-    final document = sf.PdfDocument(inputBytes: File(result.files.single.path!).readAsBytesSync());
+    final fileBytes = await File(result.files.single.path!).readAsBytes();
+    final document = sf.PdfDocument(inputBytes: fileBytes);
     text = sf.PdfTextExtractor(document).extractText();
     document.dispose();
   } catch (_) {

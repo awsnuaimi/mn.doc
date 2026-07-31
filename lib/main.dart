@@ -59,7 +59,9 @@ class MnDocApp extends StatelessWidget {
       darkTheme: AppTheme.dark,
       themeMode: settings.themeMode,
       locale: settings.locale,
-      supportedLocales: const [Locale('ar'), Locale('en')],
+      supportedLocales: const [
+        Locale('ar'), Locale('en'), Locale('de'), Locale('fr'), Locale('tr'), Locale('pl'),
+      ],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -67,7 +69,7 @@ class MnDocApp extends StatelessWidget {
       ],
       builder: (context, child) {
         return Directionality(
-          textDirection: settings.isArabic ? TextDirection.rtl : TextDirection.ltr,
+          textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
           child: SafeArea(
             top: false, // الشريط العلوي (AppBar) يتعامل مع هذا بنفسه
             bottom: true, // يمنع تغطية أزرار Navigation تبع أندرويد لمحتوى التطبيق

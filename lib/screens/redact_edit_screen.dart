@@ -48,6 +48,12 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
   Offset? _dragStart;
   Offset? _dragCurrent;
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
     if (result == null || result.files.single.path == null) return;

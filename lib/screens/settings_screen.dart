@@ -45,13 +45,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     if (result.updateAvailable) {
+      final tr2 = (String key) => AppText.t(key, context.read<AppSettingsController>().languageCode);
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('يوجد تحديث جديد! 🎉'),
-          content: Text('الإصدار الحالي: ${result.currentVersion}\nالإصدار الجديد: ${result.latestVersion}'),
+          title: Text(tr2('update_available_title')),
+          content: Text('${tr2('current_version_label')} ${result.currentVersion}\n${tr2('new_version_label')} ${result.latestVersion}'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('لاحقًا')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr2('later'))),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -59,14 +60,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   launchUrl(Uri.parse(result.downloadUrl!), mode: LaunchMode.externalApplication);
                 }
               },
-              child: const Text('تنزيل التحديث'),
+              child: Text(tr2('download_update_btn')),
             ),
           ],
         ),
       );
     } else {
+      final tr2 = (String key) => AppText.t(key, context.read<AppSettingsController>().languageCode);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('التطبيق محدَّث لآخر إصدار ✅')),
+        SnackBar(content: Text(tr2('update_uptodate_msg'))),
       );
     }
   }
@@ -180,13 +182,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // ---------------- التحديثات ----------------
             _SectionCard(
-              title: 'التحديثات',
+              title: tr('updates_section_title'),
               icon: Icons.system_update_rounded,
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
-                    _currentVersion != null ? 'الإصدار الحالي: $_currentVersion' : 'جارٍ التحقق من رقم الإصدار...',
+                    _currentVersion != null ? '${tr('current_version_label')} $_currentVersion' : tr('checking_version'),
                     style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                   ),
                 ),
@@ -197,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: _checkingUpdate
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.refresh_rounded),
-                    label: Text(_checkingUpdate ? 'جارٍ التحقق...' : 'التحقق من وجود تحديثات'),
+                    label: Text(_checkingUpdate ? tr('checking_updates') : tr('check_updates_btn')),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(double.infinity, 46)),
                   ),
                 ),

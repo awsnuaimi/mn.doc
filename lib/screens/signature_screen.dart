@@ -51,6 +51,12 @@ class _SignatureScreenState extends State<SignatureScreen> {
     _loadMarks();
   }
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadMarks() async {
     final marks = await SignatureLibrary.list();
     if (!mounted) return;

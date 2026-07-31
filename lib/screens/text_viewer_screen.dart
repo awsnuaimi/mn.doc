@@ -22,6 +22,12 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final content = await File(widget.filePath).readAsString();
     _controller.text = content;
