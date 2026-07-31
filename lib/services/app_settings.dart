@@ -3,16 +3,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// إعدادات التطبيق العامة (تُحفظ محليًا على الجهاز فقط):
 /// - وضع الثيم (فاتح/ليلي/تلقائي)
-/// - اللغة (عربي/إنجليزي) — مطبّقة حاليًا على الشاشة الرئيسية وشاشة الإعدادات فقط
+/// - اللغة (عربي/إنجليزي/ألماني/فرنسي/تركي/بولندي)
 /// - اسم المستخدم (ملف شخصي محلي، ليس تسجيل دخول حقيقي على سيرفر)
 class AppSettingsController extends ChangeNotifier {
   static const _keyThemeMode = 'theme_mode';
   static const _keyLocale = 'app_locale';
   static const _keyDisplayName = 'display_name';
 
+  /// اللغات المدعومة فعليًا بالتطبيق — أي قيمة أخرى محفوظة (تالفة أو
+  /// من إصدار قديم) يتم تجاهلها والرجوع للعربية كافتراضي آمن.
+  static const _supportedLocales = {'ar', 'en', 'de', 'fr', 'tr', 'pl'};
+
   ThemeMode _themeMode = ThemeMode.system;
   Locale _locale = const Locale('ar');
   String _displayName = '';
+
+  // نسخة واحدة مخزّنة مؤقتًا من SharedPreferences بدل طلبها بكل دالة
+  SharedPreferences? _prefsCache;
+  Future<SharedPreferences> get _prefs async => _prefsCache ??= await SharedPreferences.getInstance();
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
@@ -22,15 +30,20 @@ class AppSettingsController extends ChangeNotifier {
   bool get isRtl => _locale.languageCode == 'ar';
 
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _prefs;
     final themeStr = prefs.getString(_keyThemeMode);
     _themeMode = switch (themeStr) {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
       _ => ThemeMode.system,
     };
-    final localeStr = prefs.getString(_keyLocale) ?? 'ar';
+
+    var localeStr = prefs.getString(_keyLocale) ?? 'ar';
+    if (!_supportedLocales.contains(localeStr)) {
+      localeStr = 'ar'; // حماية من قيمة تالفة أو غير مدعومة
+    }
     _locale = Locale(localeStr);
+
     _displayName = prefs.getString(_keyDisplayName) ?? '';
     notifyListeners();
   }
@@ -38,21 +51,24 @@ class AppSettingsController extends ChangeNotifier {
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _prefs;
     await prefs.setString(_keyThemeMode, mode.name);
   }
 
   Future<void> setLocale(Locale locale) async {
-    _locale = locale;
+    final code = _supportedLocales.contains(locale.languageCode) ? locale.languageCode : 'ar';
+    _locale = Locale(code);
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyLocale, locale.languageCode);
+    final prefs = await _prefs;
+    await prefs.setString(_keyLocale, code);
   }
 
   Future<void> setDisplayName(String name) async {
-    _displayName = name;
+    final cleaned = name.trim();
+    final capped = cleaned.length > 50 ? cleaned.substring(0, 50) : cleaned;
+    _displayName = capped;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyDisplayName, name);
+    final prefs = await _prefs;
+    await prefs.setString(_keyDisplayName, capped);
   }
 }

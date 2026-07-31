@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme/app_theme.dart';
@@ -10,19 +11,45 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ------------------------------------------------------------------
-  // كاشف أخطاء مؤقت: يعرض تفاصيل أي خطأ مباشرة على الشاشة (حتى بنسخة
-  // release) بدل ما تطلع شاشة فاضية بدون أي تفسير. مفيد للتشخيص فقط.
+  // كاشف أخطاء: بنسخة Debug يعرض تفاصيل الخطأ كاملة (مفيد أثناء التطوير).
+  // بنسخة Release يعرض شاشة ودّية للمستخدم بدل تفاصيل تقنية مخيفة.
   // ------------------------------------------------------------------
   ErrorWidget.builder = (FlutterErrorDetails details) {
+    if (kDebugMode) {
+      return Material(
+        color: Colors.white,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'حدث خطأ أثناء تشغيل التطبيق:\n\n${details.exceptionAsString()}\n\n${details.stack}',
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ),
+        ),
+      );
+    }
     return Material(
       color: Colors.white,
       child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'حدث خطأ أثناء تشغيل التطبيق:\n\n${details.exceptionAsString()}\n\n${details.stack}',
-            textDirection: TextDirection.ltr,
-            style: const TextStyle(color: Colors.red, fontSize: 12),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 56, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text('حدث خطأ غير متوقع', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text(
+                  'نعتذر عن الإزعاج. جرّب إعادة فتح التطبيق.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
           ),
         ),
       ),
