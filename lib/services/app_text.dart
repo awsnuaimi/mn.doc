@@ -387,6 +387,108 @@ class AppText {
       'tr': 'Yaygın dahili dizinleme sorunlarını gidermeyi dener',
       'pl': 'Próba naprawienia typowych problemów z indeksowaniem wewnętrznym',
     },
+
+    // ---------------- محرر PDF ----------------
+    'ed_search_tooltip': {
+      'ar': 'بحث داخل المستند', 'en': 'Search in document', 'de': 'Im Dokument suchen',
+      'fr': 'Rechercher dans le document', 'tr': 'Belgede ara', 'pl': 'Szukaj w dokumencie',
+    },
+    'ed_bookmarks_tooltip': {
+      'ar': 'الفهرس (Bookmarks)', 'en': 'Bookmarks', 'de': 'Lesezeichen',
+      'fr': 'Signets', 'tr': 'Yer İmleri', 'pl': 'Zakładki',
+    },
+    'ed_addtext_tooltip': {
+      'ar': 'وضع إضافة نص', 'en': 'Add text mode', 'de': 'Textmodus',
+      'fr': 'Mode ajout de texte', 'tr': 'Metin ekleme modu', 'pl': 'Tryb dodawania tekstu',
+    },
+    'ed_ai_tooltip': {
+      'ar': 'ميزات الذكاء الاصطناعي', 'en': 'AI Features', 'de': 'KI-Funktionen',
+      'fr': 'Fonctionnalités IA', 'tr': 'Yapay Zeka Özellikleri', 'pl': 'Funkcje AI',
+    },
+    'ed_ai_summarize': {
+      'ar': 'تلخيص هذا المستند', 'en': 'Summarize this document', 'de': 'Dieses Dokument zusammenfassen',
+      'fr': 'Résumer ce document', 'tr': 'Bu belgeyi özetle', 'pl': 'Podsumuj ten dokument',
+    },
+    'ed_ai_chat': {
+      'ar': 'اسأل عن هذا المستند', 'en': 'Ask about this document', 'de': 'Fragen zu diesem Dokument stellen',
+      'fr': 'Poser une question sur ce document', 'tr': 'Bu belge hakkında soru sor', 'pl': 'Zapytaj o ten dokument',
+    },
+    'ed_ai_translate': {
+      'ar': 'ترجمة نص من المستند', 'en': 'Translate text from the document', 'de': 'Text aus dem Dokument übersetzen',
+      'fr': 'Traduire du texte du document', 'tr': 'Belgeden metin çevir', 'pl': 'Przetłumacz tekst z dokumentu',
+    },
+    'ed_search_hint': {
+      'ar': 'ابحث داخل المستند...', 'en': 'Search in document...', 'de': 'Im Dokument suchen...',
+      'fr': 'Rechercher dans le document...', 'tr': 'Belgede ara...', 'pl': 'Szukaj w dokumencie...',
+    },
+    'ed_highlight': {
+      'ar': 'تظليل', 'en': 'Highlight', 'de': 'Hervorheben', 'fr': 'Surligner', 'tr': 'Vurgula', 'pl': 'Zaznacz',
+    },
+    'ed_underline': {
+      'ar': 'تسطير', 'en': 'Underline', 'de': 'Unterstreichen', 'fr': 'Souligner', 'tr': 'Altını çiz', 'pl': 'Podkreśl',
+    },
+    'ed_strikethrough': {
+      'ar': 'شطب', 'en': 'Strikethrough', 'de': 'Durchstreichen', 'fr': 'Barrer', 'tr': 'Üstünü çiz', 'pl': 'Przekreśl',
+    },
+    'ed_stickynote': {
+      'ar': 'ملاحظة', 'en': 'Note', 'de': 'Notiz', 'fr': 'Note', 'tr': 'Not', 'pl': 'Notatka',
+    },
+    'ed_form_banner': {
+      'ar': 'هذا الملف يحتوي نموذجًا قابلاً للتعبئة',
+      'en': 'This file contains a fillable form',
+      'de': 'Diese Datei enthält ein ausfüllbares Formular',
+      'fr': 'Ce fichier contient un formulaire à remplir',
+      'tr': 'Bu dosya doldurulabilir bir form içeriyor',
+      'pl': 'Ten plik zawiera formularz do wypełnienia',
+    },
+    'ed_form_flatten': {
+      'ar': 'تثبيت عند الحفظ', 'en': 'Lock when saving', 'de': 'Beim Speichern sperren',
+      'fr': "Verrouiller à l'enregistrement", 'tr': 'Kaydederken kilitle', 'pl': 'Zablokuj przy zapisie',
+    },
+    'ed_addtext_banner': {
+      'ar': 'وضع إضافة النص مفعّل — اضغط في أي مكان على الصفحة لإدراج نص',
+      'en': 'Add-text mode is on — tap anywhere on the page to insert text',
+      'de': 'Textmodus aktiv — tippen Sie auf die Seite, um Text einzufügen',
+      'fr': 'Mode ajout de texte activé — touchez la page pour insérer du texte',
+      'tr': 'Metin ekleme modu açık — metin eklemek için sayfaya dokunun',
+      'pl': 'Tryb dodawania tekstu włączony — dotknij strony, aby wstawić tekst',
+    },
+    'ed_dialog_title': {
+      'ar': 'إضافة نص', 'en': 'Add Text', 'de': 'Text hinzufügen',
+      'fr': 'Ajouter du texte', 'tr': 'Metin Ekle', 'pl': 'Dodaj tekst',
+    },
+    'ed_dialog_hint': {
+      'ar': 'اكتب النص هنا...', 'en': 'Type your text here...', 'de': 'Text hier eingeben...',
+      'fr': 'Tapez votre texte ici...', 'tr': 'Metninizi buraya yazın...', 'pl': 'Wpisz tekst tutaj...',
+    },
+    'ed_dialog_fontsize': {
+      'ar': 'حجم الخط:', 'en': 'Font size:', 'de': 'Schriftgröße:',
+      'fr': 'Taille de police :', 'tr': 'Yazı boyutu:', 'pl': 'Rozmiar czcionki:',
+    },
+    'ed_dialog_color': {
+      'ar': 'اللون:', 'en': 'Color:', 'de': 'Farbe:', 'fr': 'Couleur :', 'tr': 'Renk:', 'pl': 'Kolor:',
+    },
+    'ed_dialog_add': {
+      'ar': 'إضافة', 'en': 'Add', 'de': 'Hinzufügen', 'fr': 'Ajouter', 'tr': 'Ekle', 'pl': 'Dodaj',
+    },
+    'ed_saved_title': {
+      'ar': 'تم الحفظ بنجاح', 'en': 'Saved successfully', 'de': 'Erfolgreich gespeichert',
+      'fr': 'Enregistré avec succès', 'tr': 'Başarıyla kaydedildi', 'pl': 'Zapisano pomyślnie',
+    },
+    'ed_saved_path_prefix': {
+      'ar': 'تم حفظ الملف في:', 'en': 'File saved to:', 'de': 'Datei gespeichert unter:',
+      'fr': 'Fichier enregistré dans :', 'tr': 'Dosya şuraya kaydedildi:', 'pl': 'Plik zapisano w:',
+    },
+    'ed_close': {
+      'ar': 'إغلاق', 'en': 'Close', 'de': 'Schließen', 'fr': 'Fermer', 'tr': 'Kapat', 'pl': 'Zamknij',
+    },
+    'ed_share': {
+      'ar': 'مشاركة', 'en': 'Share', 'de': 'Teilen', 'fr': 'Partager', 'tr': 'Paylaş', 'pl': 'Udostępnij',
+    },
+    'ed_save_error_prefix': {
+      'ar': 'حدث خطأ أثناء الحفظ:', 'en': 'An error occurred while saving:', 'de': 'Beim Speichern ist ein Fehler aufgetreten:',
+      'fr': "Une erreur s'est produite lors de l'enregistrement :", 'tr': 'Kaydedilirken bir hata oluştu:', 'pl': 'Wystąpił błąd podczas zapisywania:',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

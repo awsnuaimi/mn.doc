@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../theme/app_theme.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
@@ -106,6 +109,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final controller = TextEditingController(text: initialText);
     double fontSize = initialSize;
     Color color = initialColor;
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
 
     return showModalBottomSheet<_TextDialogResult>(
       context: context,
@@ -127,18 +132,18 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('إضافة نص', style: Theme.of(context).textTheme.titleMedium),
+                  Text(tr('ed_dialog_title'), style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   TextField(
                     controller: controller,
                     autofocus: true,
                     maxLines: 3,
-                    decoration: const InputDecoration(hintText: 'اكتب النص هنا...'),
+                    decoration: InputDecoration(hintText: tr('ed_dialog_hint')),
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Text('حجم الخط:'),
+                      Text(tr('ed_dialog_fontsize')),
                       Expanded(
                         child: Slider(
                           value: fontSize,
@@ -153,7 +158,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   ),
                   Row(
                     children: [
-                      const Text('اللون:'),
+                      Text(tr('ed_dialog_color')),
                       const SizedBox(width: 12),
                       ...[Colors.black, Colors.red, Colors.blue, AppColors.accent, Colors.green]
                           .map((c) => GestureDetector(
@@ -180,7 +185,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       context,
                       _TextDialogResult(text: controller.text, fontSize: fontSize, color: color),
                     ),
-                    child: const Text('إضافة'),
+                    child: Text(tr('ed_dialog_add')),
                   ),
                 ],
               ),
@@ -322,23 +327,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
       if (!mounted) return;
       setState(() => _saving = false);
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      String tr(String key) => AppText.t(key, lang);
 
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم الحفظ بنجاح'),
-          content: Text('تم حفظ الملف في:\n$outPath'),
+          title: Text(tr('ed_saved_title')),
+          content: Text('${tr('ed_saved_path_prefix')}\n$outPath'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('إغلاق'),
+              child: Text(tr('ed_close')),
             ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 Share.shareXFiles([XFile(outPath)], text: 'ملف من MN-Doc');
               },
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
           ],
         ),
@@ -346,8 +353,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (!mounted) return;
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ أثناء الحفظ: $e')),
+        SnackBar(content: Text('${AppText.t('ed_save_error_prefix', lang)} $e')),
       );
     }
   }
@@ -355,35 +363,40 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final hasSearchResult = _searchResult.hasResult;
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
 
-    return Scaffold(
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(widget.filePath.split('/').last, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             icon: const Icon(Icons.search_rounded),
-            tooltip: 'بحث داخل المستند',
+            tooltip: tr('ed_search_tooltip'),
             onPressed: () => setState(() => _searchVisible = !_searchVisible),
           ),
           IconButton(
             icon: const Icon(Icons.bookmark_border_rounded),
-            tooltip: 'الفهرس (Bookmarks)',
+            tooltip: tr('ed_bookmarks_tooltip'),
             onPressed: () => _pdfViewerStateKey.currentState?.openBookmarkView(),
           ),
           IconButton(
             icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
-            tooltip: 'وضع إضافة نص',
+            tooltip: tr('ed_addtext_tooltip'),
             onPressed: () => setState(() => _addTextMode = !_addTextMode),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.smart_toy_rounded),
-            tooltip: 'ميزات الذكاء الاصطناعي',
+            tooltip: tr('ed_ai_tooltip'),
             onSelected: _openAiFeature,
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'summarize', child: Text('تلخيص هذا المستند')),
-              PopupMenuItem(value: 'chat', child: Text('اسأل عن هذا المستند')),
-              PopupMenuItem(value: 'translate', child: Text('ترجمة نص من المستند')),
-              PopupMenuItem(value: 'read_aloud', child: Text('قراءة المستند بصوت')),
+            itemBuilder: (context) => [
+              PopupMenuItem(value: 'summarize', child: Text(tr('ed_ai_summarize'))),
+              PopupMenuItem(value: 'chat', child: Text(tr('ed_ai_chat'))),
+              PopupMenuItem(value: 'translate', child: Text(tr('ed_ai_translate'))),
+              PopupMenuItem(value: 'read_aloud', child: Text(tr('tool_tts_t'))),
             ],
           ),
           _saving
@@ -397,7 +410,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 )
               : IconButton(
                   icon: const Icon(Icons.save_rounded),
-                  tooltip: 'حفظ',
+                  tooltip: tr('save'),
                   onPressed: _saveDocument,
                 ),
         ],
@@ -414,8 +427,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     child: TextField(
                       controller: _searchController,
                       autofocus: true,
-                      decoration: const InputDecoration(
-                        hintText: 'ابحث داخل المستند...',
+                      decoration: InputDecoration(
+                        hintText: tr('ed_search_hint'),
                         isDense: true,
                       ),
                       onSubmitted: _search,
@@ -450,22 +463,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 children: [
                   _annotationChip(
                     icon: Icons.border_color_rounded,
-                    label: 'تظليل',
+                    label: tr('ed_highlight'),
                     mode: PdfAnnotationMode.highlight,
                   ),
                   _annotationChip(
                     icon: Icons.format_underlined_rounded,
-                    label: 'تسطير',
+                    label: tr('ed_underline'),
                     mode: PdfAnnotationMode.underline,
                   ),
                   _annotationChip(
                     icon: Icons.strikethrough_s_rounded,
-                    label: 'شطب',
+                    label: tr('ed_strikethrough'),
                     mode: PdfAnnotationMode.strikethrough,
                   ),
                   _annotationChip(
                     icon: Icons.sticky_note_2_rounded,
-                    label: 'ملاحظة',
+                    label: tr('ed_stickynote'),
                     mode: PdfAnnotationMode.stickyNote,
                   ),
                 ],
@@ -481,10 +494,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 children: [
                   const Icon(Icons.fact_check_rounded, size: 18, color: Colors.green),
                   const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text('هذا الملف يحتوي نموذجًا قابلاً للتعبئة', style: TextStyle(fontSize: 12)),
+                  Expanded(
+                    child: Text(tr('ed_form_banner'), style: const TextStyle(fontSize: 12)),
                   ),
-                  const Text('تثبيت عند الحفظ', style: TextStyle(fontSize: 11)),
+                  Text(tr('ed_form_flatten'), style: const TextStyle(fontSize: 11)),
                   Switch(
                     value: _flattenFormsOnSave,
                     onChanged: (v) => setState(() => _flattenFormsOnSave = v),
@@ -497,10 +510,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               width: double.infinity,
               color: AppColors.accent.withOpacity(0.12),
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: const Text(
-                'وضع إضافة النص مفعّل — اضغط في أي مكان على الصفحة لإدراج نص',
+              child: Text(
+                tr('ed_addtext_banner'),
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12),
+                style: const TextStyle(fontSize: 12),
               ),
             ),
           Expanded(
@@ -530,6 +543,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
