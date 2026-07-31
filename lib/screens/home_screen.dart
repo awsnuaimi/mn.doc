@@ -31,6 +31,42 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final List<DocumentItem> _recent = [];
+  bool _loadingRecent = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentFromDisk();
+  }
+
+  /// يحمّل قائمة "الملفات الأخيرة" المحفوظة فعليًا (عبر FileManagerService)
+  /// عند بدء التطبيق — بدل ما تكون القائمة فاضية في كل مرة يُغلق فيها
+  /// التطبيق ويُعاد فتحه.
+  Future<void> _loadRecentFromDisk() async {
+    setState(() => _loadingRecent = true);
+    try {
+      final records = await FileManagerService.getAll();
+      final activeRecords = records.where((r) => !r.isDeleted).take(15).toList();
+
+      final items = <DocumentItem>[];
+      for (final record in activeRecords) {
+        final file = File(record.path);
+        if (await file.exists()) {
+          items.add(await DocumentItem.fromFile(file));
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _recent
+          ..clear()
+          ..addAll(items);
+        _loadingRecent = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingRecent = false);
+    }
+  }
 
   Future<void> _pickAndOpen() async {
     final result = await FilePicker.platform.pickFiles(
@@ -100,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async {},
+        onRefresh: _loadRecentFromDisk,
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
@@ -175,7 +211,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                   ),
                   const SizedBox(height: 12),
-                  if (_recent.isEmpty)
+                  if (_loadingRecent)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 30),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_recent.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 30),
                       child: Center(

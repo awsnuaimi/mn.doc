@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -76,6 +77,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _undoStack.add(_annotations.map((a) => a.copy()).toList());
     _redoStack.clear();
     if (_undoStack.length > 20) _undoStack.removeAt(0); // حد أقصى لتفادي استهلاك ذاكرة زائد
+    _hasUnsavedChanges = true;
   }
 
   void _undo() {
@@ -110,17 +112,32 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _controller.zoomLevel = _zoomLevel;
   }
 
-  // ------- البحث داخل PDF -------
+  void _resetZoom() {
+    setState(() => _zoomLevel = 1.0);
+    _controller.zoomLevel = 1.0;
+  }
+
+  // ------- تتبّع التعديلات غير المحفوظة -------
+  bool _hasUnsavedChanges = false;
+
+  // ------- البحث داخل PDF (مع Debounce) -------
   bool _searchVisible = false;
   final TextEditingController _searchController = TextEditingController();
   PdfTextSearchResult _searchResult = PdfTextSearchResult();
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
     _controller.dispose();
     _searchController.dispose();
     _searchResult.removeListener(_onSearchResultChanged);
+    _searchDebounce?.cancel();
     super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () => _search(query));
   }
 
   void _search(String query) {
@@ -135,6 +152,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _closeSearch() {
+    _searchDebounce?.cancel();
     _searchResult.removeListener(_onSearchResultChanged);
     _searchResult.clear();
     setState(() {
@@ -202,6 +220,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     controller: controller,
                     autofocus: true,
                     maxLines: 3,
+                    maxLength: 500,
                     decoration: InputDecoration(hintText: tr('ed_dialog_hint')),
                   ),
                   const SizedBox(height: 16),
@@ -218,29 +237,50 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                           onChanged: (v) => setSheetState(() => fontSize = v),
                         ),
                       ),
+                      SizedBox(
+                        width: 36,
+                        child: Text('${fontSize.round()}', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
                     ],
                   ),
                   Row(
                     children: [
                       Text(tr('ed_dialog_color')),
                       const SizedBox(width: 12),
-                      ...[Colors.black, Colors.red, Colors.blue, AppColors.accent, Colors.green]
-                          .map((c) => GestureDetector(
-                                onTap: () => setSheetState(() => color = c),
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: c,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: color == c ? AppColors.primaryDark : Colors.transparent,
-                                      width: 3,
-                                    ),
-                                  ),
-                                ),
-                              )),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              Colors.black,
+                              Colors.red,
+                              Colors.blue,
+                              AppColors.accent,
+                              Colors.green,
+                              Colors.amber,
+                              Colors.deepOrange,
+                              Colors.purple,
+                            ]
+                                .map((c) => GestureDetector(
+                                      onTap: () => setSheetState(() => color = c),
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: c,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: color == c ? AppColors.primaryDark : Colors.transparent,
+                                            width: 3,
+                                          ),
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -384,8 +424,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       final dir = await getApplicationDocumentsDirectory();
       final originalName = widget.filePath.split('/').last.replaceAll('.pdf', '');
       final outPath = '${dir.path}/${originalName}_MN-Doc.pdf';
-      final outFile = File(outPath);
-      await outFile.writeAsBytes(savedBytes, flush: true);
+
+      // حفظ آمن (Atomic Save): نكتب أولًا لملف مؤقت، ثم نستبدل الملف
+      // النهائي به فقط بعد اكتمال الكتابة بنجاح — لو انقطع التطبيق أو
+      // الطاقة أثناء الكتابة، الملف الأصلي (إن وُجد) يبقى سليمًا ولا
+      // نحصل على ملف ناقص/تالف بمكانه.
+      final tmpFile = File('$outPath.tmp');
+      await tmpFile.writeAsBytes(savedBytes, flush: true);
+      await tmpFile.rename(outPath);
+
+      _hasUnsavedChanges = false;
 
       if (!mounted) return;
       setState(() => _saving = false);
@@ -431,7 +479,30 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     return Directionality(
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
-      child: Scaffold(
+      child: PopScope(
+        canPop: !_hasUnsavedChanges,
+        onPopInvokedWithPop: (didPop, result) async {
+          if (didPop) return;
+          final shouldDiscard = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(tr('unsaved_title')),
+              content: Text(tr('unsaved_body')),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('cancel'))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text(tr('discard_exit')),
+                ),
+              ],
+            ),
+          );
+          if (shouldDiscard == true && context.mounted) {
+            Navigator.pop(context);
+          }
+        },
+        child: Scaffold(
       appBar: AppBar(
         title: Text(widget.filePath.split('/').last, overflow: TextOverflow.ellipsis),
         actions: [
@@ -481,7 +552,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   ),
                 )
               : IconButton(
-                  icon: const Icon(Icons.save_rounded),
+                  icon: Badge(
+                    isLabelVisible: _hasUnsavedChanges,
+                    smallSize: 8,
+                    backgroundColor: Colors.orangeAccent,
+                    child: const Icon(Icons.save_rounded),
+                  ),
                   tooltip: tr('save'),
                   onPressed: _saveDocument,
                 ),
@@ -504,6 +580,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         isDense: true,
                       ),
                       onSubmitted: _search,
+                      onChanged: _onSearchChanged,
                     ),
                   ),
                   if (hasSearchResult) ...[
@@ -630,6 +707,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         backgroundColor: AppColors.primaryDark,
                         child: const Icon(Icons.remove_rounded, color: Colors.white),
                       ),
+                      const SizedBox(height: 8),
+                      FloatingActionButton.small(
+                        heroTag: 'zoom_reset',
+                        onPressed: _resetZoom,
+                        backgroundColor: AppColors.textMuted,
+                        child: const Icon(Icons.center_focus_strong_rounded, color: Colors.white),
+                      ),
                     ],
                   ),
                 ),
@@ -637,6 +721,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             ),
           ),
         ],
+      ),
       ),
       ),
     );
