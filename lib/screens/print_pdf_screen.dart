@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:printing/printing.dart';
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// طباعة ملف PDF مباشرة عبر نافذة الطباعة الأصلية للموبايل
@@ -38,8 +41,14 @@ class _PrintPdfScreenState extends State<PrintPdfScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('طباعة PDF')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_print_t'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -48,7 +57,7 @@ class _PrintPdfScreenState extends State<PrintPdfScreen> {
             OutlinedButton.icon(
               onPressed: _pickFile,
               icon: const Icon(Icons.folder_open_rounded),
-              label: Text(_filePath == null ? 'اختيار ملف PDF' : _filePath!.split('/').last, overflow: TextOverflow.ellipsis),
+              label: Text(_filePath == null ? tr('select_pdf_btn') : _filePath!.split('/').last, overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(height: 20),
             if (_filePath != null)
@@ -63,18 +72,19 @@ class _PrintPdfScreenState extends State<PrintPdfScreen> {
             else
               Expanded(
                 child: Center(
-                  child: Text('اختر ملف PDF لمعاينته وطباعته', style: TextStyle(color: AppColors.textMuted)),
+                  child: Text(tr('print_preview_hint'), style: TextStyle(color: AppColors.textMuted)),
                 ),
               ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: _filePath == null ? null : _print,
               icon: const Icon(Icons.print_rounded),
-              label: const Text('طباعة'),
+              label: Text(tr('print_btn')),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(double.infinity, 50)),
             ),
           ],
         ),
+      ),
       ),
     );
   }

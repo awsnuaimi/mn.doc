@@ -3,10 +3,13 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/table_extractor.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// استخراج تقريبي لجداول PDF وتصديرها كملف Excel.
@@ -49,6 +52,9 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
   Future<void> _exportToExcel() async {
     if (_bytes == null) return;
     setState(() => _processing = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final excelFile = xls.Excel.createExcel();
       final defaultSheetName = excelFile.getDefaultSheet()!;
@@ -56,7 +62,7 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
       final pagesToExport = _selectedPage == -1 ? List.generate(_pageCount, (i) => i) : [_selectedPage];
 
       for (final pageIndex in pagesToExport) {
-        final sheet = excelFile['صفحة ${pageIndex + 1}'];
+        final sheet = excelFile['${tr('scanner_page_label')} ${pageIndex + 1}'];
         final rows = TableExtractor.extractPageAsRows(_bytes!, pageIndex);
         for (final row in rows) {
           sheet.appendRow(row.map((cell) => xls.TextCellValue(cell)).toList());
@@ -65,7 +71,7 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
       excelFile.delete(defaultSheetName);
 
       final bytes = excelFile.save();
-      if (bytes == null) throw Exception('تعذّر إنشاء ملف Excel');
+      if (bytes == null) throw Exception(tr('table_create_error'));
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = (_fileName ?? 'file').replaceAll('.pdf', '');
@@ -78,13 +84,13 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم التصدير'),
-          content: Text('المسار: $outPath'),
+          title: Text(tr('table_exported_title')),
+          content: Text('${tr('path_label')} $outPath'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
             ElevatedButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
           ],
         ),
@@ -92,14 +98,20 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
     } catch (e) {
       setState(() => _processing = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('استخراج جداول PDF إلى Excel')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_table_t'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -108,25 +120,25 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Text(
-                'ملاحظة: الاستخراج تقريبي بالاعتماد على مواقع النصوص، وقد لا يكون دقيقًا 100% مع كل الجداول.',
-                style: TextStyle(fontSize: 12),
+              child: Text(
+                tr('table_note'),
+                style: const TextStyle(fontSize: 12),
               ),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: _pickFile,
               icon: const Icon(Icons.folder_open_rounded),
-              label: Text(_fileName == null ? 'اختيار ملف PDF' : _fileName!, overflow: TextOverflow.ellipsis),
+              label: Text(_fileName == null ? tr('select_pdf_btn') : _fileName!, overflow: TextOverflow.ellipsis),
             ),
             if (_bytes != null) ...[
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
                 value: _selectedPage,
-                decoration: const InputDecoration(labelText: 'الصفحة'),
+                decoration: InputDecoration(labelText: tr('page_field_label')),
                 items: [
-                  const DropdownMenuItem(value: -1, child: Text('كل الصفحات')),
-                  ...List.generate(_pageCount, (i) => DropdownMenuItem(value: i, child: Text('صفحة ${i + 1}'))),
+                  DropdownMenuItem(value: -1, child: Text(tr('table_all_pages'))),
+                  ...List.generate(_pageCount, (i) => DropdownMenuItem(value: i, child: Text('${tr('scanner_page_label')} ${i + 1}'))),
                 ],
                 onChanged: (v) => setState(() {
                   _selectedPage = v!;
@@ -138,7 +150,7 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
                 OutlinedButton.icon(
                   onPressed: _previewPage,
                   icon: const Icon(Icons.visibility_rounded),
-                  label: const Text('معاينة الجدول'),
+                  label: Text(tr('table_preview_btn')),
                 ),
               if (_preview != null) ...[
                 const SizedBox(height: 12),
@@ -148,7 +160,7 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
                     child: DataTable(
                       columns: List.generate(
                         _preview!.isEmpty ? 0 : _preview!.map((r) => r.length).reduce((a, b) => a > b ? a : b),
-                        (i) => DataColumn(label: Text('عمود ${i + 1}')),
+                        (i) => DataColumn(label: Text('${tr('table_column_label')} ${i + 1}')),
                       ),
                       rows: _preview!
                           .map((row) => DataRow(cells: row.map((c) => DataCell(Text(c))).toList()))
@@ -164,12 +176,13 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
                 icon: _processing
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.table_chart_rounded),
-                label: Text(_processing ? 'جارٍ التصدير...' : 'تصدير إلى Excel'),
+                label: Text(_processing ? tr('table_exporting') : tr('table_export_btn')),
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(double.infinity, 50)),
               ),
             ],
           ],
         ),
+      ),
       ),
     );
   }

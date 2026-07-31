@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// قراءة نص المستند بصوت عالٍ (Text-to-Speech) — يعمل بمحرك القراءة
@@ -71,8 +74,14 @@ class _TtsReaderScreenState extends State<TtsReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title ?? 'قراءة المستند بصوت')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(widget.title ?? tr('tool_tts_t'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -80,14 +89,14 @@ class _TtsReaderScreenState extends State<TtsReaderScreen> {
           children: [
             DropdownButtonFormField<String>(
               value: _language,
-              decoration: const InputDecoration(labelText: 'لغة القراءة'),
+              decoration: InputDecoration(labelText: tr('tts_lang_label')),
               items: _languages.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
               onChanged: (v) => setState(() => _language = v!),
             ),
             const SizedBox(height: 12),
-            Text('سرعة القراءة: ${(_rate * 2).toStringAsFixed(1)}x'),
+            Text('${tr('tts_rate_label')} ${(_rate * 2).toStringAsFixed(1)}x'),
             Slider(value: _rate, min: 0.1, max: 1.0, onChanged: (v) => setState(() => _rate = v)),
-            Text('طبقة الصوت: ${_pitch.toStringAsFixed(1)}'),
+            Text('${tr('tts_pitch_label')} ${_pitch.toStringAsFixed(1)}'),
             Slider(value: _pitch, min: 0.5, max: 2.0, onChanged: (v) => setState(() => _pitch = v)),
             const SizedBox(height: 12),
             Expanded(
@@ -96,7 +105,7 @@ class _TtsReaderScreenState extends State<TtsReaderScreen> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(hintText: 'الصق أو اكتب النص المطلوب قراءته...'),
+                decoration: InputDecoration(hintText: tr('tts_hint')),
               ),
             ),
             const SizedBox(height: 16),
@@ -106,7 +115,7 @@ class _TtsReaderScreenState extends State<TtsReaderScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _isPlaying ? _pause : _play,
                     icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                    label: Text(_isPlaying ? 'إيقاف مؤقت' : 'قراءة'),
+                    label: Text(_isPlaying ? tr('tts_pause') : tr('tts_play_btn')),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, minimumSize: const Size(0, 50)),
                   ),
                 ),
@@ -115,7 +124,7 @@ class _TtsReaderScreenState extends State<TtsReaderScreen> {
                   child: OutlinedButton.icon(
                     onPressed: _stop,
                     icon: const Icon(Icons.stop_rounded),
-                    label: const Text('إيقاف'),
+                    label: Text(tr('tts_stop')),
                     style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50)),
                   ),
                 ),
@@ -123,6 +132,7 @@ class _TtsReaderScreenState extends State<TtsReaderScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../services/text_diff.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// مقارنة ملفي PDF نصيًا وإظهار الإضافات والحذف بينهما.
@@ -48,6 +51,9 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
   Future<void> _compare() async {
     if (_fileA == null || _fileB == null) return;
     setState(() => _comparing = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       var textA = _extractText(_fileA!);
       var textB = _extractText(_fileB!);
@@ -70,21 +76,25 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
       });
 
       if (truncated) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('الملفات طويلة جدًا — تمت مقارنة أول جزء منها فقط لتفادي البطء الشديد')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('compare_truncated_msg'))));
       }
     } catch (e) {
       setState(() => _comparing = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ أثناء المقارنة: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('compare_error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('مقارنة ملفي PDF')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_compare_t'))),
       body: Column(
         children: [
           Padding(
@@ -95,13 +105,13 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
                 OutlinedButton.icon(
                   onPressed: () => _pickFile(true),
                   icon: const Icon(Icons.filter_1_rounded),
-                  label: Text(_fileA == null ? 'اختيار الملف الأول' : _fileA!.split('/').last, overflow: TextOverflow.ellipsis),
+                  label: Text(_fileA == null ? tr('compare_file1') : _fileA!.split('/').last, overflow: TextOverflow.ellipsis),
                 ),
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: () => _pickFile(false),
                   icon: const Icon(Icons.filter_2_rounded),
-                  label: Text(_fileB == null ? 'اختيار الملف الثاني' : _fileB!.split('/').last, overflow: TextOverflow.ellipsis),
+                  label: Text(_fileB == null ? tr('compare_file2') : _fileB!.split('/').last, overflow: TextOverflow.ellipsis),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
@@ -109,7 +119,7 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
                   icon: _comparing
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.compare_arrows_rounded),
-                  label: Text(_comparing ? 'جارٍ المقارنة...' : 'قارن الملفين'),
+                  label: Text(_comparing ? tr('compare_comparing') : tr('compare_btn')),
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
                 ),
               ],
@@ -120,9 +130,9 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  _legendDot(Colors.red.shade100, 'حُذف (من الملف الأول)'),
+                  _legendDot(Colors.red.shade100, tr('compare_legend_removed')),
                   const SizedBox(width: 12),
-                  _legendDot(Colors.green.shade100, 'أُضيف (بالملف الثاني)'),
+                  _legendDot(Colors.green.shade100, tr('compare_legend_added')),
                 ],
               ),
             ),
@@ -154,12 +164,13 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
             Expanded(
               child: Center(
                 child: Text(
-                  'اختر ملفين PDF لمقارنة محتواهما النصي',
+                  tr('compare_empty_hint'),
                   style: TextStyle(color: AppColors.textMuted),
                 ),
               ),
             ),
         ],
+      ),
       ),
     );
   }

@@ -975,6 +975,220 @@ class AppText {
       'ar': 'ضغط الملف', 'en': 'Compress File', 'de': 'Datei komprimieren',
       'fr': 'Compresser le fichier', 'tr': 'Dosyayı Sıkıştır', 'pl': 'Kompresuj plik',
     },
+
+    // ---------------- مقارنة ملفين PDF ----------------
+    'compare_file1': {
+      'ar': 'اختيار الملف الأول', 'en': 'Select First File', 'de': 'Erste Datei auswählen',
+      'fr': 'Sélectionner le premier fichier', 'tr': 'İlk Dosyayı Seç', 'pl': 'Wybierz pierwszy plik',
+    },
+    'compare_file2': {
+      'ar': 'اختيار الملف الثاني', 'en': 'Select Second File', 'de': 'Zweite Datei auswählen',
+      'fr': 'Sélectionner le deuxième fichier', 'tr': 'İkinci Dosyayı Seç', 'pl': 'Wybierz drugi plik',
+    },
+    'compare_comparing': {
+      'ar': 'جارٍ المقارنة...', 'en': 'Comparing...', 'de': 'Wird verglichen...',
+      'fr': 'Comparaison en cours...', 'tr': 'Karşılaştırılıyor...', 'pl': 'Porównywanie...',
+    },
+    'compare_btn': {
+      'ar': 'قارن الملفين', 'en': 'Compare Files', 'de': 'Dateien vergleichen',
+      'fr': 'Comparer les fichiers', 'tr': 'Dosyaları Karşılaştır', 'pl': 'Porównaj pliki',
+    },
+    'compare_legend_removed': {
+      'ar': 'حُذف (من الملف الأول)', 'en': 'Removed (from first file)', 'de': 'Entfernt (aus erster Datei)',
+      'fr': 'Supprimé (du premier fichier)', 'tr': 'Kaldırıldı (ilk dosyadan)', 'pl': 'Usunięto (z pierwszego pliku)',
+    },
+    'compare_legend_added': {
+      'ar': 'أُضيف (بالملف الثاني)', 'en': 'Added (in second file)', 'de': 'Hinzugefügt (in zweiter Datei)',
+      'fr': 'Ajouté (dans le deuxième fichier)', 'tr': 'Eklendi (ikinci dosyada)', 'pl': 'Dodano (w drugim pliku)',
+    },
+    'compare_empty_hint': {
+      'ar': 'اختر ملفين PDF لمقارنة محتواهما النصي',
+      'en': 'Choose two PDF files to compare their text content',
+      'de': 'Wählen Sie zwei PDF-Dateien aus, um deren Textinhalt zu vergleichen',
+      'fr': 'Choisissez deux fichiers PDF pour comparer leur contenu textuel',
+      'tr': 'Metin içeriğini karşılaştırmak için iki PDF dosyası seçin',
+      'pl': 'Wybierz dwa pliki PDF, aby porównać ich zawartość tekstową',
+    },
+    'compare_truncated_msg': {
+      'ar': 'الملفات طويلة جدًا — تمت مقارنة أول جزء منها فقط لتفادي البطء الشديد',
+      'en': 'The files are too long — only the first part was compared to avoid severe slowness',
+      'de': 'Die Dateien sind zu lang — nur der erste Teil wurde verglichen, um starke Verlangsamung zu vermeiden',
+      'fr': "Les fichiers sont trop longs — seule la première partie a été comparée pour éviter une lenteur importante",
+      'tr': 'Dosyalar çok uzun — aşırı yavaşlığı önlemek için yalnızca ilk kısım karşılaştırıldı',
+      'pl': 'Pliki są zbyt długie — porównano tylko pierwszą część, aby uniknąć znacznego spowolnienia',
+    },
+    'compare_error_prefix': {
+      'ar': 'خطأ أثناء المقارنة:', 'en': 'Error while comparing:', 'de': 'Fehler beim Vergleichen:',
+      'fr': 'Erreur lors de la comparaison :', 'tr': 'Karşılaştırma sırasında hata:', 'pl': 'Błąd podczas porównywania:',
+    },
+
+    // ---------------- استخراج الجداول ----------------
+    'table_note': {
+      'ar': 'ملاحظة: الاستخراج تقريبي بالاعتماد على مواقع النصوص، وقد لا يكون دقيقًا 100% مع كل الجداول.',
+      'en': 'Note: extraction is approximate, based on text positions, and may not be 100% accurate with every table.',
+      'de': 'Hinweis: Die Extraktion ist ungefähr und basiert auf Textpositionen; sie ist möglicherweise nicht bei jeder Tabelle 100% genau.',
+      'fr': "Remarque : l'extraction est approximative, basée sur les positions du texte, et peut ne pas être précise à 100 % pour chaque tableau.",
+      'tr': 'Not: çıkarma, metin konumlarına dayalı yaklaşık bir işlemdir ve her tabloda %100 doğru olmayabilir.',
+      'pl': 'Uwaga: ekstrakcja jest przybliżona, oparta na pozycjach tekstu, i może nie być w 100% dokładna dla każdej tabeli.',
+    },
+    'page_field_label': {
+      'ar': 'الصفحة', 'en': 'Page', 'de': 'Seite', 'fr': 'Page', 'tr': 'Sayfa', 'pl': 'Strona',
+    },
+    'table_all_pages': {
+      'ar': 'كل الصفحات', 'en': 'All Pages', 'de': 'Alle Seiten', 'fr': 'Toutes les pages', 'tr': 'Tüm Sayfalar', 'pl': 'Wszystkie strony',
+    },
+    'table_preview_btn': {
+      'ar': 'معاينة الجدول', 'en': 'Preview Table', 'de': 'Tabelle in Vorschau anzeigen',
+      'fr': 'Aperçu du tableau', 'tr': 'Tabloyu Önizle', 'pl': 'Podgląd tabeli',
+    },
+    'table_column_label': {
+      'ar': 'عمود', 'en': 'Column', 'de': 'Spalte', 'fr': 'Colonne', 'tr': 'Sütun', 'pl': 'Kolumna',
+    },
+    'table_exporting': {
+      'ar': 'جارٍ التصدير...', 'en': 'Exporting...', 'de': 'Wird exportiert...',
+      'fr': "Exportation en cours...", 'tr': 'Dışa aktarılıyor...', 'pl': 'Eksportowanie...',
+    },
+    'table_export_btn': {
+      'ar': 'تصدير إلى Excel', 'en': 'Export to Excel', 'de': 'Nach Excel exportieren',
+      'fr': 'Exporter vers Excel', 'tr': "Excel'e Aktar", 'pl': 'Eksportuj do Excela',
+    },
+    'table_exported_title': {
+      'ar': 'تم التصدير', 'en': 'Exported', 'de': 'Exportiert', 'fr': 'Exporté', 'tr': 'Dışa Aktarıldı', 'pl': 'Wyeksportowano',
+    },
+    'table_create_error': {
+      'ar': 'تعذّر إنشاء ملف Excel', 'en': 'Could not create Excel file', 'de': 'Excel-Datei konnte nicht erstellt werden',
+      'fr': 'Impossible de créer le fichier Excel', 'tr': 'Excel dosyası oluşturulamadı', 'pl': 'Nie można utworzyć pliku Excel',
+    },
+
+    // ---------------- القراءة الصوتية ----------------
+    'tts_lang_label': {
+      'ar': 'لغة القراءة', 'en': 'Reading Language', 'de': 'Vorlesesprache',
+      'fr': 'Langue de lecture', 'tr': 'Okuma Dili', 'pl': 'Język czytania',
+    },
+    'tts_rate_label': {
+      'ar': 'سرعة القراءة:', 'en': 'Reading speed:', 'de': 'Lesegeschwindigkeit:',
+      'fr': 'Vitesse de lecture :', 'tr': 'Okuma hızı:', 'pl': 'Szybkość czytania:',
+    },
+    'tts_pitch_label': {
+      'ar': 'طبقة الصوت:', 'en': 'Voice pitch:', 'de': 'Tonhöhe:',
+      'fr': 'Hauteur de la voix :', 'tr': 'Ses tonu:', 'pl': 'Wysokość głosu:',
+    },
+    'tts_hint': {
+      'ar': 'الصق أو اكتب النص المطلوب قراءته...', 'en': 'Paste or type the text to read...', 'de': 'Text zum Vorlesen einfügen oder eingeben...',
+      'fr': 'Collez ou tapez le texte à lire...', 'tr': 'Okunacak metni yapıştırın veya yazın...', 'pl': 'Wklej lub wpisz tekst do przeczytania...',
+    },
+    'tts_pause': {
+      'ar': 'إيقاف مؤقت', 'en': 'Pause', 'de': 'Pause', 'fr': 'Pause', 'tr': 'Duraklat', 'pl': 'Pauza',
+    },
+    'tts_play_btn': {
+      'ar': 'قراءة', 'en': 'Read', 'de': 'Vorlesen', 'fr': 'Lire', 'tr': 'Oku', 'pl': 'Czytaj',
+    },
+    'tts_stop': {
+      'ar': 'إيقاف', 'en': 'Stop', 'de': 'Stopp', 'fr': 'Arrêter', 'tr': 'Durdur', 'pl': 'Zatrzymaj',
+    },
+
+    // ---------------- الطباعة ----------------
+    'print_preview_hint': {
+      'ar': 'اختر ملف PDF لمعاينته وطباعته', 'en': 'Choose a PDF file to preview and print',
+      'de': 'Wählen Sie eine PDF-Datei zur Vorschau und zum Drucken aus',
+      'fr': 'Choisissez un fichier PDF à prévisualiser et à imprimer',
+      'tr': 'Önizlemek ve yazdırmak için bir PDF dosyası seçin',
+      'pl': 'Wybierz plik PDF, aby go podejrzeć i wydrukować',
+    },
+    'print_btn': {
+      'ar': 'طباعة', 'en': 'Print', 'de': 'Drucken', 'fr': 'Imprimer', 'tr': 'Yazdır', 'pl': 'Drukuj',
+    },
+
+    // ---------------- إصلاح PDF ----------------
+    'repair_note': {
+      'ar': 'ملاحظة: هذه الأداة تحاول إصلاح مشاكل الفهرسة الداخلية الشائعة عبر إعادة بناء الملف. لا يمكنها إصلاح كل أنواع التلف — بعض الملفات التالفة بشدة لن يمكن فتحها إطلاقًا.',
+      'en': 'Note: this tool tries to fix common internal indexing issues by rebuilding the file. It cannot fix every type of corruption — severely damaged files may not open at all.',
+      'de': 'Hinweis: Dieses Tool versucht, häufige interne Indexierungsprobleme durch Neuaufbau der Datei zu beheben. Es kann nicht jede Art von Beschädigung beheben — stark beschädigte Dateien lassen sich möglicherweise gar nicht öffnen.',
+      'fr': "Remarque : cet outil tente de corriger les problèmes d'indexation interne courants en reconstruisant le fichier. Il ne peut pas corriger tous les types de corruption — les fichiers gravement endommagés peuvent ne pas s'ouvrir du tout.",
+      'tr': 'Not: bu araç, dosyayı yeniden oluşturarak yaygın dahili dizinleme sorunlarını gidermeye çalışır. Her türlü bozulmayı düzeltemez — ciddi şekilde hasarlı dosyalar hiç açılmayabilir.',
+      'pl': 'Uwaga: to narzędzie próbuje naprawić typowe problemy z indeksowaniem wewnętrznym poprzez odbudowę pliku. Nie może naprawić każdego rodzaju uszkodzenia — poważnie uszkodzone pliki mogą się w ogóle nie otworzyć.',
+    },
+    'repair_open_fail': {
+      'ar': 'تعذّر فتح الملف إطلاقًا — التلف شديد جدًا ولا يمكن إصلاحه بهذه الطريقة.',
+      'en': 'Could not open the file at all — the damage is too severe to fix this way.',
+      'de': 'Die Datei konnte überhaupt nicht geöffnet werden — der Schaden ist zu schwerwiegend, um ihn auf diese Weise zu beheben.',
+      'fr': "Impossible d'ouvrir le fichier du tout — les dommages sont trop importants pour être réparés de cette façon.",
+      'tr': 'Dosya hiç açılamadı — hasar bu şekilde onarılamayacak kadar ciddi.',
+      'pl': 'Nie można było w ogóle otworzyć pliku — uszkodzenie jest zbyt poważne, aby naprawić je w ten sposób.',
+    },
+    'repair_success_prefix': {
+      'ar': 'تم فتح الملف وإعادة بناء هيكله بنجاح',
+      'en': 'The file was successfully opened and its structure rebuilt',
+      'de': 'Die Datei wurde erfolgreich geöffnet und ihre Struktur neu aufgebaut',
+      'fr': 'Le fichier a été ouvert avec succès et sa structure reconstruite',
+      'tr': 'Dosya başarıyla açıldı ve yapısı yeniden oluşturuldu',
+      'pl': 'Plik został pomyślnie otwarty, a jego struktura odbudowana',
+    },
+    'repair_success_suffix': {
+      'ar': 'إذا كان الملف الأصلي يحتوي تلفًا بسيطًا بالفهرسة الداخلية، فالنسخة الجديدة يجب أن تعمل بشكل طبيعي.',
+      'en': 'If the original file had minor internal indexing damage, the new copy should work normally.',
+      'de': 'Wenn die Originaldatei nur geringfügige interne Indexierungsschäden hatte, sollte die neue Kopie normal funktionieren.',
+      'fr': "Si le fichier original avait des dommages mineurs d'indexation interne, la nouvelle copie devrait fonctionner normalement.",
+      'tr': 'Orijinal dosyada küçük dahili dizinleme hasarı varsa, yeni kopya normal şekilde çalışmalıdır.',
+      'pl': 'Jeśli oryginalny plik miał niewielkie uszkodzenia indeksowania wewnętrznego, nowa kopia powinna działać normalnie.',
+    },
+    'repair_attempt_error': {
+      'ar': 'تعذّرت المحاولة:', 'en': 'The attempt failed:', 'de': 'Der Versuch ist fehlgeschlagen:',
+      'fr': "La tentative a échoué :", 'tr': 'Deneme başarısız oldu:', 'pl': 'Próba nie powiodła się:',
+    },
+    'repair_attempted_title': {
+      'ar': 'تمت المحاولة', 'en': 'Attempt Completed', 'de': 'Versuch abgeschlossen',
+      'fr': 'Tentative terminée', 'tr': 'Deneme Tamamlandı', 'pl': 'Próba zakończona',
+    },
+    'repair_attempt_btn': {
+      'ar': 'محاولة الإصلاح', 'en': 'Attempt Repair', 'de': 'Reparatur versuchen',
+      'fr': 'Tenter la réparation', 'tr': 'Onarmayı Dene', 'pl': 'Spróbuj naprawić',
+    },
+    'repair_attempting': {
+      'ar': 'جارٍ المحاولة...', 'en': 'Attempting...', 'de': 'Wird versucht...',
+      'fr': 'Tentative en cours...', 'tr': 'Deneniyor...', 'pl': 'Próbowanie...',
+    },
+    'repair_open_for_check': {
+      'ar': 'فتح للتأكد', 'en': 'Open to Verify', 'de': 'Zur Überprüfung öffnen',
+      'fr': 'Ouvrir pour vérifier', 'tr': 'Doğrulamak için Aç', 'pl': 'Otwórz, aby sprawdzić',
+    },
+
+    // ---------------- تعديل/حذف النص ----------------
+    'redact_appbar_initial': {
+      'ar': 'تعديل/حذف نص PDF', 'en': 'Edit/Remove PDF Text', 'de': 'PDF-Text bearbeiten/entfernen',
+      'fr': 'Modifier/supprimer le texte PDF', 'tr': 'PDF Metnini Düzenle/Kaldır', 'pl': 'Edytuj/usuń tekst PDF',
+    },
+    'redact_appbar_active': {
+      'ar': 'اسحب فوق النص لتعديله/حذفه', 'en': 'Drag over text to edit/remove it', 'de': 'Über Text ziehen, um ihn zu bearbeiten/entfernen',
+      'fr': 'Faites glisser sur le texte pour le modifier/supprimer', 'tr': 'Düzenlemek/kaldırmak için metnin üzerine sürükleyin', 'pl': 'Przeciągnij nad tekstem, aby go edytować/usunąć',
+    },
+    'redact_dialog_title': {
+      'ar': 'تعديل هذا الجزء', 'en': 'Edit This Section', 'de': 'Diesen Abschnitt bearbeiten',
+      'fr': 'Modifier cette section', 'tr': 'Bu Bölümü Düzenle', 'pl': 'Edytuj tę sekcję',
+    },
+    'redact_dialog_desc': {
+      'ar': 'اترك الحقل فارغًا للحذف فقط، أو اكتب نصًا بديلاً:',
+      'en': 'Leave the field empty to just delete, or type replacement text:',
+      'de': 'Lassen Sie das Feld leer, um nur zu löschen, oder geben Sie einen Ersatztext ein:',
+      'fr': 'Laissez le champ vide pour supprimer uniquement, ou saisissez un texte de remplacement :',
+      'tr': 'Sadece silmek için alanı boş bırakın veya değiştirme metni yazın:',
+      'pl': 'Pozostaw pole puste, aby tylko usunąć, lub wpisz tekst zastępczy:',
+    },
+    'redact_field_hint': {
+      'ar': 'نص بديل (اختياري)', 'en': 'Replacement text (optional)', 'de': 'Ersatztext (optional)',
+      'fr': 'Texte de remplacement (facultatif)', 'tr': 'Değiştirme metni (isteğe bağlı)', 'pl': 'Tekst zastępczy (opcjonalnie)',
+    },
+    'redact_done_btn': {
+      'ar': 'تم', 'en': 'Done', 'de': 'Fertig', 'fr': 'Terminé', 'tr': 'Tamam', 'pl': 'Gotowe',
+    },
+    'redact_note': {
+      'ar': 'ملاحظة: هذه الأداة "تغطي" النص القديم بمستطيل أبيض وتكتب فوقه نصًا بديلًا اختياريًا — نفس طريقة أغلب برامج تحرير PDF لتعديل محتوى موجود.',
+      'en': 'Note: this tool "covers" the old text with a white rectangle and optionally writes replacement text over it — the same approach most PDF editors use to modify existing content.',
+      'de': 'Hinweis: Dieses Tool „überdeckt" den alten Text mit einem weißen Rechteck und schreibt optional Ersatztext darüber — der gleiche Ansatz, den die meisten PDF-Editoren zum Ändern vorhandener Inhalte verwenden.',
+      'fr': "Remarque : cet outil « recouvre » l'ancien texte avec un rectangle blanc et écrit éventuellement un texte de remplacement par-dessus — la même approche utilisée par la plupart des éditeurs PDF pour modifier le contenu existant.",
+      'tr': 'Not: bu araç eski metni beyaz bir dikdörtgenle "kapatır" ve isteğe bağlı olarak üzerine değiştirme metni yazar — çoğu PDF düzenleyicinin mevcut içeriği değiştirmek için kullandığı aynı yaklaşım.',
+      'pl': 'Uwaga: to narzędzie „zakrywa" stary tekst białym prostokątem i opcjonalnie zapisuje na nim tekst zastępczy — takie samo podejście stosuje większość edytorów PDF do modyfikowania istniejącej zawartości.',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

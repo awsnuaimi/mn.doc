@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 class _RedactBox {
@@ -98,21 +101,24 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
 
   Future<String?> _askReplacementText() async {
     final controller = TextEditingController();
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('تعديل هذا الجزء'),
+        title: Text(tr('redact_dialog_title')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('اترك الحقل فارغًا للحذف فقط، أو اكتب نصًا بديلاً:', style: TextStyle(fontSize: 12)),
+            Text(tr('redact_dialog_desc'), style: const TextStyle(fontSize: 12)),
             const SizedBox(height: 8),
-            TextField(controller: controller, autofocus: true, decoration: const InputDecoration(hintText: 'نص بديل (اختياري)')),
+            TextField(controller: controller, autofocus: true, decoration: InputDecoration(hintText: tr('redact_field_hint'))),
           ],
         ),
         actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('تم')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: Text(tr('redact_done_btn'))),
         ],
       ),
     );
@@ -121,6 +127,9 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
   Future<void> _save() async {
     if (_filePath == null || _boxes.isEmpty) return;
     setState(() => _saving = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final bytes = await File(_filePath!).readAsBytes();
       final document = sf.PdfDocument(inputBytes: bytes);
@@ -164,56 +173,65 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم الحفظ'),
-          content: Text('المسار: $outPath'),
+          title: Text(tr('saved')),
+          content: Text('${tr('path_label')} $outPath'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
-            ElevatedButton(onPressed: () => Share.shareXFiles([XFile(outPath)]), child: const Text('مشاركة')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
+            ElevatedButton(onPressed: () => Share.shareXFiles([XFile(outPath)]), child: Text(tr('ed_share'))),
           ],
         ),
       );
     } catch (e) {
       setState(() => _saving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     if (_filePath == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('تعديل/حذف نص PDF')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                  child: const Text(
-                    'ملاحظة: هذه الأداة "تغطي" النص القديم بمستطيل أبيض وتكتب فوقه نصًا بديلًا اختياريًا — نفس طريقة أغلب برامج تحرير PDF لتعديل محتوى موجود.',
-                    style: TextStyle(fontSize: 12),
+      return Directionality(
+        textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+        child: Scaffold(
+          appBar: AppBar(title: Text(tr('redact_appbar_initial'))),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: Text(
+                      tr('redact_note'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(onPressed: _pickFile, icon: const Icon(Icons.folder_open_rounded), label: const Text('اختيار ملف PDF')),
-              ],
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(onPressed: _pickFile, icon: const Icon(Icons.folder_open_rounded), label: Text(tr('select_pdf_btn'))),
+                ],
+              ),
             ),
           ),
         ),
       );
     }
 
-    return Scaffold(
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
-        title: const Text('اسحب فوق النص لتعديله/حذفه'),
+        title: Text(tr('redact_appbar_active')),
         actions: [
           _saving
               ? const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
-              : IconButton(icon: const Icon(Icons.save_rounded), onPressed: _boxes.isEmpty ? null : _save, tooltip: 'حفظ'),
+              : IconButton(icon: const Icon(Icons.save_rounded), onPressed: _boxes.isEmpty ? null : _save, tooltip: tr('save')),
         ],
       ),
       body: Stack(
@@ -256,6 +274,7 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
             );
           }),
         ],
+      ),
       ),
     );
   }
