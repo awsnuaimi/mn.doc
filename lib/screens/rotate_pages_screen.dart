@@ -2,10 +2,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/pdf_page_ops.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -45,7 +48,8 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذّر قراءة الملف: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('read_error_prefix', lang)} $e')));
     }
   }
 
@@ -60,8 +64,10 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
     }
     if (!mounted) return;
     setState(() => _scanningBlanks = false);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(blankCount == 0 ? 'لم يتم العثور على صفحات فارغة' : 'وُجدت $blankCount صفحة فارغة — حدّدت للحذف تلقائيًا')),
+      SnackBar(content: Text(blankCount == 0 ? tr('rotate_no_blanks') : '${tr('rotate_found_blanks_prefix')} $blankCount ${tr('rotate_found_blanks_suffix')}')),
     );
     if (blankCount > 0) {
       setState(() {
@@ -78,9 +84,12 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
 
   Future<void> _save() async {
     if (_bytes == null) return;
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     final activePages = _pages.where((p) => !p.removed).toList();
     if (activePages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لازم يبقى صفحة واحدة على الأقل')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('rotate_min1'))));
       return;
     }
 
@@ -102,20 +111,20 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم الحفظ'),
-          content: Text('عدد الصفحات النهائي: ${refs.length}'),
+          title: Text(tr('saved')),
+          content: Text('${tr('pages_final_count')} ${refs.length}'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
             ElevatedButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)));
               },
-              child: const Text('فتح'),
+              child: Text(tr('scanner_open_file')),
             ),
           ],
         ),
@@ -123,22 +132,28 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
-        title: const Text('تدوير وإزالة الصفحات الفارغة'),
+        title: Text(tr('tool_rotate_t')),
         actions: [
           if (_bytes != null)
             IconButton(
               icon: _scanningBlanks
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.auto_fix_high_rounded),
-              tooltip: 'اكتشاف الصفحات الفارغة',
+              tooltip: tr('rotate_detect_tooltip'),
               onPressed: _scanningBlanks ? null : _detectBlankPages,
             ),
         ],
@@ -150,12 +165,12 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('اختر ملف PDF للبدء', style: TextStyle(color: AppColors.textMuted)),
+                    Text(tr('pages_pick_hint'), style: TextStyle(color: AppColors.textMuted)),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: _pickFile,
                       icon: const Icon(Icons.folder_open_rounded),
-                      label: const Text('اختيار ملف PDF'),
+                      label: Text(tr('select_pdf_btn')),
                     ),
                   ],
                 ),
@@ -178,7 +193,9 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
                             child: Text('${p.originalIndex + 1}'),
                           ),
                           title: Text(
-                            p.removed ? 'محذوفة' : 'دوران: ${p.rotation}°${p.isBlank ? ' (فارغة)' : ''}',
+                            p.removed
+                                ? tr('rotate_removed_label')
+                                : '${tr('rotate_rotation_label')} ${p.rotation}°${p.isBlank ? ' ${tr('rotate_blank_suffix')}' : ''}',
                             style: TextStyle(color: p.removed ? Colors.red : null),
                           ),
                           trailing: Row(
@@ -211,7 +228,7 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
                     icon: _saving
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.save_rounded),
-                    label: Text(_saving ? 'جارٍ الحفظ...' : 'حفظ كملف جديد'),
+                    label: Text(_saving ? tr('processing') : tr('pages_save_new')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryDark,
                       minimumSize: const Size(double.infinity, 50),
@@ -220,6 +237,7 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
                 ),
               ],
             ),
+      ),
     );
   }
 }

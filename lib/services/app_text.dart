@@ -773,6 +773,208 @@ class AppText {
       'ar': 'تعذّر التقاط الصورة:', 'en': 'Could not capture the image:', 'de': 'Bild konnte nicht aufgenommen werden:',
       'fr': "Impossible de capturer l'image :", 'tr': 'Görüntü yakalanamadı:', 'pl': 'Nie można przechwycić obrazu:',
     },
+
+    // ---------------- عناصر مشتركة إضافية ----------------
+    'select_pdf_btn': {
+      'ar': 'اختيار ملف PDF', 'en': 'Select PDF File', 'de': 'PDF-Datei auswählen',
+      'fr': 'Sélectionner un fichier PDF', 'tr': 'PDF Dosyası Seç', 'pl': 'Wybierz plik PDF',
+    },
+    'processing': {
+      'ar': 'جارٍ المعالجة...', 'en': 'Processing...', 'de': 'Wird verarbeitet...',
+      'fr': 'Traitement en cours...', 'tr': 'İşleniyor...', 'pl': 'Przetwarzanie...',
+    },
+    'read_error_prefix': {
+      'ar': 'تعذّر قراءة الملف:', 'en': 'Could not read the file:', 'de': 'Datei konnte nicht gelesen werden:',
+      'fr': 'Impossible de lire le fichier :', 'tr': 'Dosya okunamadı:', 'pl': 'Nie można odczytać pliku:',
+    },
+    'path_label': {
+      'ar': 'المسار:', 'en': 'Path:', 'de': 'Pfad:', 'fr': 'Chemin :', 'tr': 'Konum:', 'pl': 'Ścieżka:',
+    },
+    'pages_word': {
+      'ar': 'صفحة', 'en': 'page', 'de': 'Seite', 'fr': 'page', 'tr': 'sayfa', 'pl': 'strona',
+    },
+
+    // ---------------- دمج الملفات ----------------
+    'merge_add_files': {
+      'ar': 'إضافة ملفات PDF', 'en': 'Add PDF Files', 'de': 'PDF-Dateien hinzufügen',
+      'fr': 'Ajouter des fichiers PDF', 'tr': 'PDF Dosyaları Ekle', 'pl': 'Dodaj pliki PDF',
+    },
+    'merge_hint': {
+      'ar': 'أضف ملفين أو أكثر، ورتّبهم بالسحب حسب الترتيب المطلوب بالدمج',
+      'en': 'Add two or more files, and reorder them by dragging in the order you want them merged',
+      'de': 'Fügen Sie zwei oder mehr Dateien hinzu und ordnen Sie sie per Ziehen in der gewünschten Reihenfolge an',
+      'fr': "Ajoutez deux fichiers ou plus, et réorganisez-les par glisser-déposer dans l'ordre souhaité pour la fusion",
+      'tr': 'İki veya daha fazla dosya ekleyin ve birleştirmek istediğiniz sırayla sürükleyerek düzenleyin',
+      'pl': 'Dodaj dwa lub więcej plików i zmień ich kolejność przeciągając w wybranej kolejności scalania',
+    },
+    'merge_min2': {
+      'ar': 'أضف ملفين على الأقل للدمج', 'en': 'Add at least two files to merge', 'de': 'Fügen Sie mindestens zwei Dateien zum Zusammenführen hinzu',
+      'fr': 'Ajoutez au moins deux fichiers à fusionner', 'tr': 'Birleştirmek için en az iki dosya ekleyin', 'pl': 'Dodaj co najmniej dwa pliki do scalenia',
+    },
+    'merge_success_title': {
+      'ar': 'تم الدمج بنجاح', 'en': 'Merged Successfully', 'de': 'Erfolgreich zusammengeführt',
+      'fr': 'Fusionné avec succès', 'tr': 'Başarıyla Birleştirildi', 'pl': 'Pomyślnie scalono',
+    },
+    'merge_error_prefix': {
+      'ar': 'خطأ أثناء الدمج:', 'en': 'Error while merging:', 'de': 'Fehler beim Zusammenführen:',
+      'fr': 'Erreur lors de la fusion :', 'tr': 'Birleştirme sırasında hata:', 'pl': 'Błąd podczas scalania:',
+    },
+    'merge_button': {
+      'ar': 'دمج الملفات', 'en': 'Merge Files', 'de': 'Dateien zusammenführen',
+      'fr': 'Fusionner les fichiers', 'tr': 'Dosyaları Birleştir', 'pl': 'Scal pliki',
+    },
+    'merge_merging': {
+      'ar': 'جارٍ الدمج...', 'en': 'Merging...', 'de': 'Wird zusammengeführt...',
+      'fr': 'Fusion en cours...', 'tr': 'Birleştiriliyor...', 'pl': 'Scalanie...',
+    },
+
+    // ---------------- حذف/ترتيب الصفحات ----------------
+    'pages_pick_hint': {
+      'ar': 'اختر ملف PDF للبدء بحذف أو إعادة ترتيب صفحاته',
+      'en': 'Choose a PDF file to start deleting or reordering its pages',
+      'de': 'Wählen Sie eine PDF-Datei aus, um deren Seiten zu löschen oder neu anzuordnen',
+      'fr': 'Choisissez un fichier PDF pour commencer à supprimer ou réorganiser ses pages',
+      'tr': 'Sayfalarını silmeye veya yeniden sıralamaya başlamak için bir PDF dosyası seçin',
+      'pl': 'Wybierz plik PDF, aby zacząć usuwać lub zmieniać kolejność jego stron',
+    },
+    'pages_summary_suffix': {
+      'ar': '(اسحب لإعادة الترتيب، اضغط 🗑️ للحذف)',
+      'en': '(Drag to reorder, tap 🗑️ to delete)',
+      'de': '(Ziehen zum Neuanordnen, 🗑️ zum Löschen antippen)',
+      'fr': '(Glissez pour réorganiser, appuyez sur 🗑️ pour supprimer)',
+      'tr': '(Yeniden sıralamak için sürükleyin, silmek için 🗑️\'e dokunun)',
+      'pl': '(Przeciągnij, aby zmienić kolejność, dotknij 🗑️, aby usunąć)',
+    },
+    'pages_original_label': {
+      'ar': 'بالملف الأصلي', 'en': 'in the original file', 'de': 'in der Originaldatei',
+      'fr': 'dans le fichier original', 'tr': 'orijinal dosyada', 'pl': 'w oryginalnym pliku',
+    },
+    'pages_save_new': {
+      'ar': 'حفظ التعديلات كملف جديد', 'en': 'Save Changes as New File', 'de': 'Änderungen als neue Datei speichern',
+      'fr': 'Enregistrer les modifications dans un nouveau fichier', 'tr': 'Değişiklikleri Yeni Dosya Olarak Kaydet', 'pl': 'Zapisz zmiany jako nowy plik',
+    },
+    'pages_final_count': {
+      'ar': 'عدد الصفحات النهائي:', 'en': 'Final page count:', 'de': 'Endgültige Seitenzahl:',
+      'fr': 'Nombre de pages final :', 'tr': 'Son sayfa sayısı:', 'pl': 'Ostateczna liczba stron:',
+    },
+
+    // ---------------- التدوير وإزالة الفارغة ----------------
+    'rotate_detect_tooltip': {
+      'ar': 'اكتشاف الصفحات الفارغة', 'en': 'Detect Blank Pages', 'de': 'Leere Seiten erkennen',
+      'fr': 'Détecter les pages vides', 'tr': 'Boş Sayfaları Tespit Et', 'pl': 'Wykryj puste strony',
+    },
+    'rotate_no_blanks': {
+      'ar': 'لم يتم العثور على صفحات فارغة', 'en': 'No blank pages found', 'de': 'Keine leeren Seiten gefunden',
+      'fr': 'Aucune page vide trouvée', 'tr': 'Boş sayfa bulunamadı', 'pl': 'Nie znaleziono pustych stron',
+    },
+    'rotate_found_blanks_prefix': {
+      'ar': 'وُجدت', 'en': 'Found', 'de': 'Gefunden:', 'fr': 'Trouvé', 'tr': 'Bulundu:', 'pl': 'Znaleziono',
+    },
+    'rotate_found_blanks_suffix': {
+      'ar': 'صفحة فارغة — حدّدت للحذف تلقائيًا',
+      'en': 'blank page(s) — automatically selected for deletion',
+      'de': 'leere Seite(n) — automatisch zum Löschen ausgewählt',
+      'fr': 'page(s) vide(s) — sélectionnée(s) automatiquement pour suppression',
+      'tr': 'boş sayfa — otomatik olarak silinmek üzere seçildi',
+      'pl': 'pustą/-e stronę/-y — automatycznie wybrano do usunięcia',
+    },
+    'rotate_min1': {
+      'ar': 'لازم يبقى صفحة واحدة على الأقل', 'en': 'At least one page must remain', 'de': 'Mindestens eine Seite muss übrig bleiben',
+      'fr': 'Au moins une page doit rester', 'tr': 'En az bir sayfa kalmalıdır', 'pl': 'Musi pozostać co najmniej jedna strona',
+    },
+    'rotate_removed_label': {
+      'ar': 'محذوفة', 'en': 'Deleted', 'de': 'Gelöscht', 'fr': 'Supprimée', 'tr': 'Silindi', 'pl': 'Usunięto',
+    },
+    'rotate_rotation_label': {
+      'ar': 'دوران:', 'en': 'Rotation:', 'de': 'Drehung:', 'fr': 'Rotation :', 'tr': 'Döndürme:', 'pl': 'Obrót:',
+    },
+    'rotate_blank_suffix': {
+      'ar': '(فارغة)', 'en': '(blank)', 'de': '(leer)', 'fr': '(vide)', 'tr': '(boş)', 'pl': '(pusta)',
+    },
+
+    // ---------------- الحماية بكلمة مرور ----------------
+    'protect_add_mode': {
+      'ar': 'إضافة كلمة مرور', 'en': 'Add Password', 'de': 'Passwort hinzufügen',
+      'fr': 'Ajouter un mot de passe', 'tr': 'Parola Ekle', 'pl': 'Dodaj hasło',
+    },
+    'protect_remove_mode': {
+      'ar': 'إزالة كلمة مرور', 'en': 'Remove Password', 'de': 'Passwort entfernen',
+      'fr': 'Supprimer le mot de passe', 'tr': 'Parolayı Kaldır', 'pl': 'Usuń hasło',
+    },
+    'protect_current_pw': {
+      'ar': 'كلمة المرور الحالية للملف', 'en': "File's Current Password", 'de': 'Aktuelles Passwort der Datei',
+      'fr': 'Mot de passe actuel du fichier', 'tr': 'Dosyanın Mevcut Parolası', 'pl': 'Obecne hasło pliku',
+    },
+    'protect_new_pw': {
+      'ar': 'كلمة المرور الجديدة', 'en': 'New Password', 'de': 'Neues Passwort',
+      'fr': 'Nouveau mot de passe', 'tr': 'Yeni Parola', 'pl': 'Nowe hasło',
+    },
+    'protect_encrypt_btn': {
+      'ar': 'تشفير الملف', 'en': 'Encrypt File', 'de': 'Datei verschlüsseln',
+      'fr': 'Chiffrer le fichier', 'tr': 'Dosyayı Şifrele', 'pl': 'Zaszyfruj plik',
+    },
+    'protect_encrypted_title': {
+      'ar': 'تم تشفير الملف بكلمة مرور', 'en': 'File encrypted with password', 'de': 'Datei mit Passwort verschlüsselt',
+      'fr': 'Fichier chiffré avec mot de passe', 'tr': 'Dosya parolayla şifrelendi', 'pl': 'Plik zaszyfrowany hasłem',
+    },
+    'protect_removed_title': {
+      'ar': 'تمت إزالة كلمة المرور', 'en': 'Password Removed', 'de': 'Passwort entfernt',
+      'fr': 'Mot de passe supprimé', 'tr': 'Parola Kaldırıldı', 'pl': 'Hasło usunięte',
+    },
+    'protect_wrong_pw_error': {
+      'ar': 'كلمة المرور الحالية غير صحيحة أو خطأ آخر:',
+      'en': 'The current password is incorrect, or another error occurred:',
+      'de': 'Das aktuelle Passwort ist falsch oder ein anderer Fehler ist aufgetreten:',
+      'fr': "Le mot de passe actuel est incorrect, ou une autre erreur s'est produite :",
+      'tr': 'Mevcut parola yanlış veya başka bir hata oluştu:',
+      'pl': 'Obecne hasło jest nieprawidłowe lub wystąpił inny błąd:',
+    },
+
+    // ---------------- العلامة المائية ----------------
+    'watermark_text_label': {
+      'ar': 'نص العلامة المائية', 'en': 'Watermark Text', 'de': 'Wasserzeichentext',
+      'fr': 'Texte du filigrane', 'tr': 'Filigran Metni', 'pl': 'Tekst znaku wodnego',
+    },
+    'watermark_opacity_label': {
+      'ar': 'الشفافية:', 'en': 'Opacity:', 'de': 'Deckkraft:', 'fr': 'Opacité :', 'tr': 'Saydamlık:', 'pl': 'Przezroczystość:',
+    },
+    'watermark_rotation_label': {
+      'ar': 'زاوية الدوران:', 'en': 'Rotation Angle:', 'de': 'Drehwinkel:', 'fr': 'Angle de rotation :', 'tr': 'Döndürme Açısı:', 'pl': 'Kąt obrotu:',
+    },
+    'watermark_added_title': {
+      'ar': 'تمت إضافة العلامة المائية', 'en': 'Watermark Added', 'de': 'Wasserzeichen hinzugefügt',
+      'fr': 'Filigrane ajouté', 'tr': 'Filigran Eklendi', 'pl': 'Dodano znak wodny',
+    },
+    'watermark_apply_btn': {
+      'ar': 'تطبيق العلامة المائية', 'en': 'Apply Watermark', 'de': 'Wasserzeichen anwenden',
+      'fr': 'Appliquer le filigrane', 'tr': 'Filigranı Uygula', 'pl': 'Zastosuj znak wodny',
+    },
+
+    // ---------------- الضغط ----------------
+    'compress_current_size': {
+      'ar': 'الحجم الحالي:', 'en': 'Current size:', 'de': 'Aktuelle Größe:',
+      'fr': 'Taille actuelle :', 'tr': 'Mevcut boyut:', 'pl': 'Bieżący rozmiar:',
+    },
+    'compress_after_size': {
+      'ar': 'الحجم بعد الضغط:', 'en': 'Size after compression:', 'de': 'Größe nach Komprimierung:',
+      'fr': 'Taille après compression :', 'tr': 'Sıkıştırma sonrası boyut:', 'pl': 'Rozmiar po kompresji:',
+    },
+    'compress_note': {
+      'ar': 'ملاحظة: الضغط يعمل بشكل أفضل مع الملفات النصية أو التي أُعيد حفظها عدة مرات. الملفات المليئة بالصور عالية الدقة قد تنخفض بنسبة أقل.',
+      'en': 'Note: Compression works better with text-based files or files that have been re-saved multiple times. Files full of high-resolution images may shrink less.',
+      'de': 'Hinweis: Die Komprimierung funktioniert besser bei textbasierten Dateien oder mehrfach neu gespeicherten Dateien. Dateien mit vielen hochauflösenden Bildern verkleinern sich möglicherweise weniger.',
+      'fr': "Remarque : la compression fonctionne mieux avec les fichiers texte ou ceux réenregistrés plusieurs fois. Les fichiers pleins d'images haute résolution peuvent se réduire moins.",
+      'tr': 'Not: Sıkıştırma, metin tabanlı veya birden çok kez yeniden kaydedilmiş dosyalarda daha iyi çalışır. Yüksek çözünürlüklü görsellerle dolu dosyalar daha az küçülebilir.',
+      'pl': 'Uwaga: kompresja działa lepiej w przypadku plików tekstowych lub wielokrotnie zapisywanych. Pliki pełne obrazów w wysokiej rozdzielczości mogą zmniejszyć się mniej.',
+    },
+    'compress_done_title': {
+      'ar': 'تم الضغط', 'en': 'Compression Complete', 'de': 'Komprimierung abgeschlossen',
+      'fr': 'Compression terminée', 'tr': 'Sıkıştırma Tamamlandı', 'pl': 'Kompresja zakończona',
+    },
+    'compress_button': {
+      'ar': 'ضغط الملف', 'en': 'Compress File', 'de': 'Datei komprimieren',
+      'fr': 'Compresser le fichier', 'tr': 'Dosyayı Sıkıştır', 'pl': 'Kompresuj plik',
+    },
   };
 
   /// يرجع نص الترجمة المطابق لـ [languageCode]، ويعود تلقائيًا

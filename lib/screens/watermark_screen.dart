@@ -2,10 +2,13 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// إضافة علامة مائية نصية لكل صفحات ملف PDF.
@@ -33,6 +36,9 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
   Future<void> _apply() async {
     if (_filePath == null || _textController.text.trim().isEmpty) return;
     setState(() => _processing = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     try {
       final bytes = await File(_filePath!).readAsBytes();
       final document = sf.PdfDocument(inputBytes: bytes);
@@ -75,13 +81,13 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تمت إضافة العلامة المائية'),
-          content: Text('المسار: $outPath'),
+          title: Text(tr('watermark_added_title')),
+          content: Text('${tr('path_label')} $outPath'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
             ElevatedButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
           ],
         ),
@@ -89,14 +95,20 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
     } catch (e) {
       setState(() => _processing = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('إضافة علامة مائية')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_watermark_t'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
@@ -104,19 +116,19 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
             OutlinedButton.icon(
               onPressed: _pickFile,
               icon: const Icon(Icons.folder_open_rounded),
-              label: Text(_filePath == null ? 'اختيار ملف PDF' : _filePath!.split('/').last, overflow: TextOverflow.ellipsis),
+              label: Text(_filePath == null ? tr('select_pdf_btn') : _filePath!.split('/').last, overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: _textController,
-              decoration: const InputDecoration(labelText: 'نص العلامة المائية'),
+              decoration: InputDecoration(labelText: tr('watermark_text_label')),
             ),
             const SizedBox(height: 16),
-            Text('الشفافية: ${(_opacity * 100).round()}%'),
+            Text('${tr('watermark_opacity_label')} ${(_opacity * 100).round()}%'),
             Slider(value: _opacity, min: 0.05, max: 0.8, onChanged: (v) => setState(() => _opacity = v)),
-            Text('حجم الخط: ${_fontSize.round()}'),
+            Text('${tr('ed_dialog_fontsize')} ${_fontSize.round()}'),
             Slider(value: _fontSize, min: 20, max: 100, onChanged: (v) => setState(() => _fontSize = v)),
-            Text('زاوية الدوران: ${_rotation.round()}°'),
+            Text('${tr('watermark_rotation_label')} ${_rotation.round()}°'),
             Slider(value: _rotation, min: -90, max: 90, onChanged: (v) => setState(() => _rotation = v)),
             const SizedBox(height: 20),
             // معاينة تقريبية
@@ -144,7 +156,7 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
               icon: _processing
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.water_drop_rounded),
-              label: Text(_processing ? 'جارٍ المعالجة...' : 'تطبيق العلامة المائية'),
+              label: Text(_processing ? tr('processing') : tr('watermark_apply_btn')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryDark,
                 minimumSize: const Size(double.infinity, 50),
@@ -152,6 +164,7 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

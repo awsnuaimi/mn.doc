@@ -2,10 +2,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/pdf_page_ops.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -41,7 +44,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذّر قراءة الملف: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('read_error_prefix', lang)} $e')));
     }
   }
 
@@ -60,16 +64,18 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
 
       if (!mounted) return;
       setState(() => _processing = false);
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      String tr(String key) => AppText.t(key, lang);
 
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم الحفظ'),
-          content: Text('عدد الصفحات النهائي: ${refs.length}'),
+          title: Text(tr('saved')),
+          content: Text('${tr('pages_final_count')} ${refs.length}'),
           actions: [
             TextButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
             ElevatedButton(
               onPressed: () {
@@ -79,7 +85,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                   MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
                 );
               },
-              child: const Text('فتح الملف'),
+              child: Text(tr('scanner_open_file')),
             ),
           ],
         ),
@@ -87,14 +93,21 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     } catch (e) {
       setState(() => _processing = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('error_prefix', lang)} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('حذف وإعادة ترتيب الصفحات')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_pages_t'))),
       body: _bytes == null
           ? Center(
               child: Padding(
@@ -103,7 +116,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'اختر ملف PDF للبدء بحذف أو إعادة ترتيب صفحاته',
+                      tr('pages_pick_hint'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.textMuted),
                     ),
@@ -111,7 +124,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                     ElevatedButton.icon(
                       onPressed: _pickFile,
                       icon: const Icon(Icons.folder_open_rounded),
-                      label: const Text('اختيار ملف PDF'),
+                      label: Text(tr('select_pdf_btn')),
                     ),
                   ],
                 ),
@@ -122,7 +135,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(
-                    '$_fileName — ${_pageOrder.length} صفحة (اسحب لإعادة الترتيب، اضغط 🗑️ للحذف)',
+                    '$_fileName — ${_pageOrder.length} ${tr('pages_word')} ${tr('pages_summary_suffix')}',
                     style: const TextStyle(fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
@@ -148,7 +161,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                             backgroundColor: AppColors.primaryDark.withOpacity(0.1),
                             child: Text('${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
                           ),
-                          title: Text('صفحة $originalPageNumber (بالملف الأصلي)'),
+                          title: Text('${tr('scanner_page_label')} $originalPageNumber (${tr('pages_original_label')})'),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
                             onPressed: () => setState(() => _pageOrder.removeAt(index)),
@@ -165,7 +178,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                     icon: _processing
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.save_rounded),
-                    label: Text(_processing ? 'جارٍ الحفظ...' : 'حفظ التعديلات كملف جديد'),
+                    label: Text(_processing ? tr('processing') : tr('pages_save_new')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryDark,
                       minimumSize: const Size(double.infinity, 50),
@@ -174,6 +187,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                 ),
               ],
             ),
+      ),
     );
   }
 }

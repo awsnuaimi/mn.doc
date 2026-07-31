@@ -2,10 +2,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/pdf_page_ops.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'pdf_editor_screen.dart';
 
@@ -48,17 +51,21 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
         setState(() => _files.add(_PickedPdf(name: f.name, bytes: bytes!, pageCount: count)));
       } catch (_) {
         if (!mounted) return;
+        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تعذّر قراءة الملف: ${f.name}')),
+          SnackBar(content: Text('${AppText.t('read_error_prefix', lang)} ${f.name}')),
         );
       }
     }
   }
 
   Future<void> _merge() async {
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
     if (_files.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أضف ملفين على الأقل للدمج')),
+        SnackBar(content: Text(tr('merge_min2'))),
       );
       return;
     }
@@ -85,12 +92,12 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تم الدمج بنجاح'),
-          content: Text('عدد الصفحات: ${refs.length}\nالمسار: $outPath'),
+          title: Text(tr('merge_success_title')),
+          content: Text('${tr('scanner_pagecount_label')} ${refs.length}\n${tr('path_label')} $outPath'),
           actions: [
             TextButton(
               onPressed: () => Share.shareXFiles([XFile(outPath)]),
-              child: const Text('مشاركة'),
+              child: Text(tr('ed_share')),
             ),
             ElevatedButton(
               onPressed: () {
@@ -100,7 +107,7 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
                   MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
                 );
               },
-              child: const Text('فتح الملف'),
+              child: Text(tr('scanner_open_file')),
             ),
           ],
         ),
@@ -108,14 +115,20 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
     } catch (e) {
       setState(() => _merging = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ أثناء الدمج: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('merge_error_prefix')} $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('دمج ملفات PDF')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tool_merge_t'))),
       body: Column(
         children: [
           Padding(
@@ -123,14 +136,14 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
             child: ElevatedButton.icon(
               onPressed: _addFiles,
               icon: const Icon(Icons.add_rounded),
-              label: const Text('إضافة ملفات PDF'),
+              label: Text(tr('merge_add_files')),
             ),
           ),
           if (_files.isEmpty)
             Expanded(
               child: Center(
                 child: Text(
-                  'أضف ملفين أو أكثر، ورتّبهم بالسحب حسب الترتيب المطلوب بالدمج',
+                  tr('merge_hint'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textMuted),
                 ),
@@ -159,7 +172,7 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
                         child: Text('${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       ),
                       title: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text('${f.pageCount} صفحة'),
+                      subtitle: Text('${f.pageCount} ${tr('pages_word')}'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline_rounded),
                         onPressed: () => setState(() => _files.removeAt(index)),
@@ -176,7 +189,7 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
               icon: _merging
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.merge_type_rounded),
-              label: Text(_merging ? 'جارٍ الدمج...' : 'دمج الملفات (${_files.length})'),
+              label: Text(_merging ? tr('merge_merging') : '${tr('merge_button')} (${_files.length})'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryDark,
                 minimumSize: const Size(double.infinity, 50),
@@ -184,6 +197,7 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
