@@ -7,13 +7,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
 
 import '../theme/app_theme.dart';
 import '../services/app_settings.dart';
 import '../services/isolate_helpers.dart';
 import '../services/app_text.dart';
 import 'pdf_editor_screen.dart';
-import 'document_camera_screen.dart';
 
 class _ScannedPage {
   final File file;
@@ -21,8 +21,10 @@ class _ScannedPage {
   _ScannedPage({required this.file, this.enhanced = false});
 }
 
-/// مسح ضوئي للمستندات: التقاط عدة صفحات بالكاميرا، تحسينها (اختياري)،
-/// وترتيبها، ثم تصديرها كملف PDF واحد.
+/// مسح ضوئي للمستندات: يستخدم كاشف حواف المستند الحقيقي من Google
+/// (ML Kit Document Scanner) — يكتشف حواف الورقة تلقائيًا بالكاميرا
+/// الحيّة، يصحّح الزاوية، ويقصّ الصورة بدقة — نفس تقنية تطبيقات المسح
+/// الاحترافية. بعدها تقدر تحسّن الصفحات (أبيض وأسود) وترتّبها وتصدّرها PDF.
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
 
@@ -38,38 +40,45 @@ class _ScannerScreenState extends State<ScannerScreen> {
   bool _capturing = false;
   bool _saving = false;
 
-  Future<void> _capturePage() async {
+  Future<void> _scanDocument() async {
     setState(() => _capturing = true);
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    DocumentScanner? scanner;
     try {
-      final capturedPath = await Navigator.push<String>(
-        context,
-        MaterialPageRoute(builder: (_) => const DocumentCameraScreen()),
+      final options = DocumentScannerOptions(
+        documentFormat: DocumentFormat.jpeg,
+        mode: ScannerMode.filter,
+        pageLimit: 20,
+        isGalleryImport: false,
       );
-      if (capturedPath == null) {
-        setState(() => _capturing = false);
-        return;
-      }
+      scanner = DocumentScanner(options: options);
+      final result = await scanner.scanDocument();
 
-      File finalFile = File(capturedPath);
-      if (_autoEnhance) {
-        finalFile = await _enhance(finalFile);
-      }
-
-      setState(() {
+      for (final imagePath in result.images) {
+        File finalFile = File(imagePath);
+        if (_autoEnhance) {
+          finalFile = await _enhance(finalFile);
+        }
         _pages.add(_ScannedPage(file: finalFile, enhanced: _autoEnhance));
-        _capturing = false;
-      });
+      }
+
+      if (mounted) setState(() => _capturing = false);
     } catch (e) {
-      setState(() => _capturing = false);
+      if (mounted) setState(() => _capturing = false);
+      // تجاهل صامت لو المستخدم بس ألغى المسح (سلوك طبيعي، مو خطأ)
       if (!mounted) return;
-      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('scanner_capture_error', lang)} $e')));
+      if (e.toString().toLowerCase().contains('cancel')) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('scanner_capture_error')} $e')));
+    } finally {
+      await scanner?.close();
     }
   }
 
   /// يحوّل الصورة لشكل "ممسوح ضوئيًا": أبيض وأسود مع رفع التباين والحدة.
   /// تتم المعالجة بخيط منفصل (Isolate) عبر compute() لتفادي تجميد
-  /// الواجهة أثناء تصوير عدة صفحات متتالية.
+  /// الواجهة أثناء معالجة عدة صفحات متتالية.
   Future<File> _enhance(File original) async {
     final bytes = await original.readAsBytes();
     final processedBytes = await compute(
@@ -265,10 +274,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: ElevatedButton.icon(
-              onPressed: _capturing ? null : _capturePage,
+              onPressed: _capturing ? null : _scanDocument,
               icon: _capturing
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.camera_alt_rounded),
+                  : const Icon(Icons.document_scanner_rounded),
               label: Text(_capturing ? tr('scanner_capturing') : '${tr('scanner_capture_btn')} (${_pages.length})'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryDark,

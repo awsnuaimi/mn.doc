@@ -782,8 +782,8 @@ class AppText {
       'fr': 'Capture en cours...', 'tr': 'Yakalanıyor...', 'pl': 'Przechwytywanie...',
     },
     'scanner_capture_btn': {
-      'ar': 'التقاط صفحة', 'en': 'Capture Page', 'de': 'Seite aufnehmen',
-      'fr': 'Capturer une page', 'tr': 'Sayfa Yakala', 'pl': 'Przechwyć stronę',
+      'ar': 'مسح المستند', 'en': 'Scan Document', 'de': 'Dokument scannen',
+      'fr': 'Numériser le document', 'tr': 'Belgeyi Tara', 'pl': 'Skanuj dokument',
     },
     'scanner_success_title': {
       'ar': 'تم إنشاء الملف بنجاح', 'en': 'File created successfully', 'de': 'Datei erfolgreich erstellt',
@@ -815,6 +815,19 @@ class AppText {
     },
     'file_from_app_prefix': {
       'ar': 'ملف من', 'en': 'A file from', 'de': 'Eine Datei von', 'fr': 'Un fichier de', 'tr': "Şuradan bir dosya:", 'pl': 'Plik z',
+    },
+    'unsaved_title': {
+      'ar': 'تعديلات غير محفوظة', 'en': 'Unsaved Changes', 'de': 'Nicht gespeicherte Änderungen',
+      'fr': 'Modifications non enregistrées', 'tr': 'Kaydedilmemiş Değişiklikler', 'pl': 'Niezapisane zmiany',
+    },
+    'unsaved_body': {
+      'ar': 'هل تريد الخروج بدون حفظ التعديلات؟', 'en': 'Do you want to exit without saving your changes?',
+      'de': 'Möchten Sie beenden, ohne Ihre Änderungen zu speichern?', 'fr': 'Voulez-vous quitter sans enregistrer vos modifications ?',
+      'tr': 'Değişikliklerinizi kaydetmeden çıkmak istiyor musunuz?', 'pl': 'Czy chcesz wyjść bez zapisywania zmian?',
+    },
+    'discard_exit': {
+      'ar': 'تجاهل والخروج', 'en': 'Discard & Exit', 'de': 'Verwerfen & Beenden',
+      'fr': 'Ignorer et quitter', 'tr': 'Yoksay ve Çık', 'pl': 'Odrzuć i wyjdź',
     },
 
     // ---------------- عناصر مشتركة إضافية ----------------

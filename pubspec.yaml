@@ -52,6 +52,7 @@ dependencies:
   archive: ^3.6.1                        # فك ضغط ملفات .docx (Dart خالص، بدون كود أندرويد)
   xml: ^6.5.0                            # تحليل محتوى XML داخل ملفات .docx
   google_mlkit_barcode_scanning: any     # التعرف على QR/الباركود (أحدث نسخة متوافقة)
+  google_mlkit_document_scanner: any     # كشف حواف المستند تلقائيًا بالكاميرا (Android)
   package_info_plus: ^8.1.2              # قراءة رقم إصدار التطبيق الحالي
   url_launcher: ^6.3.1                    # فتح رابط تنزيل التحديث بالمتصفح
   speech_to_text: any                     # تحويل الصوت إلى نص (أحدث نسخة متوافقة)
