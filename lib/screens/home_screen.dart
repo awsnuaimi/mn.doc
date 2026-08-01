@@ -88,6 +88,28 @@ class _HomeScreenState extends State<HomeScreen> {
     _openDocument(item);
   }
 
+  /// خاص بزر "تحرير PDF": يفتح منتقي ملفات PDF فقط، ويأخذك مباشرة
+  /// لمحرر PDF (بدل منتقي الملفات العام يلي يدعم كل الأنواع).
+  Future<void> _pickAndEditPdf() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result == null || result.files.single.path == null) return;
+
+    final file = File(result.files.single.path!);
+    final item = await DocumentItem.fromFile(file);
+
+    setState(() {
+      _recent.removeWhere((d) => d.path == item.path);
+      _recent.insert(0, item);
+    });
+    FileManagerService.registerOpened(item.path, item.name);
+
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: item.path)));
+  }
+
   void _openDocument(DocumentItem item) {
     switch (item.type) {
       case DocType.pdf:
@@ -271,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _ActionData(
           icon: Icons.picture_as_pdf_rounded,
           label: t('edit_pdf'),
-          onTap: _pickAndOpen,
+          onTap: _pickAndEditPdf,
         ),
         _ActionData(
           icon: Icons.construction_rounded,
