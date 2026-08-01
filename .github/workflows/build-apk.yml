@@ -48,11 +48,25 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
+      - name: بناء ملف AAB (مطلوب لرفعه على Google Play)
+        run: flutter build appbundle --release
+        env:
+          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
       - name: رفع APK كملف تنزيل (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: MN-Doc-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: رفع AAB كملف تنزيل (Artifact) — هذا الملف تحديدًا يُرفع على Google Play
+        uses: actions/upload-artifact@v4
+        with:
+          name: MN-Doc-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
 
       # عند دفع "تاغ" إصدار مثل v1.0.1، ينشر APK كإصدار عام (Release) على GitHub
       # يستطيع أي شخص تنزيله مباشرة — وهذا ما تستخدمه ميزة "التحقق من التحديثات".
