@@ -48,7 +48,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
     DocumentScanner? scanner;
     try {
       final options = DocumentScannerOptions(
-        documentFormat: DocumentFormat.jpeg,
+        documentFormats: const {DocumentFormat.jpeg},
         mode: ScannerMode.filter,
         pageLimit: 20,
         isGalleryImport: false,
@@ -56,7 +56,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       scanner = DocumentScanner(options: options);
       final result = await scanner.scanDocument();
 
-      for (final imagePath in result.images) {
+      for (final imagePath in result.images ?? <String>[]) {
         File finalFile = File(imagePath);
         if (_autoEnhance) {
           finalFile = await _enhance(finalFile);
