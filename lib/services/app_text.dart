@@ -861,6 +861,17 @@ class AppText {
       'tr': 'Metni oraya taşımak için sayfadaki yeni konuma dokunun',
       'pl': 'Dotknij nowego miejsca na stronie, aby przenieść tam tekst',
     },
+    'ed_nudge_hint': {
+      'ar': 'استخدم الأسهم لتحريك النص بدقة، ثم اضغط "تثبيت"',
+      'en': 'Use the arrows to move the text precisely, then tap "Done"',
+      'de': 'Verwenden Sie die Pfeile, um den Text präzise zu verschieben, und tippen Sie dann auf „Fertig"',
+      'fr': "Utilisez les flèches pour déplacer le texte avec précision, puis appuyez sur « Terminé »",
+      'tr': 'Metni hassas şekilde taşımak için okları kullanın, ardından "Tamamla"ya dokunun',
+      'pl': 'Użyj strzałek, aby precyzyjnie przesunąć tekst, a następnie dotknij "Gotowe"',
+    },
+    'ed_nudge_done': {
+      'ar': 'تثبيت', 'en': 'Done', 'de': 'Fertig', 'fr': 'Terminé', 'tr': 'Tamamla', 'pl': 'Gotowe',
+    },
     'ed_extract_failed': {
       'ar': 'تعذّر استخراج النص من هذا الملف. قد يكون محميًا أو تالفًا أو صورة ممسوحة بدون نص فعلي.',
       'en': 'Could not extract text from this file. It may be protected, damaged, or a scanned image without real text.',

@@ -150,7 +150,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   // ------- تتبّع التعديلات غير المحفوظة -------
   bool _hasUnsavedChanges = false;
-  _TextAnnotation? _movingAnnotation; // النص الجاري نقله حاليًا (وضع "انقل هون")
+  _TextAnnotation? _nudgingAnnotation; // النص الجاري ضبط موضعه حاليًا بأسهم الاتجاهات
+  _TextAnnotation? _nudgeSnapshot; // نسخة من موضعه الأصلي قبل بدء الضبط — لدعم "إلغاء" والرجوع لنفس المكان
+  static const double _nudgeStep = 3.0; // مقدار الحركة بكل ضغطة سهم (نقاط PDF مباشرة — دقة كاملة بدون أي تحويل)
 
   // ------- البحث داخل PDF (مع Debounce) -------
   bool _searchVisible = false;
@@ -201,12 +203,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _handlePdfTap(PdfGestureDetails details) async {
-    if (!_addTextMode && _movingAnnotation == null) return;
+    if (!_addTextMode) return;
 
     // دقة تحديد الموضع (شاشة ↔ نقاط PDF) مضمونة فقط عند التكبير الافتراضي
     // 100% — أي تكبير/تصغير يُدخل انحرافًا حقيقيًا بين ما يظهر على
     // الشاشة والمكان الفعلي بالملف. نطلب من المستخدم إعادة الزووم لـ100%
-    // أول لضمان دقة الإضافة/النقل.
+    // أول لضمان دقة الإضافة.
     if ((_zoomLevel - 1.0).abs() > 0.01) {
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -234,22 +236,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       pdfPoint: pagePoint,
       viewerPoint: details.position,
     );
-
-    // وضع "نقل نص موجود": بدل السحب بالإصبع (غير دقيق هندسيًا)، نستخدم
-    // نفس آلية الضغط الدقيقة المستخدمة بالإضافة — هيك النقل مضمون بنفس
-    // دقة الإضافة تمامًا، بدل معامل تحويل تقريبي.
-    if (_movingAnnotation != null) {
-      final moved = _movingAnnotation!;
-      _pushUndoState();
-      setState(() {
-        moved.pageNumber = pageNumber;
-        moved.dx = pagePoint.dx;
-        moved.dy = pagePoint.dy;
-        _movingAnnotation = null;
-      });
-      _scheduleAutoSave();
-      return;
-    }
 
     final result = await _showTextDialog();
     if (result == null || result.text.trim().isEmpty) return;
@@ -1003,7 +989,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 style: const TextStyle(fontSize: 12),
               ),
             ),
-          if (_movingAnnotation != null)
+          if (_nudgingAnnotation != null)
             Container(
               width: double.infinity,
               color: AppColors.primaryDark.withOpacity(0.15),
@@ -1012,13 +998,36 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      tr('ed_tap_new_location'),
+                      tr('ed_nudge_hint'),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
                   TextButton(
-                    onPressed: () => setState(() => _movingAnnotation = null),
+                    onPressed: () {
+                      // نرجّع النص لمكانه الأصلي قبل بدء الضبط بالكامل.
+                      final ann = _nudgingAnnotation!;
+                      final snap = _nudgeSnapshot;
+                      setState(() {
+                        if (snap != null) {
+                          ann.pageNumber = snap.pageNumber;
+                          ann.dx = snap.dx;
+                          ann.dy = snap.dy;
+                        }
+                        _nudgingAnnotation = null;
+                        _nudgeSnapshot = null;
+                      });
+                    },
                     child: Text(tr('cancel'), style: const TextStyle(fontSize: 12)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _nudgingAnnotation = null;
+                        _nudgeSnapshot = null;
+                      });
+                      _scheduleAutoSave();
+                    },
+                    child: Text(tr('ed_nudge_done'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -1122,7 +1131,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     if (transform == null) return const SizedBox.shrink();
 
     final screenPoint = transform.pdfToViewer(Offset(ann.dx, ann.dy));
-    final isBeingMoved = identical(ann, _movingAnnotation);
+    final isNudging = identical(ann, _nudgingAnnotation);
 
     // حجم الخط في الـoverlay مشتق من حجم الخط الحقيقي في PDF ومن مقياس
     // الصفحة نفسه؛ بذلك تتطابق نقطة البداية والحجم بصريًا قدر الإمكان.
@@ -1131,29 +1140,74 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     return Positioned(
       left: screenPoint.dx,
       top: screenPoint.dy,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => _showAnnotationActionSheet(ann),
-        child: Container(
-          padding: EdgeInsets.zero,
-          decoration: BoxDecoration(
-            border: isBeingMoved ? Border.all(color: AppColors.accent, width: 2) : null,
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: Text(
-            ann.text,
-            textAlign: ann.alignment,
-            style: TextStyle(
-              fontSize: previewFontSize,
-              height: 1.3,
-              color: ann.color,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => _showAnnotationActionSheet(ann),
+            child: Container(
+              padding: EdgeInsets.zero,
+              decoration: BoxDecoration(
+                border: isNudging ? Border.all(color: AppColors.accent, width: 2) : null,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Text(
+                ann.text,
+                textAlign: ann.alignment,
+                style: TextStyle(
+                  fontSize: previewFontSize,
+                  height: 1.3,
+                  color: ann.color,
+                ),
+              ),
             ),
           ),
-        ),
+          if (isNudging) _buildNudgeDPad(ann),
+        ],
       ),
     );
   }
 
+  /// لوحة أسهم اتجاهات بسيطة لتحريك النص بدقة كاملة: كل ضغطة سهم تحرّك
+  /// النص مسافة ثابتة صغيرة (_nudgeStep) بنقاط PDF مباشرة — بدون أي
+  /// تحويل شاشة↔صفحة، وبالتالي دقة 100% مضمونة رياضيًا مهما كانت حالة
+  /// العرض. أبسط وأوثق بكثير من محاولة تفسير سحب بالإصبع.
+  Widget _buildNudgeDPad(_TextAnnotation ann) {
+    Widget arrow(IconData icon, double dx, double dy) => IconButton(
+          icon: Icon(icon, size: 18),
+          color: Colors.white,
+          padding: const EdgeInsets.all(4),
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          onPressed: () => setState(() {
+            ann.dx += dx;
+            ann.dy += dy;
+          }),
+        );
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          arrow(Icons.keyboard_arrow_up_rounded, 0, -_nudgeStep),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              arrow(Icons.keyboard_arrow_left_rounded, -_nudgeStep, 0),
+              arrow(Icons.keyboard_arrow_right_rounded, _nudgeStep, 0),
+            ],
+          ),
+          arrow(Icons.keyboard_arrow_down_rounded, 0, _nudgeStep),
+        ],
+      ),
+    );
+  }
 
   /// عند الضغط على نص موجود: قائمة صغيرة "تعديل" أو "نقل" — النقل يعتمد
   /// على نفس آلية الضغط الدقيقة المستخدمة بالإضافة (بدل السحب بالإصبع
@@ -1163,14 +1217,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     String tr(String key) => AppText.t(key, lang);
     showModalBottomSheet(
       context: context,
-      builder: (context) => SafeArea(
+      builder: (sheetContext) => SafeArea(
         child: Wrap(
           children: [
             ListTile(
               leading: const Icon(Icons.edit_rounded),
               title: Text(tr('ed_action_edit')),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
                 _editAnnotation(ann);
               },
             ),
@@ -1178,16 +1232,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               leading: const Icon(Icons.open_with_rounded),
               title: Text(tr('ed_action_move')),
               onTap: () {
-                Navigator.pop(context);
-                if ((_zoomLevel - 1.0).abs() > 0.01) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(tr('ed_zoom_reset_needed'))),
-                  );
-                  return;
-                }
-                setState(() => _movingAnnotation = ann);
+                Navigator.pop(sheetContext);
+                _pushUndoState();
+                setState(() {
+                  _nudgeSnapshot = ann.copy();
+                  _nudgingAnnotation = ann;
+                });
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(tr('ed_tap_new_location'))),
+                  SnackBar(content: Text(tr('ed_nudge_hint'))),
                 );
               },
             ),
@@ -1195,7 +1248,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: Text(tr('ed_action_delete'), style: const TextStyle(color: Colors.red)),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
                 _pushUndoState();
                 setState(() => _annotations.remove(ann));
                 _scheduleAutoSave();
