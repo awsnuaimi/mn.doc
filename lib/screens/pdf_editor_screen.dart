@@ -508,15 +508,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           content: Text('${tr('ed_saved_path_prefix')}\n$outPath'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(tr('ed_close')),
-            ),
-            ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 Share.shareXFiles([XFile(outPath)], text: '${tr('file_from_app_prefix')} MN-Doc');
               },
               child: Text(tr('ed_share')),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
+              child: Text(tr('ed_open_saved_file')),
             ),
           ],
         ),

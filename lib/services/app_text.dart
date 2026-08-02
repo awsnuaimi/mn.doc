@@ -819,6 +819,10 @@ class AppText {
     'ed_dialog_alignment': {
       'ar': 'المحاذاة:', 'en': 'Alignment:', 'de': 'Ausrichtung:', 'fr': 'Alignement :', 'tr': 'Hizalama:', 'pl': 'Wyrównanie:',
     },
+    'ed_open_saved_file': {
+      'ar': 'فتح الملف المحفوظ', 'en': 'Open Saved File', 'de': 'Gespeicherte Datei öffnen',
+      'fr': 'Ouvrir le fichier enregistré', 'tr': 'Kaydedilen Dosyayı Aç', 'pl': 'Otwórz zapisany plik',
+    },
     'unsaved_title': {
       'ar': 'تعديلات غير محفوظة', 'en': 'Unsaved Changes', 'de': 'Nicht gespeicherte Änderungen',
       'fr': 'Modifications non enregistrées', 'tr': 'Kaydedilmemiş Değişiklikler', 'pl': 'Niezapisane zmiany',
