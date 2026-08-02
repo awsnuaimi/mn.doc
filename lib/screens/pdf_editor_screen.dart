@@ -122,6 +122,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   // ------- تتبّع التعديلات غير المحفوظة -------
   bool _hasUnsavedChanges = false;
+  _TextAnnotation? _activeAnnotation; // النص "المفعّل" حاليًا فقط يظهر عليه إطار
 
   // ------- البحث داخل PDF (مع Debounce) -------
   bool _searchVisible = false;
@@ -785,22 +786,27 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   Widget _buildAnnotationOverlay(_TextAnnotation ann) {
     final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
     final size = box?.size ?? const Size(400, 700);
+    final isActive = identical(ann, _activeAnnotation);
     return Positioned(
       left: ann.dx * size.width,
       top: ann.dy * size.height,
       child: GestureDetector(
         onTap: () => _editAnnotation(ann),
-        onPanStart: (_) => _pushUndoState(),
+        onPanStart: (_) {
+          _pushUndoState();
+          setState(() => _activeAnnotation = ann);
+        },
         onPanUpdate: (details) {
           setState(() {
             ann.dx = (ann.dx + details.delta.dx / size.width).clamp(0.0, 1.0);
             ann.dy = (ann.dy + details.delta.dy / size.height).clamp(0.0, 1.0);
           });
         },
+        onPanEnd: (_) => setState(() => _activeAnnotation = null),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.accent.withOpacity(0.6), width: 1),
+            border: isActive ? Border.all(color: AppColors.accent.withOpacity(0.6), width: 1) : null,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
