@@ -816,6 +816,9 @@ class AppText {
     'file_from_app_prefix': {
       'ar': 'ملف من', 'en': 'A file from', 'de': 'Eine Datei von', 'fr': 'Un fichier de', 'tr': "Şuradan bir dosya:", 'pl': 'Plik z',
     },
+    'ed_dialog_alignment': {
+      'ar': 'المحاذاة:', 'en': 'Alignment:', 'de': 'Ausrichtung:', 'fr': 'Alignement :', 'tr': 'Hizalama:', 'pl': 'Wyrównanie:',
+    },
     'unsaved_title': {
       'ar': 'تعديلات غير محفوظة', 'en': 'Unsaved Changes', 'de': 'Nicht gespeicherte Änderungen',
       'fr': 'Modifications non enregistrées', 'tr': 'Kaydedilmemiş Değişiklikler', 'pl': 'Niezapisane zmiany',

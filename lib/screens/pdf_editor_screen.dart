@@ -28,6 +28,7 @@ class _TextAnnotation {
   String text;
   double fontSize;
   Color color;
+  TextAlign alignment;
 
   _TextAnnotation({
     required this.pageNumber,
@@ -36,6 +37,7 @@ class _TextAnnotation {
     required this.text,
     this.fontSize = 16,
     this.color = Colors.black,
+    this.alignment = TextAlign.right,
   });
 
   _TextAnnotation copy() => _TextAnnotation(
@@ -45,6 +47,7 @@ class _TextAnnotation {
         text: text,
         fontSize: fontSize,
         color: color,
+        alignment: alignment,
       );
 }
 
@@ -183,14 +186,21 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         text: result.text,
         fontSize: result.fontSize,
         color: result.color,
+        alignment: result.alignment,
       ));
     });
   }
 
-  Future<_TextDialogResult?> _showTextDialog({String initialText = '', double initialSize = 16, Color initialColor = Colors.black}) {
+  Future<_TextDialogResult?> _showTextDialog({
+    String initialText = '',
+    double initialSize = 16,
+    Color initialColor = Colors.black,
+    TextAlign initialAlignment = TextAlign.right,
+  }) {
     final controller = TextEditingController(text: initialText);
     double fontSize = initialSize;
     Color color = initialColor;
+    TextAlign alignment = initialAlignment;
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
@@ -283,11 +293,28 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(tr('ed_dialog_alignment')),
+                      const SizedBox(width: 12),
+                      SegmentedButton<TextAlign>(
+                        segments: const [
+                          ButtonSegment(value: TextAlign.right, icon: Icon(Icons.format_align_right_rounded)),
+                          ButtonSegment(value: TextAlign.center, icon: Icon(Icons.format_align_center_rounded)),
+                          ButtonSegment(value: TextAlign.left, icon: Icon(Icons.format_align_left_rounded)),
+                        ],
+                        selected: {alignment},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (s) => setSheetState(() => alignment = s.first),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(
                       context,
-                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color),
+                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color, alignment: alignment),
                     ),
                     child: Text(tr('ed_dialog_add')),
                   ),
@@ -305,6 +332,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       initialText: ann.text,
       initialSize: ann.fontSize,
       initialColor: ann.color,
+      initialAlignment: ann.alignment,
     );
     if (result == null) return;
     _pushUndoState();
@@ -315,6 +343,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ann.text = result.text;
         ann.fontSize = result.fontSize;
         ann.color = result.color;
+        ann.alignment = result.alignment;
       }
     });
   }
@@ -405,6 +434,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue),
         );
 
+        final pdfAlignment = switch (ann.alignment) {
+          TextAlign.left => sf.PdfTextAlignment.left,
+          TextAlign.center => sf.PdfTextAlignment.center,
+          TextAlign.right => sf.PdfTextAlignment.right,
+          _ => sf.PdfTextAlignment.right,
+        };
+
         page.graphics.drawString(
           ann.text,
           font,
@@ -415,6 +451,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             pageSize.width - (ann.dx * pageSize.width),
             ann.fontSize * 2,
           ),
+          format: sf.PdfStringFormat(alignment: pdfAlignment),
         );
       }
 
@@ -768,6 +805,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           ),
           child: Text(
             ann.text,
+            textAlign: ann.alignment,
             style: TextStyle(fontSize: ann.fontSize * 0.8, color: ann.color),
           ),
         ),
@@ -780,5 +818,6 @@ class _TextDialogResult {
   final String text;
   final double fontSize;
   final Color color;
-  _TextDialogResult({required this.text, required this.fontSize, required this.color});
+  final TextAlign alignment;
+  _TextDialogResult({required this.text, required this.fontSize, required this.color, this.alignment = TextAlign.right});
 }
