@@ -140,12 +140,12 @@ class AppText {
       'ar': 'اللغة', 'en': 'Language', 'de': 'Sprache', 'fr': 'Langue', 'tr': 'Dil', 'pl': 'Język',
     },
     'language_note': {
-      'ar': 'ملاحظة: الترجمة حاليًا مفعّلة بالشاشة الرئيسية وهذه الشاشة فقط. باقي شاشات التطبيق ستُترجم بمرحلة قادمة.',
-      'en': 'Note: translation currently applies to the Home and Settings screens only. Other screens will be translated in a future update.',
-      'de': 'Hinweis: Die Übersetzung gilt derzeit nur für Start- und Einstellungsbildschirm. Andere Bildschirme werden in einem zukünftigen Update übersetzt.',
-      'fr': "Remarque : la traduction s'applique actuellement uniquement à l'écran d'accueil et aux paramètres. Les autres écrans seront traduits lors d'une future mise à jour.",
-      'tr': 'Not: Çeviri şu anda yalnızca Ana Sayfa ve Ayarlar ekranlarında geçerlidir. Diğer ekranlar gelecekteki bir güncellemede çevrilecektir.',
-      'pl': 'Uwaga: tłumaczenie dotyczy obecnie tylko ekranu głównego i ustawień. Pozostałe ekrany zostaną przetłumaczone w przyszłej aktualizacji.',
+      'ar': 'التطبيق مترجم بالكامل لكل اللغات المدعومة.',
+      'en': 'The app is fully translated into all supported languages.',
+      'de': 'Die App ist vollständig in alle unterstützten Sprachen übersetzt.',
+      'fr': "L'application est entièrement traduite dans toutes les langues prises en charge.",
+      'tr': 'Uygulama, desteklenen tüm dillere tam olarak çevrilmiştir.',
+      'pl': 'Aplikacja jest w pełni przetłumaczona na wszystkie obsługiwane języki.',
     },
     'save': {
       'ar': 'حفظ', 'en': 'Save', 'de': 'Speichern', 'fr': 'Enregistrer', 'tr': 'Kaydet', 'pl': 'Zapisz',
@@ -826,6 +826,48 @@ class AppText {
     'ed_autosaved': {
       'ar': '✓ تم الحفظ تلقائيًا', 'en': '✓ Auto-saved', 'de': '✓ Automatisch gespeichert',
       'fr': '✓ Enregistré automatiquement', 'tr': '✓ Otomatik kaydedildi', 'pl': '✓ Zapisano automatycznie',
+    },
+    'ed_zoom_reset_needed': {
+      'ar': 'أعد التكبير لـ 100% أولًا لضمان دقة إضافة النص (اضغط زر التصفير 🎯)',
+      'en': 'Reset zoom to 100% first for accurate text placement (tap the reset button 🎯)',
+      'de': 'Setzen Sie den Zoom zuerst auf 100% für eine genaue Textplatzierung (Reset-Taste 🎯)',
+      'fr': "Réinitialisez d'abord le zoom à 100% pour un placement précis du texte (bouton de réinitialisation 🎯)",
+      'tr': 'Doğru metin yerleşimi için önce yakınlaştırmayı %100\'e sıfırlayın (sıfırlama düğmesi 🎯)',
+      'pl': 'Najpierw zresetuj powiększenie do 100%, aby dokładnie umieścić tekst (przycisk resetowania 🎯)',
+    },
+    'ed_form_fields_detected': {
+      'ar': 'هذا الملف يحتوي حقول قابلة للتعبئة — اضغط عليها مباشرة لملئها',
+      'en': 'This file contains fillable fields — tap them directly to fill in',
+      'de': 'Diese Datei enthält ausfüllbare Felder — tippen Sie direkt darauf, um sie auszufüllen',
+      'fr': "Ce fichier contient des champs à remplir — appuyez dessus directement pour les remplir",
+      'tr': 'Bu dosya doldurulabilir alanlar içeriyor — doldurmak için doğrudan onlara dokunun',
+      'pl': 'Ten plik zawiera pola do wypełnienia — dotknij ich bezpośrednio, aby je wypełnić',
+    },
+    'ed_action_edit': {
+      'ar': 'تعديل', 'en': 'Edit', 'de': 'Bearbeiten', 'fr': 'Modifier', 'tr': 'Düzenle', 'pl': 'Edytuj',
+    },
+    'ed_action_move': {
+      'ar': 'نقل لمكان تاني', 'en': 'Move to another spot', 'de': 'An eine andere Stelle verschieben',
+      'fr': 'Déplacer ailleurs', 'tr': 'Başka bir yere taşı', 'pl': 'Przenieś w inne miejsce',
+    },
+    'ed_action_delete': {
+      'ar': 'حذف', 'en': 'Delete', 'de': 'Löschen', 'fr': 'Supprimer', 'tr': 'Sil', 'pl': 'Usuń',
+    },
+    'ed_tap_new_location': {
+      'ar': 'اضغط على المكان الجديد بالصفحة لنقل النص إليه',
+      'en': 'Tap the new spot on the page to move the text there',
+      'de': 'Tippen Sie auf die neue Stelle auf der Seite, um den Text dorthin zu verschieben',
+      'fr': "Appuyez sur le nouvel emplacement de la page pour y déplacer le texte",
+      'tr': 'Metni oraya taşımak için sayfadaki yeni konuma dokunun',
+      'pl': 'Dotknij nowego miejsca na stronie, aby przenieść tam tekst',
+    },
+    'ed_extract_failed': {
+      'ar': 'تعذّر استخراج النص من هذا الملف. قد يكون محميًا أو تالفًا أو صورة ممسوحة بدون نص فعلي.',
+      'en': 'Could not extract text from this file. It may be protected, damaged, or a scanned image without real text.',
+      'de': 'Text konnte aus dieser Datei nicht extrahiert werden. Sie ist möglicherweise geschützt, beschädigt oder ein gescanntes Bild ohne echten Text.',
+      'fr': "Impossible d'extraire le texte de ce fichier. Il peut être protégé, endommagé, ou être une image scannée sans texte réel.",
+      'tr': 'Bu dosyadan metin çıkarılamadı. Korumalı, hasarlı veya gerçek metin içermeyen taranmış bir görüntü olabilir.',
+      'pl': 'Nie można wyodrębnić tekstu z tego pliku. Może być chroniony, uszkodzony lub być zeskanowanym obrazem bez rzeczywistego tekstu.',
     },
     'unsaved_title': {
       'ar': 'تعديلات غير محفوظة', 'en': 'Unsaved Changes', 'de': 'Nicht gespeicherte Änderungen',

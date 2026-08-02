@@ -19,16 +19,15 @@ import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
 
 /// نص تمت إضافته فوق صفحة معيّنة من ملف PDF.
-/// الإحداثيات dx/dy نسبية (0..1) بالنسبة لأبعاد الصفحة المعروضة،
-/// مما يسمح بحسابها بدقة عند الحفظ الفعلي داخل ملف الـPDF.
+/// dx/dy إحداثيات حقيقية بنقاط PDF (وليست نسبية) — تُستخدم مباشرة عند
+/// الحفظ الفعلي داخل الملف. previewFracX/Y هي كسور تقريبية (0-1) منفصلة
+/// تُستخدم فقط لعرض المعاينة الحيّة على الشاشة (راجع تعليقات الحقول بالأسفل).
 class _TextAnnotation {
   int pageNumber; // يبدأ من 1
   double dx; // إحداثي X الحقيقي بنقاط PDF (يُستخدم للحفظ النهائي بدقة)
   double dy; // إحداثي Y الحقيقي بنقاط PDF (يُستخدم للحفظ النهائي بدقة)
   double previewFracX; // كسر تقريبي (0-1) من عرض الشاشة، للمعاينة الحيّة فقط
   double previewFracY; // كسر تقريبي (0-1) من ارتفاع الشاشة، للمعاينة الحيّة فقط
-  double pointsPerPixelX; // معامل تحويل مُشتق لحظة الإضافة، يُستخدم أثناء السحب
-  double pointsPerPixelY;
   String text;
   double fontSize;
   Color color;
@@ -40,8 +39,6 @@ class _TextAnnotation {
     required this.dy,
     required this.previewFracX,
     required this.previewFracY,
-    this.pointsPerPixelX = 1,
-    this.pointsPerPixelY = 1,
     required this.text,
     this.fontSize = 16,
     this.color = Colors.black,
@@ -54,8 +51,6 @@ class _TextAnnotation {
         dy: dy,
         previewFracX: previewFracX,
         previewFracY: previewFracY,
-        pointsPerPixelX: pointsPerPixelX,
-        pointsPerPixelY: pointsPerPixelY,
         text: text,
         fontSize: fontSize,
         color: color,
@@ -79,7 +74,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   bool _addTextMode = false;
   bool _saving = false;
-  bool _autoSaving = false;
+  Timer? _autoSaveDebounce; // يجمّع عدة تعديلات متتالية سريعة بعملية تصدير واحدة بدل تصدير كامل لكل تعديل
+  Future<void>? _saveQueue; // طابور تسلسلي واحد لكل عمليات الحفظ (يدوي + تلقائي) لمنع تعارضهم على نفس الملف
+  bool _disposed = false; // نمنع أي حفظ أو setState بعد التخلص من الشاشة
+  String? _lastExportedPath; // آخر مسار تصدير ناجح — تستخدمه ميزات الذكاء الاصطناعي لقراءة أحدث نسخة
   bool _flattenFormsOnSave = false;
   bool _hasFormFields = false;
   int _currentPage = 1;
@@ -94,6 +92,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _redoStack.clear();
     if (_undoStack.length > 20) _undoStack.removeAt(0); // حد أقصى لتفادي استهلاك ذاكرة زائد
     _hasUnsavedChanges = true;
+    // نحدّث الواجهة هون مباشرة (مثلًا لتفعيل زري تراجع/إعادة فورًا)
+    // بدل الاعتماد على استدعاء خارجي قد يُنسى مستقبلًا عند إضافة مسار جديد.
+    if (mounted) setState(() {});
   }
 
   void _undo() {
@@ -105,6 +106,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ..clear()
         ..addAll(prev);
     });
+    _scheduleAutoSave();
   }
 
   void _redo() {
@@ -116,6 +118,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ..clear()
         ..addAll(next);
     });
+    _scheduleAutoSave();
   }
 
   void _zoomIn() {
@@ -135,7 +138,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   // ------- تتبّع التعديلات غير المحفوظة -------
   bool _hasUnsavedChanges = false;
-  _TextAnnotation? _activeAnnotation; // النص "المفعّل" حاليًا فقط يظهر عليه إطار
+  _TextAnnotation? _movingAnnotation; // النص الجاري نقله حاليًا (وضع "انقل هون")
 
   // ------- البحث داخل PDF (مع Debounce) -------
   bool _searchVisible = false;
@@ -145,10 +148,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   @override
   void dispose() {
+    _disposed = true;
     _controller.dispose();
     _searchController.dispose();
     _searchResult.removeListener(_onSearchResultChanged);
     _searchDebounce?.cancel();
+    _autoSaveDebounce?.cancel();
     super.dispose();
   }
 
@@ -158,7 +163,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _search(String query) {
-    if (query.trim().isEmpty) return;
+    if (query.trim().isEmpty) {
+      _searchResult.clear();
+      setState(() {});
+      return;
+    }
+    _searchResult.removeListener(_onSearchResultChanged);
     _searchResult = _controller.searchText(query);
     _searchResult.addListener(_onSearchResultChanged);
     setState(() {});
@@ -179,21 +189,52 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _handlePdfTap(PdfGestureDetails details) async {
-    if (!_addTextMode) return;
+    if (!_addTextMode && _movingAnnotation == null) return;
+
+    // دقة تحديد الموضع (شاشة ↔ نقاط PDF) مضمونة فقط عند التكبير الافتراضي
+    // 100% — أي تكبير/تصغير يُدخل انحرافًا حقيقيًا بين ما يظهر على
+    // الشاشة والمكان الفعلي بالملف. نطلب من المستخدم إعادة الزووم لـ100%
+    // أول لضمان دقة الإضافة/النقل.
+    if ((_zoomLevel - 1.0).abs() > 0.01) {
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
+      );
+      return;
+    }
 
     // pagePosition: الموضع الحقيقي بنقاط PDF (دقيق، يُستخدم للحفظ).
     // position: الموضع بكسلات عنصر العرض (تقريبي، للمعاينة الحيّة فقط).
     final pagePoint = details.pagePosition;
     final pageNumber = details.pageNumber;
 
+    // لو الضغطة وقعت خارج حدود الصفحة فعليًا (بالهوامش الفاضية حول
+    // الصفحة مثلًا)، Syncfusion بترجع pageNumber = -1 وإحداثيات سالبة —
+    // نرفضها صراحة بدل ما نضيف/ننقل نص بمكان غير منطقي.
+    if (pageNumber < 1 || pagePoint.dx < 0 || pagePoint.dy < 0) return;
+
     final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
     final widgetSize = box?.size ?? const Size(400, 700);
     final previewFracX = (details.position.dx / widgetSize.width).clamp(0.0, 1.0);
     final previewFracY = (details.position.dy / widgetSize.height).clamp(0.0, 1.0);
-    // معامل تحويل تقريبي (نقاط PDF لكل بكسل شاشة)، مُشتق من نفس نقطة الضغط —
-    // يُستخدم لاحقًا لتحويل حركة السحب (بكسلات) لإحداثيات PDF صحيحة تقريبًا.
-    final pointsPerPixelX = details.position.dx > 5 ? pagePoint.dx / details.position.dx : 1.0;
-    final pointsPerPixelY = details.position.dy > 5 ? pagePoint.dy / details.position.dy : 1.0;
+
+    // وضع "نقل نص موجود": بدل السحب بالإصبع (غير دقيق هندسيًا)، نستخدم
+    // نفس آلية الضغط الدقيقة المستخدمة بالإضافة — هيك النقل مضمون بنفس
+    // دقة الإضافة تمامًا، بدل معامل تحويل تقريبي.
+    if (_movingAnnotation != null) {
+      final moved = _movingAnnotation!;
+      _pushUndoState();
+      setState(() {
+        moved.pageNumber = pageNumber;
+        moved.dx = pagePoint.dx;
+        moved.dy = pagePoint.dy;
+        moved.previewFracX = previewFracX;
+        moved.previewFracY = previewFracY;
+        _movingAnnotation = null;
+      });
+      _scheduleAutoSave();
+      return;
+    }
 
     final result = await _showTextDialog();
     if (result == null || result.text.trim().isEmpty) return;
@@ -206,15 +247,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         dy: pagePoint.dy,
         previewFracX: previewFracX,
         previewFracY: previewFracY,
-        pointsPerPixelX: pointsPerPixelX,
-        pointsPerPixelY: pointsPerPixelY,
         text: result.text,
         fontSize: result.fontSize,
         color: result.color,
         alignment: result.alignment,
       ));
     });
-    _autoSaveSilently();
+    _scheduleAutoSave();
   }
 
   Future<_TextDialogResult?> _showTextDialog({
@@ -372,14 +411,35 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ann.alignment = result.alignment;
       }
     });
-    _autoSaveSilently();
+    _scheduleAutoSave();
   }
 
   /// يستخرج كامل النص من ملف الـPDF الحالي بخيط منفصل (Isolate) بالخلفية
   /// عبر compute() — لتفادي تجميد الواجهة مع ملفات PDF كبيرة، لاستخدامه
   /// بميزات الذكاء الاصطناعي (التلخيص/الدردشة/الترجمة/القراءة الصوتية).
+  /// يحدّد أفضل مسار نقرأ منه النص لميزات الذكاء الاصطناعي. لو فيه أي
+  /// تعديلات محتملة (نصوص مضافة أو حقول نماذج بالملف)، ننفّذ تصديرًا
+  /// طازجًا عبر طابور الحفظ نفسه أولًا لضمان قراءة أحدث حالة فعليًا —
+  /// وليس مجرد التحقق من وجود نسخة محفوظة قد تكون قديمة.
+  Future<String> _currentBestFilePath() async {
+    if (_annotations.isNotEmpty || _hasFormFields) {
+      try {
+        return await _runQueuedSave(showResult: false).then((_) => _lastExportedPath ?? widget.filePath);
+      } catch (_) {
+        // فشل التصدير الطازج: نرجع لأفضل نسخة محفوظة سابقًا إن وُجدت
+      }
+    }
+    final dir = await getApplicationDocumentsDirectory();
+    final rawName = widget.filePath.split('/').last;
+    final originalName = rawName.toLowerCase().endsWith('.pdf') ? rawName.substring(0, rawName.length - 4) : rawName;
+    final savedPath = '${dir.path}/${originalName}_MN-Doc.pdf';
+    if (await File(savedPath).exists()) return savedPath;
+    return widget.filePath;
+  }
+
   Future<String> _extractFullText() async {
-    final bytes = await File(widget.filePath).readAsBytes();
+    final path = await _currentBestFilePath();
+    final bytes = await File(path).readAsBytes();
     return compute(extractPdfTextIsolate, bytes);
   }
 
@@ -390,13 +450,26 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
     String text = '';
+    bool extractionFailed = false;
     try {
       text = await _extractFullText();
     } catch (_) {
-      text = '';
+      extractionFailed = true;
     }
     if (!mounted) return;
     Navigator.pop(context); // إغلاق مؤشر التحميل
+
+    // نص فارغ أو استخراج فاشل: نوضّح السبب للمستخدم بدل ما ننتقل بصمت
+    // لشاشة الذكاء الاصطناعي وهو يظن أن الميزة معطوبة.
+    if (extractionFailed || text.trim().isEmpty) {
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.t('ed_extract_failed', lang))),
+      );
+      if (extractionFailed) return;
+      // لو النص فاضي فعليًا (مو خطأ) بس المستخدم لسا يقدر يكمل — الميزات
+      // التالية أصلاً بتتعامل مع نص فاضي بشكل معقول (تلخيص/ترجمة فاضية).
+    }
 
     final title = widget.filePath.split('/').last;
     switch (feature) {
@@ -421,9 +494,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       setState(() => _hasFormFields = true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('هذا الملف يحتوي ${formFields.length} حقل/حقول قابلة للتعبئة — اضغط عليها مباشرة لملئها'),
+            content: Text('${AppText.t('ed_form_fields_detected', lang)} (${formFields.length})'),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -449,44 +523,70 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     // الخطوة 2: افتح تلك النسخة وأضف فوقها نصوصنا المخصّصة (المربّعات النصية).
     final sf.PdfDocument document = sf.PdfDocument(inputBytes: viewerBytes);
+    late final List<int> savedBytes;
 
-    for (final ann in _annotations) {
-      final pageIndex = ann.pageNumber - 1;
-      if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
-      final page = document.pages[pageIndex];
-      final pageSize = page.getClientSize();
+    // لقطة ثابتة من التعليقات قبل الحلقة — الحلقة فيها await (تحميل خط)،
+    // فلو المستخدم أضاف/عدّل نصًا بالمنتصف، تعديل _annotations الحيّة
+    // أثناء المرور عليها ممكن يرمي ConcurrentModificationError.
+    final annotationsSnapshot = _annotations.map((a) => a.copy()).toList(growable: false);
 
-      final font = await ArabicFontLoader.loadSyncfusionFont(ann.fontSize);
-      final brush = sf.PdfSolidBrush(
-        sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue),
-      );
+    try {
+      for (final ann in annotationsSnapshot) {
+        final pageIndex = ann.pageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+        final page = document.pages[pageIndex];
+        final pageSize = page.getClientSize();
 
-      final pdfAlignment = switch (ann.alignment) {
-        TextAlign.left => sf.PdfTextAlignment.left,
-        TextAlign.center => sf.PdfTextAlignment.center,
-        TextAlign.right => sf.PdfTextAlignment.right,
-        _ => sf.PdfTextAlignment.right,
-      };
+        final font = await ArabicFontLoader.loadSyncfusionFont(ann.fontSize);
+        final brush = sf.PdfSolidBrush(
+          sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue),
+        );
 
-      page.graphics.drawString(
-        ann.text,
-        font,
-        brush: brush,
-        bounds: Rect.fromLTWH(
-          ann.dx,
-          ann.dy,
-          pageSize.width - ann.dx,
-          ann.fontSize * 2,
-        ),
-        format: sf.PdfStringFormat(alignment: pdfAlignment),
-      );
+        final pdfAlignment = switch (ann.alignment) {
+          TextAlign.left => sf.PdfTextAlignment.left,
+          TextAlign.center => sf.PdfTextAlignment.center,
+          TextAlign.right => sf.PdfTextAlignment.right,
+          _ => sf.PdfTextAlignment.right,
+        };
+
+        // ارتفاع الصندوق يعتمد على عدد الأسطر الفعلي (النص يسمح حتى 3 أسطر)
+        // بدل قيمة ثابتة، لتفادي قص أي سطر إضافي عند التصدير.
+        final lineCount = '\n'.allMatches(ann.text).length + 1;
+        final boxHeight = ann.fontSize * 1.3 * lineCount;
+
+        // نحصر موضع النص ضمن حدود الصفحة فعليًا (وليس بس عرض الصندوق) —
+        // يحمي من حالات نادرة تكون فيها dx/dy خارج الصفحة قليلًا (مثلًا
+        // بسبب فارق تقريبي بالحساب)، بدل نص يظهر مقصوصًا أو خارج الصفحة.
+        const minBoxWidth = 60.0;
+        final safeX = ann.dx.clamp(0.0, (pageSize.width - minBoxWidth).clamp(0.0, pageSize.width)).toDouble();
+        final safeY = ann.dy.clamp(0.0, (pageSize.height - boxHeight).clamp(0.0, pageSize.height)).toDouble();
+        final availableWidth = pageSize.width - safeX;
+        final boxWidth = availableWidth < minBoxWidth ? minBoxWidth : availableWidth;
+
+        page.graphics.drawString(
+          ann.text,
+          font,
+          brush: brush,
+          bounds: Rect.fromLTWH(
+            safeX,
+            safeY,
+            boxWidth,
+            boxHeight,
+          ),
+          format: sf.PdfStringFormat(alignment: pdfAlignment),
+        );
+      }
+
+      savedBytes = await document.save();
+    } finally {
+      // نضمن تحرير موارد المستند (Native) حتى لو فشل الرسم أو الحفظ —
+      // بدون هذا، أي استثناء أثناء التصدير يسرّب ذاكرة المستند بصمت.
+      document.dispose();
     }
 
-    final List<int> savedBytes = await document.save();
-    document.dispose();
-
     final dir = await getApplicationDocumentsDirectory();
-    final originalName = widget.filePath.split('/').last.replaceAll('.pdf', '');
+    final rawName = widget.filePath.split('/').last;
+    final originalName = rawName.toLowerCase().endsWith('.pdf') ? rawName.substring(0, rawName.length - 4) : rawName;
     final outPath = '${dir.path}/${originalName}_MN-Doc.pdf';
 
     // حفظ آمن (Atomic Save): نكتب أولًا لملف مؤقت، ثم نستبدل الملف
@@ -494,8 +594,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // الطاقة أثناء الكتابة، الملف الأصلي (إن وُجد) يبقى سليمًا ولا
     // نحصل على ملف ناقص/تالف بمكانه.
     final tmpFile = File('$outPath.tmp');
-    await tmpFile.writeAsBytes(savedBytes, flush: true);
-    await tmpFile.rename(outPath);
+    try {
+      await tmpFile.writeAsBytes(savedBytes, flush: true);
+      // بعض أنظمة الملفات ترفض rename لو الملف الهدف موجود مسبقًا —
+      // نحذفه صراحة أول لضمان نجاح الاستبدال بغض النظر عن المنصة.
+      final destFile = File(outPath);
+      if (await destFile.exists()) {
+        await destFile.delete();
+      }
+      await tmpFile.rename(outPath);
+    } catch (e) {
+      // تنظيف الملف المؤقت لو فشلت العملية، حتى لا يبقى بواقي معطوبة
+      if (await tmpFile.exists()) {
+        await tmpFile.delete();
+      }
+      rethrow;
+    }
 
     return outPath;
   }
@@ -503,44 +617,62 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// حفظ تلقائي وصامت — يُستدعى فور إضافة/تعديل/نقل أي نص، بدون الحاجة
   /// لضغط زر الحفظ يدويًا. يُظهر إشعارًا صغيرًا بس (مو نافذة كاملة)
   /// حتى لا يقاطع المستخدم أثناء إضافة عدة نصوص متتالية.
-  Future<void> _autoSaveSilently() async {
-    if (_autoSaving) return; // تفادي تشغيل حفظ ثانٍ فوق حفظ لسا شغّال
-    _autoSaving = true;
-    try {
-      await _exportToFile();
-      _hasUnsavedChanges = false;
-      if (mounted) {
-        setState(() {});
-        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(AppText.t('ed_autosaved', lang), style: const TextStyle(fontSize: 12)),
-              duration: const Duration(milliseconds: 900),
-              behavior: SnackBarBehavior.floating,
-              width: 180,
-            ),
-          );
-      }
-    } catch (_) {
-      // تجاهل صامت لأخطاء الحفظ التلقائي — المستخدم لسا يقدر يحفظ يدويًا
-      // بزر الحفظ لو احتاج، وسيظهر له خطأ واضح حينها.
-    } finally {
-      _autoSaving = false;
-    }
+  /// يجدول حفظًا تلقائيًا بعد فترة قصيرة من التوقف عن التعديل (بدل تصدير
+  /// الملف كاملًا فورًا مع كل تعديل) — مهم للأداء مع الملفات الكبيرة،
+  /// خصوصًا لو المستخدم عدّل/نقل نفس النص عدة مرات متتالية بسرعة.
+  void _scheduleAutoSave() {
+    if (_disposed) return;
+    _hasUnsavedChanges = true;
+    _autoSaveDebounce?.cancel();
+    _autoSaveDebounce = Timer(const Duration(milliseconds: 1200), () {
+      if (!_disposed) unawaited(_runQueuedSave(showResult: false));
+    });
   }
 
-  Future<void> _saveDocument() async {
-    setState(() => _saving = true);
-    try {
-      final outPath = await _exportToFile();
-      _hasUnsavedChanges = false;
+  /// طابور حفظ تسلسلي واحد: كل طلب حفظ (تلقائي أو يدوي) ينتظر أي حفظ
+  /// سابق لسا شغّال قبل ما يبلّش، بدل ما يشتغلوا بالتوازي على نفس
+  /// الملف المؤقت (سبب تعارض حقيقي كان ممكن يصير قبل هالتعديل).
+  Future<void> _runQueuedSave({required bool showResult}) {
+    final previous = _saveQueue ?? Future.value();
+    final current = previous
+        .catchError((_) {}) // خطأ بحفظ سابق ما لازم يوقف الطابور بالكامل
+        .then((_) => _performSave(showResult: showResult));
+    _saveQueue = current;
+    return current;
+  }
 
-      if (!mounted) return;
+  Future<void> _performSave({required bool showResult}) async {
+    if (_disposed) return;
+    _autoSaveDebounce?.cancel();
+    if (showResult && mounted) setState(() => _saving = true);
+
+    String? outPath;
+    Object? error;
+    try {
+      outPath = await _exportToFile();
+      _lastExportedPath = outPath;
+      if (!_disposed) _hasUnsavedChanges = false;
+    } catch (e, stack) {
+      error = e;
+      if (kDebugMode) {
+        debugPrint('فشل الحفظ: $e');
+        debugPrintStack(stackTrace: stack);
+      }
+    }
+
+    if (_disposed || !mounted) return;
+
+    if (showResult) {
       setState(() => _saving = false);
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       String tr(String key) => AppText.t(key, lang);
+
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${tr('ed_save_error_prefix')} $error')),
+        );
+        return;
+      }
 
       showDialog(
         context: context,
@@ -551,7 +683,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                Share.shareXFiles([XFile(outPath)], text: '${tr('file_from_app_prefix')} MN-Doc');
+                Share.shareXFiles([XFile(outPath!)], text: '${tr('file_from_app_prefix')} MN-Doc');
               },
               child: Text(tr('ed_share')),
             ),
@@ -560,7 +692,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 Navigator.pop(context);
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
+                  MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath!)),
                 );
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
@@ -569,17 +701,24 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           ],
         ),
       );
-    } catch (e) {
-      setState(() => _saving = false);
-      if (!mounted) return;
+    } else if (error == null) {
+      setState(() {});
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppText.t('ed_save_error_prefix', lang)} $e')),
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppText.t('ed_autosaved', lang), style: const TextStyle(fontSize: 12)),
+            duration: const Duration(milliseconds: 900),
+            behavior: SnackBarBehavior.floating,
+            width: 180,
+          ),
+        );
     }
   }
 
-  @override
+  Future<void> _saveDocument() => _runQueuedSave(showResult: true);
+
   Widget build(BuildContext context) {
     final hasSearchResult = _searchResult.hasResult;
     final settings = context.watch<AppSettingsController>();
@@ -612,6 +751,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           }
         },
         child: Scaffold(
+      // نمنع تغيّر حجم الشاشة عند ظهور لوحة المفاتيح — هذا يضمن بقاء
+      // موضع النصوص المضافة مستقرًا بصريًا حتى أثناء فتح نافذة التعديل.
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(widget.filePath.split('/').last, overflow: TextOverflow.ellipsis),
         actions: [
@@ -774,6 +916,26 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 style: const TextStyle(fontSize: 12),
               ),
             ),
+          if (_movingAnnotation != null)
+            Container(
+              width: double.infinity,
+              color: AppColors.primaryDark.withOpacity(0.15),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      tr('ed_tap_new_location'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _movingAnnotation = null),
+                    child: Text(tr('cancel'), style: const TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: Stack(
               key: _viewerKey,
@@ -789,6 +951,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   },
                   onDocumentLoaded: _onDocumentLoaded,
                   onTap: _handlePdfTap,
+                  // تعليقات Syncfusion المدمجة (تظليل/تسطير/شطب/ملاحظة لاصقة)
+                  // وتعبئة حقول النماذج لا تمر بكودنا الخاص إطلاقًا — بدون
+                  // هذه الاستدعاءات، أي تعديل منها ما كان رح يُحفَظ تلقائيًا.
+                  onAnnotationAdded: (_) => _scheduleAutoSave(),
+                  onAnnotationEdited: (_) => _scheduleAutoSave(),
+                  onAnnotationRemoved: (_) => _scheduleAutoSave(),
+                  onFormFieldValueChanged: (_) => _scheduleAutoSave(),
                 ),
                 // طبقة عرض النصوص المضافة على الصفحة الحالية فقط
                 ..._annotations
@@ -854,34 +1023,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   Widget _buildAnnotationOverlay(_TextAnnotation ann) {
     final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
     final size = box?.size ?? const Size(400, 700);
-    final isActive = identical(ann, _activeAnnotation);
+    final isBeingMoved = identical(ann, _movingAnnotation);
     return Positioned(
       left: ann.previewFracX * size.width,
       top: ann.previewFracY * size.height,
       child: GestureDetector(
-        onTap: () => _editAnnotation(ann),
-        onPanStart: (_) {
-          _pushUndoState();
-          setState(() => _activeAnnotation = ann);
-        },
-        onPanUpdate: (details) {
-          setState(() {
-            ann.previewFracX = (ann.previewFracX + details.delta.dx / size.width).clamp(0.0, 1.0);
-            ann.previewFracY = (ann.previewFracY + details.delta.dy / size.height).clamp(0.0, 1.0);
-            // نحرّك إحداثيات PDF الحقيقية بنفس النسبة (عبر معامل التحويل) حتى
-            // يبقى الحفظ النهائي مطابقًا لما يظهر على الشاشة.
-            ann.dx += details.delta.dx * ann.pointsPerPixelX;
-            ann.dy += details.delta.dy * ann.pointsPerPixelY;
-          });
-        },
-        onPanEnd: (_) {
-          setState(() => _activeAnnotation = null);
-          _autoSaveSilently();
-        },
+        onTap: () => _showAnnotationActionSheet(ann),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
-            border: isActive ? Border.all(color: AppColors.accent.withOpacity(0.6), width: 1) : null,
+            border: isBeingMoved ? Border.all(color: AppColors.accent, width: 2) : null,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
@@ -889,6 +1040,58 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             textAlign: ann.alignment,
             style: TextStyle(fontSize: ann.fontSize * 0.8, color: ann.color),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// عند الضغط على نص موجود: قائمة صغيرة "تعديل" أو "نقل" — النقل يعتمد
+  /// على نفس آلية الضغط الدقيقة المستخدمة بالإضافة (بدل السحب بالإصبع
+  /// غير المضمون هندسيًا)، فيضغط المستخدم على المكان الجديد مباشرة.
+  void _showAnnotationActionSheet(_TextAnnotation ann) {
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: Text(tr('ed_action_edit')),
+              onTap: () {
+                Navigator.pop(context);
+                _editAnnotation(ann);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_with_rounded),
+              title: Text(tr('ed_action_move')),
+              onTap: () {
+                Navigator.pop(context);
+                if ((_zoomLevel - 1.0).abs() > 0.01) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(tr('ed_zoom_reset_needed'))),
+                  );
+                  return;
+                }
+                setState(() => _movingAnnotation = ann);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(tr('ed_tap_new_location'))),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+              title: Text(tr('ed_action_delete'), style: const TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                _pushUndoState();
+                setState(() => _annotations.remove(ann));
+                _scheduleAutoSave();
+              },
+            ),
+          ],
         ),
       ),
     );
