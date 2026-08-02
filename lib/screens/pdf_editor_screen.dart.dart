@@ -18,15 +18,15 @@ import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
 
-/// نص تمت إضافته فوق صفحة معيّنة من ملف PDF.
-/// dx/dy إحداثيات حقيقية بنقاط PDF — مصدر الحقيقة الوحيد، تُستخدم مباشرة
-/// عند الحفظ. موضع العرض على الشاشة يُحسَب دايمًا من جديد وقت الرسم
-/// (راجع _pagePointToScreen) بدل تخزين أي قيمة شاشة منفصلة قد "تنحرف"
-/// عن الحقيقة مع تغيّر حجم الشاشة أو التمرير.
+/// نص مضاف إلى صفحة PDF.
+///
+/// المصدر الوحيد للحقيقة هو (pageNumber, dx, dy) بإحداثيات صفحة PDF نفسها.
+/// لا نخزّن أي إحداثيات شاشة داخل التعليق؛ موضع المعاينة يُشتق لحظيًا من
+/// تحويل الصفحة الحالية، لذلك الإضافة والنقل والحفظ تستخدم النظام نفسه.
 class _TextAnnotation {
   int pageNumber; // يبدأ من 1
-  double dx; // إحداثي X الحقيقي بنقاط PDF (يُستخدم للحفظ النهائي بدقة)
-  double dy; // إحداثي Y الحقيقي بنقاط PDF (يُستخدم للحفظ النهائي بدقة)
+  double dx; // X بنقاط PDF
+  double dy; // Y بنقاط PDF
   String text;
   double fontSize;
   Color color;
@@ -53,6 +53,18 @@ class _TextAnnotation {
       );
 }
 
+/// تحويل هندسي من إحداثيات صفحة PDF (points) إلى إحداثيات الـViewer (pixels).
+/// يُعاد حسابه/معايرته من ضغطة Syncfusion الحقيقية، ولا يدخل في بيانات النص.
+class _PdfPageTransform {
+  final double scale;
+  final Offset origin;
+
+  const _PdfPageTransform({required this.scale, required this.origin});
+
+  Offset pdfToViewer(Offset pdfPoint) => origin + pdfPoint * scale;
+}
+
+
 class PdfEditorScreen extends StatefulWidget {
   final String filePath;
   const PdfEditorScreen({super.key, required this.filePath});
@@ -66,6 +78,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
   final GlobalKey _viewerKey = GlobalKey();
+
+  // أبعاد الصفحات الأصلية بنقاط PDF + التحويل الحالي للصفحة المعروضة.
+  // لا تُخزّن إحداثيات الشاشة داخل _TextAnnotation إطلاقًا.
+  final Map<int, Size> _pdfPageSizes = <int, Size>{};
+  final Map<int, _PdfPageTransform> _pageTransforms = <int, _PdfPageTransform>{};
 
   bool _addTextMode = false;
   bool _saving = false;
@@ -134,7 +151,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   // ------- تتبّع التعديلات غير المحفوظة -------
   bool _hasUnsavedChanges = false;
   _TextAnnotation? _movingAnnotation; // النص الجاري نقله حاليًا (وضع "انقل هون")
-  Map<int, Size> _pageSizesInPoints = {}; // أبعاد كل صفحة الحقيقية بالنقاط — أساس تحويل الإحداثيات للعرض
 
   // ------- البحث داخل PDF (مع Debounce) -------
   bool _searchVisible = false;
@@ -187,9 +203,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   void _handlePdfTap(PdfGestureDetails details) async {
     if (!_addTextMode && _movingAnnotation == null) return;
 
-    // دقة تحديد الموضع مضمونة فقط عند التكبير الافتراضي 100% — عندها
-    // فقط تحويل "احتواء" (Contain Fit) المستخدم بـ_pagePointToScreen
-    // يبقى صحيحًا (بدون إزاحة تمرير إضافية ناتجة عن تكبير يدوي).
+    // دقة تحديد الموضع (شاشة ↔ نقاط PDF) مضمونة فقط عند التكبير الافتراضي
+    // 100% — أي تكبير/تصغير يُدخل انحرافًا حقيقيًا بين ما يظهر على
+    // الشاشة والمكان الفعلي بالملف. نطلب من المستخدم إعادة الزووم لـ100%
+    // أول لضمان دقة الإضافة/النقل.
     if ((_zoomLevel - 1.0).abs() > 0.01) {
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -198,8 +215,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       return;
     }
 
-    // pagePosition: الموضع الحقيقي بنقاط PDF — مصدر الحقيقة الوحيد، يُستخدم
-    // للحفظ وللعرض معًا (عبر _pagePointToScreen وقت الرسم).
+    // pagePosition: الموضع الحقيقي بنقاط PDF (دقيق، يُستخدم للحفظ).
+    // position: الموضع بكسلات عنصر العرض (تقريبي، للمعاينة الحيّة فقط).
     final pagePoint = details.pagePosition;
     final pageNumber = details.pageNumber;
 
@@ -207,6 +224,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // الصفحة مثلًا)، Syncfusion بترجع pageNumber = -1 وإحداثيات سالبة —
     // نرفضها صراحة بدل ما نضيف/ننقل نص بمكان غير منطقي.
     if (pageNumber < 1 || pagePoint.dx < 0 || pagePoint.dy < 0) return;
+
+    // نعاير تحويل الصفحة من الضغطة نفسها: Syncfusion يعطينا في الحدث ذاته
+    // النقطة في نظام الصفحة (pagePosition) والنقطة المناظرة داخل الـViewer
+    // (position). نستخدم أبعاد الصفحة الحقيقية لحساب المقياس، ثم نستخرج
+    // origin بحيث تكون النقطة المضغوطة متطابقة رياضيًا 100% في النظامين.
+    _calibratePageTransform(
+      pageNumber: pageNumber,
+      pdfPoint: pagePoint,
+      viewerPoint: details.position,
+    );
 
     // وضع "نقل نص موجود": بدل السحب بالإصبع (غير دقيق هندسيًا)، نستخدم
     // نفس آلية الضغط الدقيقة المستخدمة بالإضافة — هيك النقل مضمون بنفس
@@ -474,7 +501,81 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
+  Future<void> _loadPdfPageSizes() async {
+    sf.PdfDocument? document;
+    try {
+      final bytes = await File(widget.filePath).readAsBytes();
+      document = sf.PdfDocument(inputBytes: bytes);
+      final sizes = <int, Size>{};
+      for (var i = 0; i < document.pages.count; i++) {
+        sizes[i + 1] = document.pages[i].getClientSize();
+      }
+      if (_disposed || !mounted) return;
+      setState(() {
+        _pdfPageSizes
+          ..clear()
+          ..addAll(sizes);
+        _pageTransforms.clear();
+      });
+    } catch (e, stack) {
+      if (kDebugMode) {
+        debugPrint('تعذر قراءة أبعاد صفحات PDF: $e');
+        debugPrintStack(stackTrace: stack);
+      }
+    } finally {
+      document?.dispose();
+    }
+  }
+
+  void _calibratePageTransform({
+    required int pageNumber,
+    required Offset pdfPoint,
+    required Offset viewerPoint,
+  }) {
+    final pageSize = _pdfPageSizes[pageNumber];
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (pageSize == null || box == null || pageSize.width <= 0 || pageSize.height <= 0) {
+      return;
+    }
+
+    final viewport = box.size;
+    if (viewport.width <= 0 || viewport.height <= 0) return;
+
+    // في pageLayoutMode.single وعند zoom=1 يعرض العارض الصفحة ضمن المساحة
+    // المتاحة مع الحفاظ على نسبة أبعادها. هذا هو المقياس الأساسي. لا نعتمد
+    // على هوامش مفترضة: الـorigin يُستخرج من النقطة الفعلية التي أعادها
+    // Syncfusion، لذلك أي padding داخلي يدخل في المعايرة تلقائيًا.
+    final scaleX = viewport.width / pageSize.width;
+    final scaleY = viewport.height / pageSize.height;
+    final scale = scaleX < scaleY ? scaleX : scaleY;
+    final origin = viewerPoint - pdfPoint * scale;
+
+    _pageTransforms[pageNumber] = _PdfPageTransform(scale: scale, origin: origin);
+  }
+
+  _PdfPageTransform? _fallbackPageTransform(int pageNumber) {
+    final pageSize = _pdfPageSizes[pageNumber];
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (pageSize == null || box == null || pageSize.width <= 0 || pageSize.height <= 0) {
+      return null;
+    }
+    final viewport = box.size;
+    if (viewport.width <= 0 || viewport.height <= 0) return null;
+    final scaleX = viewport.width / pageSize.width;
+    final scaleY = viewport.height / pageSize.height;
+    final scale = scaleX < scaleY ? scaleX : scaleY;
+    final rendered = Size(pageSize.width * scale, pageSize.height * scale);
+    return _PdfPageTransform(
+      scale: scale,
+      origin: Offset(
+        (viewport.width - rendered.width) / 2,
+        (viewport.height - rendered.height) / 2,
+      ),
+    );
+  }
+
   void _onDocumentLoaded(PdfDocumentLoadedDetails details) {
+    unawaited(_loadPdfPageSizes());
     final formFields = _controller.getFormFields();
     if (formFields.isNotEmpty) {
       setState(() => _hasFormFields = true);
@@ -489,54 +590,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         );
       });
     }
-    _loadPageSizes();
-  }
-
-  /// يقرأ الأبعاد الحقيقية لكل صفحة بالنقاط (عبر مكتبة syncfusion_flutter_pdf
-  /// المستقرة والموثّقة جيدًا لهذا الغرض بالذات — بعكس محاولة استنتاج
-  /// الأبعاد من واجهة العارض نفسها). هذه القراءة مستقلة تمامًا عن العارض
-  /// الحيّ (SfPdfViewer) ولا تؤثر عليه، وتُغلَق فورًا بعد الاستخدام.
-  Future<void> _loadPageSizes() async {
-    try {
-      final bytes = await File(widget.filePath).readAsBytes();
-      final document = sf.PdfDocument(inputBytes: bytes);
-      final sizes = <int, Size>{};
-      for (var i = 0; i < document.pages.count; i++) {
-        final s = document.pages[i].size;
-        sizes[i + 1] = Size(s.width, s.height);
-      }
-      document.dispose();
-      if (mounted) setState(() => _pageSizesInPoints = sizes);
-    } catch (_) {
-      // لو فشلت القراءة (ملف محمي مثلًا)، بنعتمد لاحقًا على قيمة افتراضية
-      // معقولة (A4) بدل تعطيل ميزة إضافة النص بالكامل.
-    }
-  }
-
-  /// يحوّل نقطة بإحداثيات PDF الحقيقية (dx, dy) لموضع شاشة صحيح، بافتراض
-  /// أن Syncfusion تعرض الصفحة بنمط "احتواء" (Contain Fit) — أي تكبير/تصغير
-  /// الصفحة بالكامل لتناسب المساحة المتاحة مع الحفاظ على أبعادها الأصلية،
-  /// وتتوسّط أفقيًا/رأسيًا ضمن تلك المساحة. هذا مطابق لسلوك Syncfusion
-  /// الموثّق ("الصفحات تتمدد/تنكمش لتناسب المساحة المتاحة").
-  /// يُحسَب من جديد بكل مرة (مش قيمة مخزَّنة) حتى يبقى صحيحًا حتى لو
-  /// تغيّر حجم الشاشة لأي سبب.
-  Offset? _pagePointToScreen(int pageNumber, double pdfX, double pdfY) {
-    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return null;
-    final widgetSize = box.size;
-    final pageSize = _pageSizesInPoints[pageNumber];
-    if (pageSize == null || pageSize.width <= 0 || pageSize.height <= 0) return null;
-
-    final scale = (widgetSize.width / pageSize.width < widgetSize.height / pageSize.height)
-        ? widgetSize.width / pageSize.width
-        : widgetSize.height / pageSize.height;
-
-    final renderedWidth = pageSize.width * scale;
-    final renderedHeight = pageSize.height * scale;
-    final offsetX = (widgetSize.width - renderedWidth) / 2;
-    final offsetY = (widgetSize.height - renderedHeight) / 2;
-
-    return Offset(offsetX + pdfX * scale, offsetY + pdfY * scale);
   }
 
   void _setAnnotationMode(PdfAnnotationMode mode) {
@@ -814,10 +867,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           IconButton(
             icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
             tooltip: tr('ed_addtext_tooltip'),
-            onPressed: () => setState(() {
-              _addTextMode = !_addTextMode;
-              if (_addTextMode) _controller.annotationMode = PdfAnnotationMode.none;
-            }),
+            onPressed: () => setState(() => _addTextMode = !_addTextMode),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.smart_toy_rounded),
@@ -984,7 +1034,17 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
                   pageLayoutMode: PdfPageLayoutMode.single,
                   onPageChanged: (details) {
-                    _currentPage = details.newPageNumber;
+                    if (!mounted) return;
+                    setState(() => _currentPage = details.newPageNumber);
+                  },
+                  onZoomLevelChanged: (details) {
+                    if (!mounted) return;
+                    setState(() {
+                      _zoomLevel = details.newZoomLevel;
+                      // أي تغيير zoom يغيّر إسقاط الصفحة على الشاشة. بما أن
+                      // Tt يعمل بدقة عند 100% فقط، نمسح التحويلات القديمة.
+                      _pageTransforms.clear();
+                    });
                   },
                   onDocumentLoaded: _onDocumentLoaded,
                   onTap: _handlePdfTap,
@@ -1058,29 +1118,42 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   Widget _buildAnnotationOverlay(_TextAnnotation ann) {
-    final screenPos = _pagePointToScreen(ann.pageNumber, ann.dx, ann.dy);
-    if (screenPos == null) return const SizedBox.shrink();
+    final transform = _pageTransforms[ann.pageNumber] ?? _fallbackPageTransform(ann.pageNumber);
+    if (transform == null) return const SizedBox.shrink();
+
+    final screenPoint = transform.pdfToViewer(Offset(ann.dx, ann.dy));
     final isBeingMoved = identical(ann, _movingAnnotation);
+
+    // حجم الخط في الـoverlay مشتق من حجم الخط الحقيقي في PDF ومن مقياس
+    // الصفحة نفسه؛ بذلك تتطابق نقطة البداية والحجم بصريًا قدر الإمكان.
+    final previewFontSize = ann.fontSize * transform.scale;
+
     return Positioned(
-      left: screenPos.dx,
-      top: screenPos.dy,
+      left: screenPoint.dx,
+      top: screenPoint.dy,
       child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
         onTap: () => _showAnnotationActionSheet(ann),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          padding: EdgeInsets.zero,
           decoration: BoxDecoration(
             border: isBeingMoved ? Border.all(color: AppColors.accent, width: 2) : null,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(3),
           ),
           child: Text(
             ann.text,
             textAlign: ann.alignment,
-            style: TextStyle(fontSize: ann.fontSize * 0.8, color: ann.color),
+            style: TextStyle(
+              fontSize: previewFontSize,
+              height: 1.3,
+              color: ann.color,
+            ),
           ),
         ),
       ),
     );
   }
+
 
   /// عند الضغط على نص موجود: قائمة صغيرة "تعديل" أو "نقل" — النقل يعتمد
   /// على نفس آلية الضغط الدقيقة المستخدمة بالإضافة (بدل السحب بالإصبع
@@ -1090,14 +1163,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     String tr(String key) => AppText.t(key, lang);
     showModalBottomSheet(
       context: context,
-      builder: (sheetContext) => SafeArea(
+      builder: (context) => SafeArea(
         child: Wrap(
           children: [
             ListTile(
               leading: const Icon(Icons.edit_rounded),
               title: Text(tr('ed_action_edit')),
               onTap: () {
-                Navigator.pop(sheetContext);
+                Navigator.pop(context);
                 _editAnnotation(ann);
               },
             ),
@@ -1105,19 +1178,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               leading: const Icon(Icons.open_with_rounded),
               title: Text(tr('ed_action_move')),
               onTap: () {
-                Navigator.pop(sheetContext);
+                Navigator.pop(context);
                 if ((_zoomLevel - 1.0).abs() > 0.01) {
-                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(tr('ed_zoom_reset_needed'))),
                   );
                   return;
                 }
-                setState(() {
-                  _movingAnnotation = ann;
-                  _controller.annotationMode = PdfAnnotationMode.none;
-                });
-                if (!mounted) return;
+                setState(() => _movingAnnotation = ann);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(tr('ed_tap_new_location'))),
                 );
@@ -1127,7 +1195,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: Text(tr('ed_action_delete'), style: const TextStyle(color: Colors.red)),
               onTap: () {
-                Navigator.pop(sheetContext);
+                Navigator.pop(context);
                 _pushUndoState();
                 setState(() => _annotations.remove(ann));
                 _scheduleAutoSave();
