@@ -823,6 +823,10 @@ class AppText {
       'ar': 'فتح الملف المحفوظ', 'en': 'Open Saved File', 'de': 'Gespeicherte Datei öffnen',
       'fr': 'Ouvrir le fichier enregistré', 'tr': 'Kaydedilen Dosyayı Aç', 'pl': 'Otwórz zapisany plik',
     },
+    'ed_autosaved': {
+      'ar': '✓ تم الحفظ تلقائيًا', 'en': '✓ Auto-saved', 'de': '✓ Automatisch gespeichert',
+      'fr': '✓ Enregistré automatiquement', 'tr': '✓ Otomatik kaydedildi', 'pl': '✓ Zapisano automatycznie',
+    },
     'unsaved_title': {
       'ar': 'تعديلات غير محفوظة', 'en': 'Unsaved Changes', 'de': 'Nicht gespeicherte Änderungen',
       'fr': 'Modifications non enregistrées', 'tr': 'Kaydedilmemiş Değişiklikler', 'pl': 'Niezapisane zmiany',

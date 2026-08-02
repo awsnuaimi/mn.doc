@@ -79,6 +79,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   bool _addTextMode = false;
   bool _saving = false;
+  bool _autoSaving = false;
   bool _flattenFormsOnSave = false;
   bool _hasFormFields = false;
   int _currentPage = 1;
@@ -213,6 +214,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         alignment: result.alignment,
       ));
     });
+    _autoSaveSilently();
   }
 
   Future<_TextDialogResult?> _showTextDialog({
@@ -370,6 +372,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ann.alignment = result.alignment;
       }
     });
+    _autoSaveSilently();
   }
 
   /// يستخرج كامل النص من ملف الـPDF الحالي بخيط منفصل (Isolate) بالخلفية
@@ -435,65 +438,103 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     });
   }
 
+  /// المنطق الأساسي لتصدير المستند (يُستخدم من الحفظ اليدوي والحفظ التلقائي
+  /// معًا) — يعيد مسار الملف الناتج، أو يرمي استثناء عند الفشل.
+  Future<String> _exportToFile() async {
+    // الخطوة 1: احفظ نسخة تتضمن تعليقات العارض المدمجة
+    // (تظليل/تسطير/شطب/ملاحظات لاصقة) وبيانات حقول النموذج التي عبّأها المستخدم.
+    final List<int> viewerBytes = await _controller.saveDocument(
+      flattenOption: _flattenFormsOnSave ? PdfFlattenOption.formFields : PdfFlattenOption.none,
+    );
+
+    // الخطوة 2: افتح تلك النسخة وأضف فوقها نصوصنا المخصّصة (المربّعات النصية).
+    final sf.PdfDocument document = sf.PdfDocument(inputBytes: viewerBytes);
+
+    for (final ann in _annotations) {
+      final pageIndex = ann.pageNumber - 1;
+      if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+      final page = document.pages[pageIndex];
+      final pageSize = page.getClientSize();
+
+      final font = await ArabicFontLoader.loadSyncfusionFont(ann.fontSize);
+      final brush = sf.PdfSolidBrush(
+        sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue),
+      );
+
+      final pdfAlignment = switch (ann.alignment) {
+        TextAlign.left => sf.PdfTextAlignment.left,
+        TextAlign.center => sf.PdfTextAlignment.center,
+        TextAlign.right => sf.PdfTextAlignment.right,
+        _ => sf.PdfTextAlignment.right,
+      };
+
+      page.graphics.drawString(
+        ann.text,
+        font,
+        brush: brush,
+        bounds: Rect.fromLTWH(
+          ann.dx,
+          ann.dy,
+          pageSize.width - ann.dx,
+          ann.fontSize * 2,
+        ),
+        format: sf.PdfStringFormat(alignment: pdfAlignment),
+      );
+    }
+
+    final List<int> savedBytes = await document.save();
+    document.dispose();
+
+    final dir = await getApplicationDocumentsDirectory();
+    final originalName = widget.filePath.split('/').last.replaceAll('.pdf', '');
+    final outPath = '${dir.path}/${originalName}_MN-Doc.pdf';
+
+    // حفظ آمن (Atomic Save): نكتب أولًا لملف مؤقت، ثم نستبدل الملف
+    // النهائي به فقط بعد اكتمال الكتابة بنجاح — لو انقطع التطبيق أو
+    // الطاقة أثناء الكتابة، الملف الأصلي (إن وُجد) يبقى سليمًا ولا
+    // نحصل على ملف ناقص/تالف بمكانه.
+    final tmpFile = File('$outPath.tmp');
+    await tmpFile.writeAsBytes(savedBytes, flush: true);
+    await tmpFile.rename(outPath);
+
+    return outPath;
+  }
+
+  /// حفظ تلقائي وصامت — يُستدعى فور إضافة/تعديل/نقل أي نص، بدون الحاجة
+  /// لضغط زر الحفظ يدويًا. يُظهر إشعارًا صغيرًا بس (مو نافذة كاملة)
+  /// حتى لا يقاطع المستخدم أثناء إضافة عدة نصوص متتالية.
+  Future<void> _autoSaveSilently() async {
+    if (_autoSaving) return; // تفادي تشغيل حفظ ثانٍ فوق حفظ لسا شغّال
+    _autoSaving = true;
+    try {
+      await _exportToFile();
+      _hasUnsavedChanges = false;
+      if (mounted) {
+        setState(() {});
+        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(AppText.t('ed_autosaved', lang), style: const TextStyle(fontSize: 12)),
+              duration: const Duration(milliseconds: 900),
+              behavior: SnackBarBehavior.floating,
+              width: 180,
+            ),
+          );
+      }
+    } catch (_) {
+      // تجاهل صامت لأخطاء الحفظ التلقائي — المستخدم لسا يقدر يحفظ يدويًا
+      // بزر الحفظ لو احتاج، وسيظهر له خطأ واضح حينها.
+    } finally {
+      _autoSaving = false;
+    }
+  }
+
   Future<void> _saveDocument() async {
     setState(() => _saving = true);
     try {
-      // الخطوة 1: احفظ نسخة تتضمن تعليقات العارض المدمجة
-      // (تظليل/تسطير/شطب/ملاحظات لاصقة) وبيانات حقول النموذج التي عبّأها المستخدم.
-      final List<int> viewerBytes = await _controller.saveDocument(
-        flattenOption: _flattenFormsOnSave ? PdfFlattenOption.formFields : PdfFlattenOption.none,
-      );
-
-      // الخطوة 2: افتح تلك النسخة وأضف فوقها نصوصنا المخصّصة (المربّعات النصية).
-      final sf.PdfDocument document = sf.PdfDocument(inputBytes: viewerBytes);
-
-      for (final ann in _annotations) {
-        final pageIndex = ann.pageNumber - 1;
-        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
-        final page = document.pages[pageIndex];
-        final pageSize = page.getClientSize();
-
-        final font = await ArabicFontLoader.loadSyncfusionFont(ann.fontSize);
-        final brush = sf.PdfSolidBrush(
-          sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue),
-        );
-
-        final pdfAlignment = switch (ann.alignment) {
-          TextAlign.left => sf.PdfTextAlignment.left,
-          TextAlign.center => sf.PdfTextAlignment.center,
-          TextAlign.right => sf.PdfTextAlignment.right,
-          _ => sf.PdfTextAlignment.right,
-        };
-
-        page.graphics.drawString(
-          ann.text,
-          font,
-          brush: brush,
-          bounds: Rect.fromLTWH(
-            ann.dx,
-            ann.dy,
-            pageSize.width - ann.dx,
-            ann.fontSize * 2,
-          ),
-          format: sf.PdfStringFormat(alignment: pdfAlignment),
-        );
-      }
-
-      final List<int> savedBytes = await document.save();
-      document.dispose();
-
-      final dir = await getApplicationDocumentsDirectory();
-      final originalName = widget.filePath.split('/').last.replaceAll('.pdf', '');
-      final outPath = '${dir.path}/${originalName}_MN-Doc.pdf';
-
-      // حفظ آمن (Atomic Save): نكتب أولًا لملف مؤقت، ثم نستبدل الملف
-      // النهائي به فقط بعد اكتمال الكتابة بنجاح — لو انقطع التطبيق أو
-      // الطاقة أثناء الكتابة، الملف الأصلي (إن وُجد) يبقى سليمًا ولا
-      // نحصل على ملف ناقص/تالف بمكانه.
-      final tmpFile = File('$outPath.tmp');
-      await tmpFile.writeAsBytes(savedBytes, flush: true);
-      await tmpFile.rename(outPath);
-
+      final outPath = await _exportToFile();
       _hasUnsavedChanges = false;
 
       if (!mounted) return;
@@ -833,7 +874,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             ann.dy += details.delta.dy * ann.pointsPerPixelY;
           });
         },
-        onPanEnd: (_) => setState(() => _activeAnnotation = null),
+        onPanEnd: (_) {
+          setState(() => _activeAnnotation = null);
+          _autoSaveSilently();
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
