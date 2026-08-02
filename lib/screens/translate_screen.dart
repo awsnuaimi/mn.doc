@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 
 import '../theme/app_theme.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 
 /// ترجمة نصوص على الجهاز مباشرة عبر Google ML Kit — مجانية بالكامل
 /// وتعمل بدون إنترنت بعد تحميل حزمة اللغة مرة واحدة فقط.
@@ -81,8 +84,9 @@ class _TranslateScreenState extends State<TranslateScreen> {
       setState(() => _resultController.text = result);
     } catch (e) {
       if (!mounted) return;
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّرت الترجمة: $e')),
+        SnackBar(content: Text('${AppText.t('tr_error_prefix', lang)} $e')),
       );
     } finally {
       if (mounted) setState(() => _translating = false);
@@ -102,8 +106,14 @@ class _TranslateScreenState extends State<TranslateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('الترجمة (مجانية وبدون إنترنت)')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('tr_appbar'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -126,7 +136,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(hintText: 'اكتب أو الصق النص هنا...'),
+                decoration: InputDecoration(hintText: tr('tr_hint_source')),
               ),
             ),
             const SizedBox(height: 12),
@@ -136,8 +146,8 @@ class _TranslateScreenState extends State<TranslateScreen> {
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.translate_rounded),
               label: Text(_downloadingModel
-                  ? 'جارٍ تحميل حزمة اللغة (مرة واحدة فقط)...'
-                  : (_translating ? 'جارٍ الترجمة...' : 'ترجمة')),
+                  ? tr('tr_downloading')
+                  : (_translating ? tr('tr_translating') : tr('btn_translate'))),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
             ),
             const SizedBox(height: 12),
@@ -149,7 +159,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
                 decoration: InputDecoration(
-                  hintText: 'ستظهر الترجمة هنا...',
+                  hintText: tr('tr_hint_result'),
                   fillColor: AppColors.accent.withOpacity(0.05),
                   filled: true,
                 ),
@@ -157,6 +167,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

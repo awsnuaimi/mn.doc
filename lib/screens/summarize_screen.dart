@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../services/ai_settings.dart';
 import '../services/gemini_service.dart';
 import '../services/local_summarizer.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'ai_settings_screen.dart';
 
@@ -53,8 +56,9 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
       // في حال فشل الاتصال بالنموذج الذكي، ارجع تلقائيًا للتلخيص المحلي المجاني
       _resultController.text = LocalSummarizer.summarize(text, sentenceCount: 5);
       if (!mounted) return;
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّر الاتصال بالتلخيص الذكي، تم استخدام التلخيص المحلي بدلاً منه.\n$e')),
+        SnackBar(content: Text('${AppText.t('sm_error_prefix', lang)}\n$e')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -63,13 +67,19 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
-        title: const Text('تلخيص المستند'),
+        title: Text(tr('summarize')),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_rounded),
-            tooltip: 'إعدادات الذكاء الاصطناعي',
+            tooltip: tr('ai_settings'),
             onPressed: () async {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => const AiSettingsScreen()));
               _checkKey();
@@ -95,9 +105,7 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _hasKey
-                          ? 'سيتم استخدام تلخيص ذكي (Gemini) — يحتاج إنترنت'
-                          : 'سيتم استخدام التلخيص المحلي المجاني (بدون إنترنت)',
+                      _hasKey ? tr('sm_ai_note') : tr('sm_local_note'),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -110,7 +118,7 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Text('النص الأصلي', style: Theme.of(context).textTheme.titleSmall),
+            Text(tr('sm_original_label'), style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
             Expanded(
               child: TextField(
@@ -118,7 +126,7 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(hintText: 'الصق نص المستند هنا، أو افتحه من محرر PDF مباشرة...'),
+                decoration: InputDecoration(hintText: tr('sm_hint_input')),
               ),
             ),
             const SizedBox(height: 12),
@@ -127,11 +135,11 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
               icon: _loading
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.summarize_rounded),
-              label: Text(_loading ? 'جارٍ التلخيص...' : 'تلخيص'),
+              label: Text(_loading ? tr('sm_summarizing') : tr('btn_summarize')),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
             ),
             const SizedBox(height: 12),
-            Text('الملخص', style: Theme.of(context).textTheme.titleSmall),
+            Text(tr('sm_summary_label'), style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
             Expanded(
               child: Stack(
@@ -142,7 +150,7 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
                     expands: true,
                     textAlignVertical: TextAlignVertical.top,
                     decoration: InputDecoration(
-                      hintText: 'سيظهر الملخص هنا...',
+                      hintText: tr('sm_hint_result'),
                       fillColor: AppColors.accent.withOpacity(0.05),
                       filled: true,
                     ),
@@ -155,7 +163,7 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
                         icon: const Icon(Icons.copy_rounded, size: 20),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: _resultController.text));
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم النسخ')));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('copied'))));
                         },
                       ),
                     ),
@@ -164,6 +172,7 @@ class _SummarizeScreenState extends State<SummarizeScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

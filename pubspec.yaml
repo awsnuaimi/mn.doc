@@ -10,22 +10,21 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
+  flutter_localizations:
+    sdk: flutter
 
   # -------- إدارة الملفات --------
-  file_picker: ^8.1.2                 # اختيار ملفات من الجهاز
+  file_picker: 10.3.6                 # اختيار ملفات من الجهاز — نسخة مستقرة (تفادي خلل معروف بالإصدارات الأحدث)
   path_provider: ^2.1.4               # مسارات التخزين المحلي
   permission_handler: ^11.3.1         # صلاحيات التخزين/الكاميرا
   share_plus: ^10.0.2                 # مشاركة الملفات
   open_filex: ^4.5.0                  # فتح الملفات بالتطبيقات الخارجية
 
   # -------- عرض وتحرير PDF --------
-  syncfusion_flutter_pdfviewer: ^26.2.14   # عارض PDF احترافي (تكبير/بحث/تنقل)
-  syncfusion_flutter_pdf: ^26.2.14         # إنشاء/تحرير/كتابة نصوص داخل PDF
+  syncfusion_flutter_pdfviewer: any        # عارض PDF احترافي (تكبير/بحث/تنقل) — أحدث نسخة متوافقة
+  syncfusion_flutter_pdf: any               # إنشاء/تحرير/كتابة نصوص داخل PDF — أحدث نسخة متوافقة
   pdf: ^3.11.1                              # إنشاء ملفات PDF من الصفر
   printing: ^5.13.3                         # معاينة وطباعة/تصدير PDF
-
-  # -------- عرض وتحرير مستندات أخرى --------
-  syncfusion_flutter_pdfviewer_platform_interface: ^26.2.14
 
   # -------- OCR (التعرف الضوئي على النصوص) --------
   google_mlkit_text_recognition: ^0.14.0
@@ -33,8 +32,8 @@ dependencies:
   camera: ^0.11.0+2
 
   # -------- الذكاء الاصطناعي --------
-  google_mlkit_translation: ^0.13.0     # ترجمة على الجهاز، مجانية بالكامل وبدون إنترنت
-  google_mlkit_language_id: ^0.13.0     # كشف لغة النص تلقائيًا (مجاني وعلى الجهاز)
+  google_mlkit_translation: ^0.12.0     # ترجمة على الجهاز، مجانية بالكامل وبدون إنترنت
+  google_mlkit_language_id: ^0.12.0     # كشف لغة النص تلقائيًا (مجاني وعلى الجهاز)
   http: ^1.2.2                          # للاتصال بـ Gemini API (الفئة المجانية) للتلخيص/الدردشة
   shared_preferences: ^2.3.2            # حفظ مفتاح API محليًا على الجهاز
 
@@ -46,6 +45,17 @@ dependencies:
 
   # -------- واجهة وتصميم --------
   google_fonts: ^6.2.1
+
+  # -------- ميزات إضافية --------
+  flutter_tts: ^4.2.2                   # قراءة المستند بصوت (Text-to-Speech)
+  excel: ^4.0.6                          # تصدير الجداول المستخرجة إلى Excel
+  archive: ^3.6.1                        # فك ضغط ملفات .docx (Dart خالص، بدون كود أندرويد)
+  xml: ^6.5.0                            # تحليل محتوى XML داخل ملفات .docx
+  google_mlkit_barcode_scanning: any     # التعرف على QR/الباركود (أحدث نسخة متوافقة)
+  google_mlkit_document_scanner: any     # كشف حواف المستند تلقائيًا بالكاميرا (Android)
+  package_info_plus: ^8.1.2              # قراءة رقم إصدار التطبيق الحالي
+  url_launcher: ^6.3.1                    # فتح رابط تنزيل التحديث بالمتصفح
+  speech_to_text: any                     # تحويل الصوت إلى نص (أحدث نسخة متوافقة)
 
 dev_dependencies:
   flutter_test:
@@ -70,3 +80,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
+    - assets/fonts/
+  fonts:
+    - family: NotoNaskhArabic
+      fonts:
+        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf

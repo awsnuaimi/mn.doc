@@ -3,7 +3,11 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -18,8 +22,10 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
           channel: 'stable'
+
+      - name: تنظيف الملفات المؤقتة القديمة
+        run: flutter clean
 
       - name: تثبيت الاعتماديات
         run: flutter pub get
@@ -27,11 +33,47 @@ jobs:
       - name: توليد أيقونة التطبيق
         run: flutter pub run flutter_launcher_icons
 
+      - name: فك تشفير مفتاح التوقيع (إن وُجد)
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/release.jks
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
+          fi
+
       - name: بناء ملف APK
         run: flutter build apk --release
+        env:
+          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: بناء ملف AAB (مطلوب لرفعه على Google Play)
+        run: flutter build appbundle --release
+        env:
+          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: رفع APK كملف تنزيل (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: MN-Doc-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: رفع AAB كملف تنزيل (Artifact) — هذا الملف تحديدًا يُرفع على Google Play
+        uses: actions/upload-artifact@v4
+        with:
+          name: MN-Doc-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+
+      # عند دفع "تاغ" إصدار مثل v1.0.1، ينشر APK كإصدار عام (Release) على GitHub
+      # يستطيع أي شخص تنزيله مباشرة — وهذا ما تستخدمه ميزة "التحقق من التحديثات".
+      - name: نشر إصدار عام (فقط عند دفع تاغ إصدار)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

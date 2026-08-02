@@ -10,30 +10,52 @@
 /// عند عدم توفر مفتاح Gemini API.
 class LocalSummarizer {
   static final RegExp _sentenceSplitter = RegExp(r'(?<=[\.\!\?؟\n])\s+');
-  static final RegExp _wordSplitter = RegExp(r'[\s،,\.]+');
+  static final RegExp _wordSplitter = RegExp(r'''[\s،,\.:;"' \(\)\[\]\{\}/\\—–…]+''');
+  static final RegExp _pureNumber = RegExp(r'^[0-9.,%٠-٩]+$');
+
+  // حد أقصى لطول النص المُعالَج لتفادي استهلاك وقت/ذاكرة زائد مع
+  // مستندات ضخمة جدًا (يُعالَج أول 300 ألف حرف فقط تقريبًا)
+  static const int _maxInputLength = 300000;
 
   static final Set<String> _stopWords = {
     'من', 'إلى', 'على', 'في', 'عن', 'مع', 'هذا', 'هذه', 'ذلك', 'التي', 'الذي',
     'و', 'أو', 'ثم', 'كما', 'قد', 'لا', 'لم', 'لن', 'ما', 'هو', 'هي', 'كان',
-    'كانت', 'the', 'a', 'an', 'of', 'to', 'in', 'on', 'and', 'or', 'is', 'are',
-    'was', 'were', 'for', 'with', 'that', 'this',
+    'كانت', 'إن', 'أن', 'هناك', 'أي', 'أيضا', 'أيضًا', 'إذ', 'بعد', 'قبل',
+    'حتى', 'كل', 'جميع', 'بعض', 'أكثر', 'أقل', 'بين', 'ضمن', 'حول', 'عند',
+    'عندما', 'حيث', 'لدى', 'دون', 'بدون', 'نحو', 'إذا', 'لو', 'لكن', 'بل',
+    'the', 'a', 'an', 'of', 'to', 'in', 'on', 'and', 'or', 'is', 'are',
+    'was', 'were', 'for', 'with', 'that', 'this', 'it', 'as', 'by', 'at',
+    'be', 'been', 'has', 'have', 'had', 'not', 'but', 'if', 'so', 'than',
   };
+
+  /// يطبّع الحروف العربية المختلفة الأشكال لنفس الحرف الأساسي (مثل
+  /// أ/إ/آ/ٱ → ا)، ويزيل التشكيل — بدونها تُحسب كلمات متطابقة معنويًا
+  /// (زي "إدارة" و"ادارة") كأنها كلمات مختلفة تمامًا، مما يضعف دقة التلخيص.
+  static String _normalizeArabic(String input) {
+    var result = input;
+    result = result.replaceAll(RegExp('[أإآٱ]'), 'ا');
+    result = result.replaceAll(RegExp('[ًٌٍَُِّْـ]'), ''); // إزالة التشكيل والتطويل
+    return result;
+  }
 
   /// يلخّص [text] ويعيد أهم [sentenceCount] جملة (افتراضيًا 5).
   static String summarize(String text, {int sentenceCount = 5}) {
-    final sentences = text
+    final limitedText = text.length > _maxInputLength ? text.substring(0, _maxInputLength) : text;
+
+    final sentences = limitedText
         .split(_sentenceSplitter)
         .map((s) => s.trim())
-        .where((s) => s.length > 8)
+        .where((s) => s.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length >= 2)
         .toList();
 
     if (sentences.length <= sentenceCount) return sentences.join(' ');
 
-    // حساب تكرار الكلمات (باستثناء كلمات الوقف الشائعة)
+    // حساب تكرار الكلمات (باستثناء كلمات الوقف الشائعة والأرقام المجردة)
     final wordFreq = <String, int>{};
     for (final sentence in sentences) {
-      for (final word in sentence.toLowerCase().split(_wordSplitter)) {
-        if (word.isEmpty || _stopWords.contains(word)) continue;
+      for (final rawWord in _normalizeArabic(sentence.toLowerCase()).split(_wordSplitter)) {
+        final word = rawWord.trim();
+        if (word.isEmpty || _stopWords.contains(word) || _pureNumber.hasMatch(word)) continue;
         wordFreq[word] = (wordFreq[word] ?? 0) + 1;
       }
     }
@@ -41,13 +63,16 @@ class LocalSummarizer {
     // حساب درجة أهمية كل جملة
     final scores = <int, double>{};
     for (var i = 0; i < sentences.length; i++) {
-      final words = sentences[i].toLowerCase().split(_wordSplitter);
+      final words = _normalizeArabic(sentences[i].toLowerCase()).split(_wordSplitter).where((w) => w.isNotEmpty).toList();
       double score = 0;
       for (final w in words) {
         score += (wordFreq[w] ?? 0).toDouble();
       }
       // تطبيع حسب طول الجملة لتفادي تفضيل الجمل الطويلة فقط
-      scores[i] = words.isEmpty ? 0 : score / words.length;
+      var sentenceScore = words.isEmpty ? 0.0 : score / words.length;
+      // وزن إضافي بسيط للجمل الأولى والأخيرة (غالبًا تحمل مقدمة/خلاصة)
+      if (i < 2 || i >= sentences.length - 2) sentenceScore *= 1.15;
+      scores[i] = sentenceScore;
     }
 
     final topIndices = scores.entries.toList()

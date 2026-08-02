@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../services/ai_settings.dart';
 import '../services/gemini_service.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 import 'ai_settings_screen.dart';
 
@@ -75,7 +78,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
       setState(() => _messages.add(_ChatMessage('model', answer)));
     } catch (e) {
-      setState(() => _messages.add(_ChatMessage('model', 'حدث خطأ: $e')));
+      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      setState(() => _messages.add(_ChatMessage('model', '${AppText.t('chat_error_prefix', lang)} $e')));
     } finally {
       setState(() => _sending = false);
       _scrollToBottom();
@@ -96,9 +100,15 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
       appBar: AppBar(
-        title: Text(widget.documentTitle ?? 'اسأل عن هذا المستند'),
+        title: Text(widget.documentTitle ?? tr('ed_ai_chat')),
       ),
       body: Column(
         children: [
@@ -107,10 +117,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
               width: double.infinity,
               color: Colors.orange.withOpacity(0.1),
               padding: const EdgeInsets.all(10),
-              child: const Text(
-                'لم يتم العثور على نص داخل هذا المستند بعد — قد تحتاج لاستخراج النص أولًا.',
+              child: Text(
+                tr('chat_no_text'),
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12),
+                style: const TextStyle(fontSize: 12),
               ),
             ),
           Expanded(
@@ -119,7 +129,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'اسأل أي سؤال عن محتوى هذا المستند، مثل:\n"لخّص لي الفكرة الرئيسية"\n"ما أهم الأرقام المذكورة؟"',
+                        tr('chat_empty_hint'),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: AppColors.textMuted),
                       ),
@@ -160,7 +170,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   Expanded(
                     child: TextField(
                       controller: _inputController,
-                      decoration: const InputDecoration(hintText: 'اكتب سؤالك...'),
+                      decoration: InputDecoration(hintText: tr('chat_input_hint')),
                       onSubmitted: (_) => _send(),
                     ),
                   ),
@@ -175,6 +185,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

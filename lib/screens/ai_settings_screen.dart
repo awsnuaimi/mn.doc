@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/ai_settings.dart';
+import '../services/app_settings.dart';
+import '../services/app_text.dart';
 import '../theme/app_theme.dart';
 
 /// شاشة إعدادات الذكاء الاصطناعي: إدخال مفتاح Gemini API المجاني
@@ -32,7 +35,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   Future<void> _save() async {
     await AiSettings.setApiKey(_controller.text);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ المفتاح على جهازك')));
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.t('aisettings_saved_msg', lang))));
   }
 
   Future<void> _clear() async {
@@ -40,13 +44,20 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _controller.clear();
     if (!mounted) return;
     setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حذف المفتاح')));
+    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.t('aisettings_deleted_msg', lang))));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('إعدادات الذكاء الاصطناعي')),
+    final settings = context.watch<AppSettingsController>();
+    final lang = settings.languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    return Directionality(
+      textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+      appBar: AppBar(title: Text(tr('ai_settings'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -62,23 +73,18 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                           children: [
                             const Icon(Icons.smart_toy_rounded, color: AppColors.accent),
                             const SizedBox(width: 8),
-                            Text('مفتاح Gemini API (مجاني)',
+                            Text(tr('aisettings_card_title'),
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                           ],
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          'يُستخدم فقط لميزتيّ "التلخيص الذكي" و"المساعد الذكي للدردشة"، '
-                          'وتحتاج فيهما اتصال إنترنت. أما الترجمة والتعرف الضوئي على النصوص '
-                          'فيعملان بالكامل بدون إنترنت وبدون أي مفتاح.',
+                        Text(
+                          tr('aisettings_desc1'),
                           style: TextStyle(color: AppColors.textMuted, height: 1.5),
                         ),
                         const SizedBox(height: 6),
-                        const Text(
-                          'للحصول على مفتاح مجاني (بدون بطاقة ائتمان):\n'
-                          '1) افتح aistudio.google.com/apikey\n'
-                          '2) سجّل الدخول بحساب Google\n'
-                          '3) اضغط "Create API key" وانسخه هنا',
+                        Text(
+                          tr('aisettings_desc2'),
                           style: TextStyle(color: AppColors.textMuted, height: 1.6),
                         ),
                         const SizedBox(height: 16),
@@ -86,7 +92,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                           controller: _controller,
                           obscureText: _obscure,
                           decoration: InputDecoration(
-                            labelText: 'الصق مفتاح API هنا',
+                            labelText: tr('aisettings_field_label'),
                             suffixIcon: IconButton(
                               icon: Icon(_obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded),
                               onPressed: () => setState(() => _obscure = !_obscure),
@@ -99,14 +105,14 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                             Expanded(
                               child: ElevatedButton(
                                 onPressed: _save,
-                                child: const Text('حفظ'),
+                                child: Text(tr('save')),
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: OutlinedButton(
                                 onPressed: _clear,
-                                child: const Text('حذف'),
+                                child: Text(tr('delete')),
                               ),
                             ),
                           ],
@@ -117,6 +123,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 ),
               ],
             ),
+      ),
     );
   }
 }
