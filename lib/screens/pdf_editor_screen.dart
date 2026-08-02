@@ -23,8 +23,12 @@ import 'tts_reader_screen.dart';
 /// مما يسمح بحسابها بدقة عند الحفظ الفعلي داخل ملف الـPDF.
 class _TextAnnotation {
   int pageNumber; // يبدأ من 1
-  double dx;
-  double dy;
+  double dx; // إحداثي X الحقيقي بنقاط PDF (يُستخدم للحفظ النهائي بدقة)
+  double dy; // إحداثي Y الحقيقي بنقاط PDF (يُستخدم للحفظ النهائي بدقة)
+  double previewFracX; // كسر تقريبي (0-1) من عرض الشاشة، للمعاينة الحيّة فقط
+  double previewFracY; // كسر تقريبي (0-1) من ارتفاع الشاشة، للمعاينة الحيّة فقط
+  double pointsPerPixelX; // معامل تحويل مُشتق لحظة الإضافة، يُستخدم أثناء السحب
+  double pointsPerPixelY;
   String text;
   double fontSize;
   Color color;
@@ -34,6 +38,10 @@ class _TextAnnotation {
     required this.pageNumber,
     required this.dx,
     required this.dy,
+    required this.previewFracX,
+    required this.previewFracY,
+    this.pointsPerPixelX = 1,
+    this.pointsPerPixelY = 1,
     required this.text,
     this.fontSize = 16,
     this.color = Colors.black,
@@ -44,6 +52,10 @@ class _TextAnnotation {
         pageNumber: pageNumber,
         dx: dx,
         dy: dy,
+        previewFracX: previewFracX,
+        previewFracY: previewFracY,
+        pointsPerPixelX: pointsPerPixelX,
+        pointsPerPixelY: pointsPerPixelY,
         text: text,
         fontSize: fontSize,
         color: color,
@@ -165,15 +177,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     });
   }
 
-  void _handleTapDown(TapDownDetails details) async {
+  void _handlePdfTap(PdfGestureDetails details) async {
     if (!_addTextMode) return;
 
+    // pagePosition: الموضع الحقيقي بنقاط PDF (دقيق، يُستخدم للحفظ).
+    // position: الموضع بكسلات عنصر العرض (تقريبي، للمعاينة الحيّة فقط).
+    final pagePoint = details.pagePosition;
+    final pageNumber = details.pageNumber;
+
     final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final local = box.globalToLocal(details.globalPosition);
-    final size = box.size;
-    final relX = (local.dx / size.width).clamp(0.0, 1.0);
-    final relY = (local.dy / size.height).clamp(0.0, 1.0);
+    final widgetSize = box?.size ?? const Size(400, 700);
+    final previewFracX = (details.position.dx / widgetSize.width).clamp(0.0, 1.0);
+    final previewFracY = (details.position.dy / widgetSize.height).clamp(0.0, 1.0);
+    // معامل تحويل تقريبي (نقاط PDF لكل بكسل شاشة)، مُشتق من نفس نقطة الضغط —
+    // يُستخدم لاحقًا لتحويل حركة السحب (بكسلات) لإحداثيات PDF صحيحة تقريبًا.
+    final pointsPerPixelX = details.position.dx > 5 ? pagePoint.dx / details.position.dx : 1.0;
+    final pointsPerPixelY = details.position.dy > 5 ? pagePoint.dy / details.position.dy : 1.0;
 
     final result = await _showTextDialog();
     if (result == null || result.text.trim().isEmpty) return;
@@ -181,9 +200,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _pushUndoState();
     setState(() {
       _annotations.add(_TextAnnotation(
-        pageNumber: _currentPage,
-        dx: relX,
-        dy: relY,
+        pageNumber: pageNumber,
+        dx: pagePoint.dx,
+        dy: pagePoint.dy,
+        previewFracX: previewFracX,
+        previewFracY: previewFracY,
+        pointsPerPixelX: pointsPerPixelX,
+        pointsPerPixelY: pointsPerPixelY,
         text: result.text,
         fontSize: result.fontSize,
         color: result.color,
@@ -447,9 +470,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           font,
           brush: brush,
           bounds: Rect.fromLTWH(
-            ann.dx * pageSize.width,
-            ann.dy * pageSize.height,
-            pageSize.width - (ann.dx * pageSize.width),
+            ann.dx,
+            ann.dy,
+            pageSize.width - ann.dx,
             ann.fontSize * 2,
           ),
           format: sf.PdfStringFormat(alignment: pdfAlignment),
@@ -707,20 +730,17 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             child: Stack(
               key: _viewerKey,
               children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTapDown: _handleTapDown,
-                  child: SfPdfViewer.file(
-                    File(widget.filePath),
-                    key: _pdfViewerStateKey,
-                    controller: _controller,
-                    // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
-                    pageLayoutMode: PdfPageLayoutMode.single,
-                    onPageChanged: (details) {
-                      _currentPage = details.newPageNumber;
-                    },
-                    onDocumentLoaded: _onDocumentLoaded,
-                  ),
+                SfPdfViewer.file(
+                  File(widget.filePath),
+                  key: _pdfViewerStateKey,
+                  controller: _controller,
+                  // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
+                  pageLayoutMode: PdfPageLayoutMode.single,
+                  onPageChanged: (details) {
+                    _currentPage = details.newPageNumber;
+                  },
+                  onDocumentLoaded: _onDocumentLoaded,
+                  onTap: _handlePdfTap,
                 ),
                 // طبقة عرض النصوص المضافة على الصفحة الحالية فقط
                 ..._annotations
@@ -788,8 +808,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final size = box?.size ?? const Size(400, 700);
     final isActive = identical(ann, _activeAnnotation);
     return Positioned(
-      left: ann.dx * size.width,
-      top: ann.dy * size.height,
+      left: ann.previewFracX * size.width,
+      top: ann.previewFracY * size.height,
       child: GestureDetector(
         onTap: () => _editAnnotation(ann),
         onPanStart: (_) {
@@ -798,8 +818,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         },
         onPanUpdate: (details) {
           setState(() {
-            ann.dx = (ann.dx + details.delta.dx / size.width).clamp(0.0, 1.0);
-            ann.dy = (ann.dy + details.delta.dy / size.height).clamp(0.0, 1.0);
+            ann.previewFracX = (ann.previewFracX + details.delta.dx / size.width).clamp(0.0, 1.0);
+            ann.previewFracY = (ann.previewFracY + details.delta.dy / size.height).clamp(0.0, 1.0);
+            // نحرّك إحداثيات PDF الحقيقية بنفس النسبة (عبر معامل التحويل) حتى
+            // يبقى الحفظ النهائي مطابقًا لما يظهر على الشاشة.
+            ann.dx += details.delta.dx * ann.pointsPerPixelX;
+            ann.dy += details.delta.dy * ann.pointsPerPixelY;
           });
         },
         onPanEnd: (_) => setState(() => _activeAnnotation = null),
