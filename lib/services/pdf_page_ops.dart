@@ -5,10 +5,10 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 /// إشارة لصفحة معيّنة داخل ملف PDF مصدر، تُستخدم كوحدة بناء أساسية
 /// لكل ميزات تحرير الصفحات (الدمج، الحذف، إعادة الترتيب، التدوير).
 class PageRef {
-  final String sourceLabel; // اسم الملف الأصلي (للعرض فقط)
+  final String sourceLabel;
   final Uint8List sourceBytes;
-  final int pageIndex; // يبدأ من 0
-  final int rotation; // 0, 90, 180, 270 (اتجاه دوران إضافي عند البناء)
+  final int pageIndex;
+  final int rotation; // 0, 90, 180, 270
 
   PageRef({
     required this.sourceLabel,
@@ -18,12 +18,13 @@ class PageRef {
   });
 }
 
-/// محرّك عام: يبني ملف PDF جديد من قائمة صفحات (بأي ترتيب، من أي عدد ملفات).
-/// يُستخدم لدمج الملفات، حذف صفحات، أو إعادة ترتيبها — بنفس الآلية.
+/// محرّك عام لبناء PDF جديد من صفحات مصدر مع الحفاظ على أبعاد كل صفحة.
 class PdfPageOps {
   static Future<Uint8List> buildFromPages(List<PageRef> pageRefs) async {
     final outDoc = sf.PdfDocument();
-    // تخزين مؤقت للمستندات المفتوحة لتفادي إعادة فتح نفس الملف لكل صفحة
+
+    // المفتاح هو نفس Uint8List الذي تحمله PageRef. هذا cache داخل عملية البناء
+    // فقط، ويمنع إعادة فتح المصدر نفسه عندما تشترك PageRefs بنفس الـbytes instance.
     final Map<Uint8List, sf.PdfDocument> openDocs = {};
 
     try {
@@ -35,60 +36,80 @@ class PdfPageOps {
         if (ref.pageIndex < 0 || ref.pageIndex >= srcDoc.pages.count) continue;
 
         final srcPage = srcDoc.pages[ref.pageIndex];
+        final srcSize = srcPage.getClientSize();
         final template = srcPage.createTemplate();
-        final newPage = outDoc.pages.add();
-        final graphics = newPage.graphics;
+        final rotation = _normalizeRotation(ref.rotation);
 
-        if (ref.rotation % 360 == 0) {
-          graphics.drawPdfTemplate(
-            template,
-            const Offset(0, 0),
-            Size(newPage.size.width, newPage.size.height),
-          );
-        } else {
-          // دوران حول مركز الصفحة بالزاوية المطلوبة
-          graphics.save();
-          graphics.translateTransform(newPage.size.width / 2, newPage.size.height / 2);
-          graphics.rotateTransform(ref.rotation.toDouble());
-          graphics.translateTransform(-newPage.size.width / 2, -newPage.size.height / 2);
-          graphics.drawPdfTemplate(
-            template,
-            const Offset(0, 0),
-            Size(newPage.size.width, newPage.size.height),
-          );
-          graphics.restore();
-        }
+        // Section مستقلة لكل صفحة تسمح بالحفاظ على الحجم الأصلي حتى عند دمج
+        // ملفات ذات A4/Letter/Landscape/custom sizes في مستند واحد.
+        final section = outDoc.sections!.add();
+        section.pageSettings.size = Size(srcSize.width, srcSize.height);
+        section.pageSettings.margins.all = 0;
+        section.pageSettings.rotate = _toPdfRotation(rotation);
+
+        final newPage = section.pages.add();
+        newPage.graphics.drawPdfTemplate(
+          template,
+          const Offset(0, 0),
+          Size(srcSize.width, srcSize.height),
+        );
       }
 
       final bytes = await outDoc.save();
       return Uint8List.fromList(bytes);
     } finally {
       outDoc.dispose();
-      for (final d in openDocs.values) {
-        d.dispose();
+      for (final document in openDocs.values) {
+        document.dispose();
       }
     }
   }
 
-  /// يرجع عدد صفحات ملف PDF بدون تحميله بالكامل بالذاكرة لفترة طويلة.
   static int countPages(Uint8List bytes) {
     final doc = sf.PdfDocument(inputBytes: bytes);
-    final count = doc.pages.count;
-    doc.dispose();
-    return count;
+    try {
+      return doc.pages.count;
+    } finally {
+      doc.dispose();
+    }
   }
 
-  /// يفحص إذا كانت صفحة معيّنة "فارغة" — بالاعتماد على غياب أي نص مستخرج
-  /// منها. ملاحظة: هذا فحص تقريبي؛ صفحة فيها صورة فقط بدون نص ستُعتبر
-  /// فارغة أيضًا حسب هذا المعيار.
-  static bool isPageBlank(Uint8List bytes, int pageIndex) {
+  /// يفحص فقط غياب النص القابل للاستخراج.
+  ///
+  /// مهم: true لا تعني أن الصفحة فارغة بصريًا؛ قد تكون Scan أو صورة أو رسمًا.
+  /// لذلك لا يجوز استخدام هذه النتيجة للحذف التلقائي.
+  static bool hasNoExtractableText(Uint8List bytes, int pageIndex) {
     final doc = sf.PdfDocument(inputBytes: bytes);
-    if (pageIndex < 0 || pageIndex >= doc.pages.count) {
+    try {
+      if (pageIndex < 0 || pageIndex >= doc.pages.count) return false;
+      final text = sf.PdfTextExtractor(doc).extractText(
+        startPageIndex: pageIndex,
+        endPageIndex: pageIndex,
+      );
+      return text.trim().isEmpty;
+    } finally {
       doc.dispose();
-      return false;
     }
-    final text = sf.PdfTextExtractor(doc).extractText(startPageIndex: pageIndex, endPageIndex: pageIndex);
-    doc.dispose();
-    return text.trim().isEmpty;
+  }
+
+  static int _normalizeRotation(int rotation) {
+    final normalized = ((rotation % 360) + 360) % 360;
+    if (normalized == 90 || normalized == 180 || normalized == 270) {
+      return normalized;
+    }
+    return 0;
+  }
+
+  static sf.PdfPageRotateAngle _toPdfRotation(int rotation) {
+    switch (rotation) {
+      case 90:
+        return sf.PdfPageRotateAngle.rotateAngle90;
+      case 180:
+        return sf.PdfPageRotateAngle.rotateAngle180;
+      case 270:
+        return sf.PdfPageRotateAngle.rotateAngle270;
+      default:
+        return sf.PdfPageRotateAngle.rotateAngle0;
+    }
   }
 }

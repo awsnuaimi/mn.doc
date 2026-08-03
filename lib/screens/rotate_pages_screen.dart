@@ -41,6 +41,7 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
     final bytes = result.files.single.bytes!;
     try {
       final count = PdfPageOps.countPages(bytes);
+      if (!mounted) return;
       setState(() {
         _fileName = result.files.single.name;
         _bytes = bytes;
@@ -58,7 +59,7 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
     setState(() => _scanningBlanks = true);
     int blankCount = 0;
     for (final p in _pages) {
-      final blank = PdfPageOps.isPageBlank(_bytes!, p.originalIndex);
+      final blank = PdfPageOps.hasNoExtractableText(_bytes!, p.originalIndex);
       p.isBlank = blank;
       if (blank) blankCount++;
     }
@@ -69,13 +70,6 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(blankCount == 0 ? tr('rotate_no_blanks') : '${tr('rotate_found_blanks_prefix')} $blankCount ${tr('rotate_found_blanks_suffix')}')),
     );
-    if (blankCount > 0) {
-      setState(() {
-        for (final p in _pages) {
-          if (p.isBlank) p.removed = true;
-        }
-      });
-    }
   }
 
   void _rotate(_PageEntry entry, int delta) {
@@ -130,8 +124,8 @@ class _RotatePagesScreenState extends State<RotatePagesScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _saving = false);
       if (!mounted) return;
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
