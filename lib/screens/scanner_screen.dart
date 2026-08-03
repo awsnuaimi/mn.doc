@@ -145,8 +145,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _saving = false);
       if (!mounted) return;
+      setState(() => _saving = false);
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('ed_save_error_prefix', lang)} $e')));
     }

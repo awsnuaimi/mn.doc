@@ -34,6 +34,7 @@ class _OcrScreenState extends State<OcrScreen> {
   String? _imagePath;
   bool _processing = false;
   bool _useAiMode = false;
+  int _ocrGeneration = 0;
 
   @override
   void initState() {
@@ -54,7 +55,7 @@ class _OcrScreenState extends State<OcrScreen> {
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final file = await picker.pickImage(source: source, imageQuality: 95);
-    if (file == null) return;
+    if (file == null || !mounted) return;
     setState(() {
       _imagePath = file.path;
       _resultController.clear();
@@ -63,32 +64,40 @@ class _OcrScreenState extends State<OcrScreen> {
   }
 
   Future<void> _runOcr() async {
-    if (_imagePath == null) return;
+    if (_imagePath == null || _processing) return;
+    final generation = ++_ocrGeneration;
+    final imagePath = _imagePath!;
+    final useAiMode = _useAiMode;
     setState(() => _processing = true);
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
     try {
-      if (_useAiMode) {
+      if (useAiMode) {
         final hasKey = await AiSettings.hasApiKey();
         if (!hasKey) {
           if (!mounted) return;
           final ok = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AiSettingsScreen()));
-          if (ok == null || !(await AiSettings.hasApiKey())) {
+          final hasKeyNow = await AiSettings.hasApiKey();
+          if (!mounted || generation != _ocrGeneration) return;
+          if (ok == null || !hasKeyNow) {
             setState(() => _processing = false);
             return;
           }
         }
-        final bytes = await File(_imagePath!).readAsBytes();
-        _resultController.text = await GeminiService.extractTextFromImage(bytes);
+        final bytes = await File(imagePath).readAsBytes();
+        final result = await GeminiService.extractTextFromImage(bytes);
+        if (!mounted || generation != _ocrGeneration) return;
+        _resultController.text = result;
       } else {
-        final inputImage = InputImage.fromFilePath(_imagePath!);
+        final inputImage = InputImage.fromFilePath(imagePath);
         final RecognizedText recognized = await _recognizer.processImage(inputImage);
+        if (!mounted || generation != _ocrGeneration) return;
         _resultController.text = recognized.text;
       }
     } catch (e) {
+      if (!mounted || generation != _ocrGeneration) return;
       _resultController.text = '';
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${tr('ocr_error_prefix')} $e')),
       );

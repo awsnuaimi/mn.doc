@@ -36,12 +36,14 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
   Future<void> _initCamera() async {
     try {
       final status = await Permission.camera.request();
+      if (!mounted) return;
       if (!status.isGranted) {
         setState(() => _error = tr('cam_permission_needed'));
         return;
       }
 
       final cameras = await availableCameras();
+      if (!mounted) return;
       if (cameras.isEmpty) {
         setState(() => _error = tr('cam_no_camera'));
         return;
@@ -54,6 +56,7 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
       await _controller!.initialize();
       if (mounted) setState(() {});
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = '${tr('cam_open_error')} $e');
     }
   }
@@ -72,8 +75,8 @@ class _DocumentCameraScreenState extends State<DocumentCameraScreen> {
       if (!mounted) return;
       Navigator.pop(context, file.path);
     } catch (e) {
-      setState(() => _capturing = false);
       if (!mounted) return;
+      setState(() => _capturing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('cam_capture_error')} $e')));
     }
   }

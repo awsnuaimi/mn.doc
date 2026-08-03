@@ -10,13 +10,13 @@ class TableExtractor {
   /// يرجع قائمة صفوف (كل صف = قائمة نصوص أعمدة) لصفحة واحدة.
   static List<List<String>> extractPageAsRows(Uint8List bytes, int pageIndex, {double columnGap = 18}) {
     final doc = sf.PdfDocument(inputBytes: bytes);
-    if (pageIndex < 0 || pageIndex >= doc.pages.count) {
+    late final lines;
+    try {
+      if (pageIndex < 0 || pageIndex >= doc.pages.count) return [];
+      lines = sf.PdfTextExtractor(doc).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex);
+    } finally {
       doc.dispose();
-      return [];
     }
-
-    final lines = sf.PdfTextExtractor(doc).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex);
-    doc.dispose();
 
     if (lines.isEmpty) return [];
 
@@ -65,8 +65,10 @@ class TableExtractor {
 
   static int countPages(Uint8List bytes) {
     final doc = sf.PdfDocument(inputBytes: bytes);
-    final count = doc.pages.count;
-    doc.dispose();
-    return count;
+    try {
+      return doc.pages.count;
+    } finally {
+      doc.dispose();
+    }
   }
 }

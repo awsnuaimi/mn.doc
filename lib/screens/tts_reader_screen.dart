@@ -58,17 +58,20 @@ class _TtsReaderScreenState extends State<TtsReaderScreen> {
     await _tts.setLanguage(_language);
     await _tts.setSpeechRate(_rate);
     await _tts.setPitch(_pitch);
+    if (!mounted) return;
     setState(() => _isPlaying = true);
     await _tts.speak(_textController.text);
   }
 
   Future<void> _pause() async {
     await _tts.pause();
+    if (!mounted) return;
     setState(() => _isPlaying = false);
   }
 
   Future<void> _stop() async {
     await _tts.stop();
+    if (!mounted) return;
     setState(() => _isPlaying = false);
   }
 

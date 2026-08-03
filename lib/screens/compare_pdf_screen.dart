@@ -30,7 +30,7 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
 
   Future<void> _pickFile(bool isA) async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
-    if (result == null || result.files.single.path == null) return;
+    if (result == null || result.files.single.path == null || !mounted) return;
     setState(() {
       if (isA) {
         _fileA = result.files.single.path!;
@@ -77,8 +77,8 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('compare_truncated_msg'))));
       }
     } catch (e) {
-      setState(() => _comparing = false);
       if (!mounted) return;
+      setState(() => _comparing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('compare_error_prefix')} $e')));
     }
   }

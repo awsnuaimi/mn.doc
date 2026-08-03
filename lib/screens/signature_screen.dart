@@ -70,6 +70,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
 
   Future<void> _pickExistingMark(SavedMark mark) async {
     final bytes = await File(mark.filePath).readAsBytes();
+    if (!mounted) return;
     setState(() {
       _activeMarkBytes = bytes;
       _step = _Step.placePdf;
@@ -88,6 +89,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
 
     final mark = await SignatureLibrary.addMark(bytes: bytes, name: name, type: MarkType.stamp);
     await _loadMarks();
+    if (!mounted) return;
 
     setState(() {
       _activeMarkBytes = bytes;
@@ -149,6 +151,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _activeMarkBytes = bytes;
       _step = _Step.placePdf;
@@ -160,7 +163,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
 
   Future<void> _pickPdf() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
-    if (result == null || result.files.single.path == null) return;
+    if (result == null || result.files.single.path == null || !mounted) return;
     setState(() {
       _pdfPath = result.files.single.path!;
       _placedDx = null;
@@ -189,22 +192,26 @@ class _SignatureScreenState extends State<SignatureScreen> {
     try {
       final pdfBytes = await File(_pdfPath!).readAsBytes();
       final document = sf.PdfDocument(inputBytes: pdfBytes);
-      final pageIndex = _currentPage - 1;
-      if (pageIndex < 0 || pageIndex >= document.pages.count) throw Exception(tr('sig_invalid_page'));
-      final page = document.pages[pageIndex];
-      final pageSize = page.getClientSize();
+      late final List<int> savedBytes;
+      try {
+        final pageIndex = _currentPage - 1;
+        if (pageIndex < 0 || pageIndex >= document.pages.count) throw Exception(tr('sig_invalid_page'));
+        final page = document.pages[pageIndex];
+        final pageSize = page.getClientSize();
 
-      final markImage = sf.PdfBitmap(_activeMarkBytes!);
-      const markWidth = 160.0;
-      const markHeight = 70.0;
+        final markImage = sf.PdfBitmap(_activeMarkBytes!);
+        const markWidth = 160.0;
+        const markHeight = 70.0;
 
-      page.graphics.drawImage(
-        markImage,
-        Rect.fromLTWH(_placedDx! * pageSize.width, _placedDy! * pageSize.height, markWidth, markHeight),
-      );
+        page.graphics.drawImage(
+          markImage,
+          Rect.fromLTWH(_placedDx! * pageSize.width, _placedDy! * pageSize.height, markWidth, markHeight),
+        );
 
-      final savedBytes = await document.save();
-      document.dispose();
+        savedBytes = await document.save();
+      } finally {
+        document.dispose();
+      }
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = _pdfPath!.split('/').last.replaceAll('.pdf', '');
@@ -232,8 +239,8 @@ class _SignatureScreenState extends State<SignatureScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _saving = false);
       if (!mounted) return;
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }

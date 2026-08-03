@@ -58,29 +58,32 @@ class _TranslateScreenState extends State<TranslateScreen> {
   }
 
   Future<void> _ensureModelsAndTranslate() async {
-    if (_sourceController.text.trim().isEmpty) return;
+    if (_translating) return;
+    final sourceText = _sourceController.text.trim();
+    if (sourceText.isEmpty) return;
+    final sourceLang = _sourceLang;
+    final targetLang = _targetLang;
 
     setState(() => _translating = true);
     final modelManager = OnDeviceTranslatorModelManager();
+    OnDeviceTranslator? translator;
 
     try {
-      // تحميل حزمتيّ اللغة إن لم تكونا محمّلتين (يتم مرة واحدة فقط ثم تُحفظ محليًا)
-      for (final lang in [_sourceLang, _targetLang]) {
+      for (final lang in [sourceLang, targetLang]) {
         final downloaded = await modelManager.isModelDownloaded(lang.bcpCode);
+        if (!mounted) return;
         if (!downloaded) {
           setState(() => _downloadingModel = true);
           await modelManager.downloadModel(lang.bcpCode, isWifiRequired: false);
+          if (!mounted) return;
         }
       }
+      if (!mounted) return;
       setState(() => _downloadingModel = false);
 
-      final translator = OnDeviceTranslator(
-        sourceLanguage: _sourceLang,
-        targetLanguage: _targetLang,
-      );
-      final result = await translator.translateText(_sourceController.text);
-      await translator.close();
-
+      translator = OnDeviceTranslator(sourceLanguage: sourceLang, targetLanguage: targetLang);
+      final result = await translator.translateText(sourceText);
+      if (!mounted) return;
       setState(() => _resultController.text = result);
     } catch (e) {
       if (!mounted) return;
@@ -89,7 +92,13 @@ class _TranslateScreenState extends State<TranslateScreen> {
         SnackBar(content: Text('${AppText.t('tr_error_prefix', lang)} $e')),
       );
     } finally {
-      if (mounted) setState(() => _translating = false);
+      if (translator != null) await translator.close();
+      if (mounted) {
+        setState(() {
+          _translating = false;
+          _downloadingModel = false;
+        });
+      }
     }
   }
 

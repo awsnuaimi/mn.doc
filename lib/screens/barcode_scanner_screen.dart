@@ -45,6 +45,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     try {
       final input = InputImage.fromFilePath(path);
       final barcodes = await _scanner.processImage(input);
+      if (!mounted) return;
       setState(() {
         _results = barcodes;
         _scanning = false;
@@ -53,8 +54,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('barcode_none_found'))));
       }
     } catch (e) {
-      setState(() => _scanning = false);
       if (!mounted) return;
+      setState(() => _scanning = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('barcode_scan_error')} $e')));
     }
   }
@@ -95,15 +96,16 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         ),
       );
       if (chosenPage == null) {
+        if (!mounted) return;
         setState(() => _scanning = false);
         return;
       }
 
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getTemporaryDirectory();
       String? pagePath;
       await for (final page in Printing.raster(bytes, pages: [chosenPage], dpi: 200)) {
         final png = await page.toPng();
-        pagePath = '${dir.path}/barcode_scan_page.png';
+        pagePath = '${dir.path}/barcode_scan_${DateTime.now().microsecondsSinceEpoch}.png';
         await File(pagePath).writeAsBytes(png, flush: true);
         break;
       }
@@ -111,11 +113,12 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       if (pagePath != null) {
         await _scanImagePath(pagePath);
       } else {
+        if (!mounted) return;
         setState(() => _scanning = false);
       }
     } catch (e) {
-      setState(() => _scanning = false);
       if (!mounted) return;
+      setState(() => _scanning = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }

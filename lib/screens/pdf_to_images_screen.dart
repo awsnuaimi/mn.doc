@@ -35,6 +35,7 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
     final doc = sf.PdfDocument(inputBytes: bytes);
     final count = doc.pages.count;
     doc.dispose();
+    if (!mounted) return;
 
     setState(() {
       _filePath = path;
@@ -76,8 +77,8 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
         _outputPaths = paths;
       });
     } catch (e) {
-      setState(() => _converting = false);
       if (!mounted) return;
+      setState(() => _converting = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('pdf2img_convert_error')} $e')));
     }
   }

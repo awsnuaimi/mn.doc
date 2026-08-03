@@ -9,9 +9,11 @@ import 'package:image/image.dart' as img;
 /// يستخرج كامل النص من بايتات ملف PDF — يعمل بخيط منفصل عبر compute().
 String extractPdfTextIsolate(Uint8List bytes) {
   final document = sf.PdfDocument(inputBytes: bytes);
-  final text = sf.PdfTextExtractor(document).extractText();
-  document.dispose();
-  return text;
+  try {
+    return sf.PdfTextExtractor(document).extractText();
+  } finally {
+    document.dispose();
+  }
 }
 
 /// معطيات تحسين الصورة — يجب أن تبقى قابلة للتسلسل بين الـ Isolates

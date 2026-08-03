@@ -34,6 +34,7 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
     if (result == null || result.files.single.bytes == null) return;
     final bytes = result.files.single.bytes!;
     final count = TableExtractor.countPages(bytes);
+    if (!mounted) return;
     setState(() {
       _fileName = result.files.single.name;
       _bytes = bytes;
@@ -96,8 +97,8 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _processing = false);
       if (!mounted) return;
+      setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }

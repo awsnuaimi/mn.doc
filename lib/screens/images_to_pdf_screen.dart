@@ -93,8 +93,8 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _saving = false);
       if (!mounted) return;
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
