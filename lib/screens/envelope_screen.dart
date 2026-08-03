@@ -16,11 +16,7 @@ const double _mmToPoints = 72 / 25.4;
 
 class _EnvelopeLayout {
   final String code;
-
-  /// العرض الحقيقي للظرف عند وضعه أفقيًا.
   final double widthMm;
-
-  /// الارتفاع الحقيقي للظرف عند وضعه أفقيًا.
   final double heightMm;
 
   final double senderXmm;
@@ -48,104 +44,87 @@ class _EnvelopeLayout {
   String get label =>
       '$code (${widthMm.toInt()}×${heightMm.toInt()} مم)';
 
-  /// المقاس الحقيقي للصفحة.
-  /// width دائمًا أكبر من height لأن الظرف عندنا أفقي.
+  /// المقاس الفيزيائي الحقيقي للظرف.
+  ///
+  /// مثال DL:
+  /// 220mm عرض × 110mm ارتفاع.
   PdfPageFormat get pageFormat {
-    final width = widthMm * _mmToPoints;
-    final height = heightMm * _mmToPoints;
-
     return PdfPageFormat(
-      width,
-      height,
+      widthMm * _mmToPoints,
+      heightMm * _mmToPoints,
       marginAll: 0,
     );
   }
 }
 
 /// ===============================================================
-/// تخطيط الأظرف
+/// تخطيطات الأظرف.
 ///
-/// جميع المقاسات هنا معرفة بوضع LANDSCAPE.
+/// جميع الأظرف معرفة هنا بالشكل الأفقي المطلوب:
 ///
-/// مثال:
-/// DL = 220 × 110 mm
+/// width > height
 ///
-/// وليس:
-/// 110 × 220 mm
-///
-/// الإحداثيات أيضًا محسوبة بالنسبة لهذا الاتجاه.
+/// وهذه البيانات هي مصدر الحقيقة الوحيد لكل من:
+/// - المعاينة
+/// - إنشاء PDF
+/// - مهمة الطباعة
 /// ===============================================================
 const List<_EnvelopeLayout> _envelopeLayouts = [
   _EnvelopeLayout(
     code: 'DL',
     widthMm: 220,
     heightMm: 110,
-
     senderXmm: 12,
     senderYmm: 9,
     senderWidthMm: 82,
-
-    // منطقة المستلم في النصف الأيمن تقريبًا.
     recipientXmm: 92,
     recipientYmm: 42,
     recipientWidthMm: 112,
     recipientHeightMm: 45,
   ),
-
   _EnvelopeLayout(
     code: 'C6',
     widthMm: 162,
     heightMm: 114,
-
     senderXmm: 10,
     senderYmm: 9,
     senderWidthMm: 65,
-
     recipientXmm: 67,
     recipientYmm: 45,
     recipientWidthMm: 85,
     recipientHeightMm: 45,
   ),
-
   _EnvelopeLayout(
     code: 'C6/C5',
     widthMm: 229,
     heightMm: 114,
-
     senderXmm: 12,
     senderYmm: 9,
     senderWidthMm: 85,
-
     recipientXmm: 96,
     recipientYmm: 45,
     recipientWidthMm: 117,
     recipientHeightMm: 45,
   ),
-
   _EnvelopeLayout(
     code: 'C5',
     widthMm: 229,
     heightMm: 162,
-
     senderXmm: 14,
     senderYmm: 12,
     senderWidthMm: 90,
-
     recipientXmm: 96,
     recipientYmm: 69,
     recipientWidthMm: 117,
     recipientHeightMm: 52,
   ),
-
   _EnvelopeLayout(
     code: 'C4',
     widthMm: 324,
     heightMm: 229,
-
     senderXmm: 16,
     senderYmm: 14,
     senderWidthMm: 120,
-
     recipientXmm: 136,
     recipientYmm: 98,
     recipientWidthMm: 166,
@@ -232,17 +211,14 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
   }
 
   /// =============================================================
-  /// مولد PDF الوحيد للمعاينة والطباعة.
+  /// إنشاء PDF الظرف.
   ///
-  /// لا يوجد هنا أي Portrait/Landscape conversion.
+  /// نفس الدالة تستخدم للمعاينة والطباعة.
   ///
-  /// المقاس يأتي مباشرة من EnvelopeLayout:
+  /// لا نقوم هنا بتدوير الصفحة.
+  /// المقاس نفسه محدد أصلًا أفقيًا:
   ///
-  /// DL:
-  /// width  = 220mm
-  /// height = 110mm
-  ///
-  /// لذلك الملف الناتج نفسه Landscape.
+  /// DL = 220 × 110 mm
   /// =============================================================
   Future<Uint8List> _buildPdf({
     _EnvelopeLayout? layoutOverride,
@@ -250,7 +226,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     final _EnvelopeLayout layout =
         layoutOverride ?? _layout;
 
-    // Snapshot.
+    // Snapshot للقيم الحالية.
     final String sender =
         _senderController.text.trim();
 
@@ -277,16 +253,12 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     doc.addPage(
       pw.Page(
         pageFormat: pageFormat,
-
-        // مهم جدًا:
-        // لا يوجد أي Margin يغير نظام الإحداثيات.
         margin: pw.EdgeInsets.zero,
-
         build: (_) {
           return pw.Stack(
             children: [
               // =====================================================
-              // المرسل
+              // عنوان المرسل
               // =====================================================
               if (showSender && sender.isNotEmpty)
                 pw.Positioned(
@@ -309,17 +281,15 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                 ),
 
               // =====================================================
-              // المستلم
+              // عنوان المستلم
               // =====================================================
               if (recipient.isNotEmpty)
                 pw.Positioned(
                   left: mm(
-                    layout.recipientXmm +
-                        offsetX,
+                    layout.recipientXmm + offsetX,
                   ),
                   top: mm(
-                    layout.recipientYmm +
-                        offsetY,
+                    layout.recipientYmm + offsetY,
                   ),
                   child: pw.SizedBox(
                     width: mm(
@@ -344,13 +314,20 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     final List<int> savedBytes =
         await doc.save();
 
-    return Uint8List.fromList(
-      savedBytes,
-    );
+    return Uint8List.fromList(savedBytes);
   }
 
   /// =============================================================
-  /// الطباعة
+  /// طباعة الظرف.
+  ///
+  /// هنا التعديل المهم:
+  ///
+  /// 1. format = المقاس الحقيقي للظرف.
+  /// 2. dynamicLayout = false
+  /// 3. forceCustomPrintPaper = true
+  ///
+  /// الهدف هو عدم ترك مهمة الطباعة تبدأ بمقاس ورق عام ثم
+  /// تحاول إعادة تفسير ملف الظرف.
   /// =============================================================
   Future<void> _print(
     String errorPrefix,
@@ -359,39 +336,40 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
       return;
     }
 
-    if (_recipientController.text
-        .trim()
-        .isEmpty) {
+    if (_recipientController.text.trim().isEmpty) {
       return;
     }
 
-    // Snapshot مهم جدًا.
-    //
-    // لو غيّر المستخدم المقاس أثناء فتح Dialog الطباعة
-    // لا نريد أن تتغير الصفحة أثناء العملية.
+    // Snapshot مهم حتى لا يتغير المقاس أثناء فتح نافذة الطباعة.
     final _EnvelopeLayout printLayout =
         _layout;
+
+    final PdfPageFormat envelopeFormat =
+        printLayout.pageFormat;
 
     setState(() {
       _printing = true;
     });
 
     try {
-      if (!mounted) {
-        return;
-      }
-
       await Printing.layoutPdf(
         name:
             'MN-Doc_Envelope_${printLayout.code}.pdf',
 
-        /// الـformat الذي يصل هنا يأتي من نظام الطباعة.
-        ///
-        /// نحن لا نستخدمه لتغيير مقاس الظرف.
-        /// نعيد دائمًا ملف PDF بالمقاس الحقيقي المختار.
-        onLayout: (
-          PdfPageFormat printerFormat,
-        ) async {
+        // -----------------------------------------------------------
+        // مهم جدًا:
+        // نفرض على Print Job نفس المقاس الفيزيائي للظرف.
+        // -----------------------------------------------------------
+        format: envelopeFormat,
+
+        // لا نسمح بإعادة بناء المستند وفق مقاس مختلف
+        // ترسله نافذة الطباعة.
+        dynamicLayout: false,
+
+        // طلب استخدام المقاس المخصص للورقة.
+        forceCustomPrintPaper: true,
+
+        onLayout: (_) async {
           return _buildPdf(
             layoutOverride: printLayout,
           );
@@ -402,8 +380,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             '$errorPrefix $e',
@@ -428,8 +405,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
       children: [
         Expanded(
           child: Text(
-            '$label: '
-            '${value.toStringAsFixed(1)} mm',
+            '$label: ${value.toStringAsFixed(1)} mm',
           ),
         ),
         Expanded(
@@ -465,14 +441,12 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
           settings.isRtl
               ? TextDirection.rtl
               : TextDirection.ltr,
-
       child: Scaffold(
         appBar: AppBar(
           title: Text(
             tr('tool_envelope_t'),
           ),
         ),
-
         body: Column(
           children: [
             Expanded(
@@ -484,15 +458,13 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   16,
                   8,
                 ),
-
                 children: [
                   // =================================================
-                  // مقاس الظرف
+                  // اختيار مقاس الظرف
                   // =================================================
                   DropdownButtonFormField<
                       _EnvelopeLayout>(
                     initialValue: _layout,
-
                     decoration:
                         InputDecoration(
                       labelText:
@@ -500,7 +472,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                       border:
                           const OutlineInputBorder(),
                     ),
-
                     items: _envelopeLayouts
                         .map(
                           (s) =>
@@ -512,7 +483,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                           ),
                         )
                         .toList(),
-
                     onChanged: (v) {
                       if (v == null) {
                         return;
@@ -521,8 +491,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                       setState(() {
                         _layout = v;
 
-                        // المعايرة تخص المقاس الحالي.
-                        // عند تغيير الظرف نبدأ من الصفر.
+                        // كل مقاس يبدأ بمعايرة صفرية.
                         _offsetXmm = 0;
                         _offsetYmm = 0;
                       });
@@ -534,35 +503,32 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
 
                   // =================================================
-                  // المرسل
+                  // إظهار عنوان المرسل
                   // =================================================
                   SwitchListTile(
                     contentPadding:
                         EdgeInsets.zero,
-
                     value: _showSender,
-
                     onChanged: (v) {
                       setState(() {
                         _showSender = v;
                       });
                     },
-
                     title: Text(
                       tr('env_show_sender'),
                     ),
-
                     activeThumbColor:
                         AppColors.primaryDark,
                   ),
 
+                  // =================================================
+                  // عنوان المرسل
+                  // =================================================
                   if (_showSender)
                     TextField(
                       controller:
                           _senderController,
-
                       maxLines: 3,
-
                       textDirection:
                           _isRtlText(
                             _senderController
@@ -572,7 +538,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                                   .rtl
                               : TextDirection
                                   .ltr,
-
                       decoration:
                           InputDecoration(
                         labelText:
@@ -582,7 +547,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                         border:
                             const OutlineInputBorder(),
                       ),
-
                       onChanged: (_) {
                         _schedulePreview();
                       },
@@ -593,14 +557,12 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
 
                   // =================================================
-                  // المستلم
+                  // عنوان المستلم
                   // =================================================
                   TextField(
                     controller:
                         _recipientController,
-
                     maxLines: 4,
-
                     textDirection:
                         _isRtlText(
                           _recipientController
@@ -608,7 +570,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                         )
                             ? TextDirection.rtl
                             : TextDirection.ltr,
-
                     decoration:
                         InputDecoration(
                       labelText:
@@ -618,7 +579,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                       border:
                           const OutlineInputBorder(),
                     ),
-
                     onChanged: (_) {
                       _schedulePreview();
                     },
@@ -629,22 +589,19 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
 
                   // =================================================
-                  // المعايرة
+                  // معايرة موضع الطباعة
                   // =================================================
                   ExpansionTile(
                     tilePadding:
                         EdgeInsets.zero,
-
                     title: Text(
                       tr('env_calibration'),
                     ),
-
                     subtitle: Text(
                       tr(
                         'env_calibration_note',
                       ),
                     ),
-
                     children: [
                       _calibrationSlider(
                         label:
@@ -657,7 +614,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                           });
                         },
                       ),
-
                       _calibrationSlider(
                         label:
                             tr('env_offset_y'),
@@ -669,12 +625,10 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                           });
                         },
                       ),
-
                       Align(
                         alignment:
                             AlignmentDirectional
                                 .centerEnd,
-
                         child:
                             TextButton.icon(
                           onPressed: () {
@@ -683,12 +637,10 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                               _offsetYmm = 0;
                             });
                           },
-
                           icon: const Icon(
                             Icons
                                 .restart_alt_rounded,
                           ),
-
                           label: Text(
                             tr(
                               'env_reset_offsets',
@@ -718,19 +670,15 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
 
                   // =================================================
-                  // المعاينة
-                  //
-                  // هي نفس PDF المستخدم للطباعة.
+                  // المعاينة الحية
                   // =================================================
                   SizedBox(
                     height: 330,
-
                     child: ClipRRect(
                       borderRadius:
                           BorderRadius.circular(
                         12,
                       ),
-
                       child: PdfPreview(
                         key: ValueKey(
                           '${_layout.code}|'
@@ -741,15 +689,15 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                           '${_recipientController.text}',
                         ),
 
-                        build: (
-                          PdfPageFormat _,
-                        ) {
+                        // نفس مولد PDF المستخدم في الطباعة.
+                        build: (_) {
                           return _buildPdf(
                             layoutOverride:
                                 _layout,
                           );
                         },
 
+                        // المقاس الأولي للمعاينة مطابق تمامًا للظرف.
                         initialPageFormat:
                             _layout.pageFormat,
 
@@ -773,7 +721,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
             // =======================================================
             SafeArea(
               top: false,
-
               child: Padding(
                 padding:
                     const EdgeInsets.fromLTRB(
@@ -782,7 +729,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   16,
                   16,
                 ),
-
                 child:
                     ElevatedButton.icon(
                   onPressed:
@@ -797,7 +743,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                                   'error_prefix',
                                 ),
                               ),
-
                   icon: _printing
                       ? const SizedBox(
                           width: 20,
@@ -810,7 +755,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                       : const Icon(
                           Icons.print_rounded,
                         ),
-
                   label: Text(
                     _printing
                         ? tr(
@@ -820,12 +764,10 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                             'print_btn',
                           ),
                   ),
-
                   style:
                       ElevatedButton.styleFrom(
                     backgroundColor:
                         AppColors.primaryDark,
-
                     minimumSize:
                         const Size(
                       double.infinity,
