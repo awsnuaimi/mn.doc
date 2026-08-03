@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +15,8 @@ import '../services/app_settings.dart';
 import '../services/app_text.dart';
 import '../services/isolate_helpers.dart';
 import '../services/arabic_font_loader.dart';
+import '../services/signature_library.dart';
+import '../widgets/signature_pad.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
@@ -55,6 +59,20 @@ class _TextAnnotation {
 
 /// تحويل هندسي من إحداثيات صفحة PDF (points) إلى إحداثيات الـViewer (pixels).
 /// يُعاد حسابه/معايرته من ضغطة Syncfusion الحقيقية، ولا يدخل في بيانات النص.
+
+
+class _ImageAnnotation {
+  int pageNumber;
+  double dx;
+  double dy;
+  double width;
+  double height;
+  Uint8List bytes;
+  final bool isSignature;
+
+  _ImageAnnotation({required this.pageNumber, required this.dx, required this.dy, required this.width, required this.height, required this.bytes, this.isSignature = false});
+}
+
 class _PdfPageTransform {
   final double scale;
   final Offset origin;
@@ -77,6 +95,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final PdfViewerController _controller = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
+  final List<_ImageAnnotation> _imageAnnotations = [];
+  Uint8List? _pendingImageBytes;
+  bool _pendingImageIsSignature = false;
   final GlobalKey _viewerKey = GlobalKey();
 
   // أبعاد الصفحات الأصلية بنقاط PDF + التحويل الحالي للصفحة المعروضة.
@@ -210,6 +231,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _handlePdfTap(PdfGestureDetails details) async {
+    if (_pendingImageBytes != null) {
+      final pagePoint = details.pagePosition;
+      final pageNumber = details.pageNumber;
+      if (pageNumber < 1 || pagePoint.dx < 0 || pagePoint.dy < 0) return;
+      _calibratePageTransform(pageNumber: pageNumber, pdfPoint: pagePoint, viewerPoint: details.position);
+      final bytes = _pendingImageBytes!;
+      final isSignature = _pendingImageIsSignature;
+      setState(() {
+        _imageAnnotations.add(_ImageAnnotation(pageNumber: pageNumber, dx: pagePoint.dx, dy: pagePoint.dy, width: isSignature ? 150 : 140, height: isSignature ? 65 : 110, bytes: bytes, isSignature: isSignature));
+        _pendingImageBytes = null;
+        _pendingImageIsSignature = false;
+        _hasUnsavedChanges = true;
+      });
+      _scheduleAutoSave();
+      return;
+    }
     if (!_addTextMode) return;
 
     // دقة تحديد الموضع (شاشة ↔ نقاط PDF) مضمونة فقط عند التكبير الافتراضي
@@ -657,6 +694,18 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         );
       }
 
+      for (final img in List<_ImageAnnotation>.from(_imageAnnotations)) {
+        final pageIndex = img.pageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+        final page = document.pages[pageIndex];
+        final pageSize = page.getClientSize();
+        final x = img.dx.clamp(0.0, pageSize.width).toDouble();
+        final y = img.dy.clamp(0.0, pageSize.height).toDouble();
+        final w = img.width.clamp(20.0, (pageSize.width - x).clamp(20.0, pageSize.width)).toDouble();
+        final h = img.height.clamp(20.0, (pageSize.height - y).clamp(20.0, pageSize.height)).toDouble();
+        page.graphics.drawImage(sf.PdfBitmap(img.bytes), Rect.fromLTWH(x, y, w, h));
+      }
+
       savedBytes = await document.save();
     } finally {
       // نضمن تحرير موارد المستند (Native) حتى لو فشل الرسم أو الحفظ —
@@ -961,6 +1010,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     label: tr('ed_stickynote'),
                     mode: PdfAnnotationMode.stickyNote,
                   ),
+                  const SizedBox(width: 6),
+                  ActionChip(avatar: const Icon(Icons.draw_rounded, size: 18), label: const Text('توقيع'), onPressed: _chooseSignatureForPlacement),
+                  const SizedBox(width: 6),
+                  ActionChip(avatar: const Icon(Icons.image_rounded, size: 18), label: const Text('صورة'), onPressed: _pickImageForPlacement),
                 ],
               ),
             ),
@@ -1060,6 +1113,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._annotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildAnnotationOverlay(ann)),
+                ..._imageAnnotations
+                    .where((a) => a.pageNumber == _currentPage)
+                    .map((ann) => _buildImageOverlay(ann)),
                 // أزرار التكبير/التصغير العائمة
                 Positioned(
                   bottom: 16,
@@ -1353,6 +1409,75 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// عند الضغط على نص موجود: قائمة صغيرة "تعديل" أو "نقل" — النقل يعتمد
   /// على نفس آلية الضغط الدقيقة المستخدمة بالإضافة (بدل السحب بالإصبع
   /// غير المضمون هندسيًا)، فيضغط المستخدم على المكان الجديد مباشرة.
+  Future<void> _pickImageForPlacement() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 95);
+    if (picked == null) return;
+    final bytes = await File(picked.path).readAsBytes();
+    if (!mounted) return;
+    setState(() { _pendingImageBytes = bytes; _pendingImageIsSignature = false; _addTextMode = false; });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اضغط على المكان المطلوب داخل صفحة PDF لوضع الصورة.')));
+  }
+
+  Future<void> _chooseSignatureForPlacement() async {
+    final marks = await SignatureLibrary.list();
+    if (!mounted) return;
+    await showModalBottomSheet(context: context, builder: (sheetContext) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(leading: const Icon(Icons.gesture_rounded), title: const Text('رسم توقيع جديد'), onTap: () { Navigator.pop(sheetContext); _drawSignatureForPlacement(); }),
+      ...marks.take(8).map((m) => ListTile(leading: Image.file(File(m.filePath), width: 56, height: 32, fit: BoxFit.contain), title: Text(m.name), subtitle: Text(m.type == MarkType.signature ? 'توقيع محفوظ' : 'ختم محفوظ'), onTap: () async { Navigator.pop(sheetContext); final b=await File(m.filePath).readAsBytes(); if (!mounted) return; _armImagePlacement(b, true); })),
+    ])));
+  }
+
+  Future<void> _drawSignatureForPlacement() async {
+    final key = GlobalKey<SignaturePadState>();
+    final bytes = await showDialog<Uint8List>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('ارسم التوقيع'),
+      content: SizedBox(width: 360, height: 220, child: SignaturePad(key: key)),
+      actions: [TextButton(onPressed: () => key.currentState?.clear(), child: const Text('مسح')), TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')), ElevatedButton(onPressed: () async { final b=await key.currentState?.exportAsPng(); if (b != null && dialogContext.mounted) Navigator.pop(dialogContext,b); }, child: const Text('استخدام'))],
+    ));
+    if (bytes != null && mounted) _armImagePlacement(bytes, true);
+  }
+
+  void _armImagePlacement(Uint8List bytes, bool signature) {
+    setState(() { _pendingImageBytes=bytes; _pendingImageIsSignature=signature; _addTextMode=false; });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(signature ? 'اضغط على المكان المطلوب داخل الصفحة لوضع التوقيع.' : 'اضغط على المكان المطلوب داخل الصفحة لوضع الصورة.')));
+  }
+
+  Widget _buildImageOverlay(_ImageAnnotation ann) {
+    final transform = _pageTransforms[ann.pageNumber] ?? _fallbackPageTransform(ann.pageNumber);
+    if (transform == null) return const SizedBox.shrink();
+    final pt = transform.pdfToViewer(Offset(ann.dx, ann.dy));
+    return Positioned(left: pt.dx, top: pt.dy, child: GestureDetector(
+      onPanUpdate: (d) { final page=_pdfPageSizes[ann.pageNumber]; if(page==null) return; setState(() { ann.dx=(ann.dx+d.delta.dx/transform.scale).clamp(0.0,page.width-5).toDouble(); ann.dy=(ann.dy+d.delta.dy/transform.scale).clamp(0.0,page.height-5).toDouble(); _hasUnsavedChanges=true; }); },
+      onPanEnd: (_) => _scheduleAutoSave(),
+      onTap: () => _showImageActionSheet(ann),
+      child: Container(width: ann.width*transform.scale, height: ann.height*transform.scale, decoration: BoxDecoration(border: Border.all(color: AppColors.accent, width: 1.5)), child: Image.memory(ann.bytes, fit: BoxFit.contain)),
+    ));
+  }
+
+  void _showImageActionSheet(_ImageAnnotation ann) {
+    showModalBottomSheet(context: context, builder: (sheetContext) => SafeArea(child: Wrap(children: [
+      ListTile(leading: const Icon(Icons.zoom_in_map_rounded), title: const Text('تكبير'), onTap: () { Navigator.pop(sheetContext); setState(() { ann.width*=1.15; ann.height*=1.15; }); _scheduleAutoSave(); }),
+      ListTile(leading: const Icon(Icons.zoom_out_map_rounded), title: const Text('تصغير'), onTap: () { Navigator.pop(sheetContext); setState(() { ann.width=(ann.width*.85).clamp(25.0,500.0).toDouble(); ann.height=(ann.height*.85).clamp(20.0,500.0).toDouble(); }); _scheduleAutoSave(); }),
+      ListTile(leading: const Icon(Icons.copy_rounded), title: const Text('تكرار'), onTap: () { Navigator.pop(sheetContext); setState(() { _imageAnnotations.add(_ImageAnnotation(pageNumber:ann.pageNumber,dx:ann.dx+12,dy:ann.dy+12,width:ann.width,height:ann.height,bytes:ann.bytes,isSignature:ann.isSignature)); }); _scheduleAutoSave(); }),
+      ListTile(leading: const Icon(Icons.delete_outline_rounded,color:Colors.red), title: const Text('حذف',style:TextStyle(color:Colors.red)), onTap: () { Navigator.pop(sheetContext); setState(() => _imageAnnotations.remove(ann)); _scheduleAutoSave(); }),
+    ])));
+  }
+
+  Future<void> _splitAnnotation(_TextAnnotation ann) async {
+    final c = TextEditingController(text: ann.text);
+    final result = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(title: const Text('تقسيم النص'), content: TextField(controller:c,maxLines:5,decoration:const InputDecoration(helperText:'ضع المؤشر/سطرًا جديدًا بين الجزأين ثم اضغط تقسيم')), actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),ElevatedButton(onPressed:()=>Navigator.pop(ctx,c.text),child:const Text('تقسيم'))]));
+    if(result==null) return;
+    final idx=result.indexOf('\n');
+    final cut=idx>=0?idx:(result.length~/2);
+    final a=result.substring(0,cut).trim(), b=result.substring(idx>=0?cut+1:cut).trim();
+    if(a.isEmpty||b.isEmpty) return;
+    _pushUndoState();
+    setState(() { ann.text=a; _annotations.add(_TextAnnotation(pageNumber:ann.pageNumber,dx:ann.dx+80,dy:ann.dy,text:b,fontSize:ann.fontSize,color:ann.color,alignment:ann.alignment)); });
+    _scheduleAutoSave();
+  }
+
+  void _duplicateAnnotation(_TextAnnotation ann) { _pushUndoState(); setState(() => _annotations.add(_TextAnnotation(pageNumber:ann.pageNumber,dx:ann.dx+18,dy:ann.dy+18,text:ann.text,fontSize:ann.fontSize,color:ann.color,alignment:ann.alignment))); _scheduleAutoSave(); }
+
   void _showAnnotationActionSheet(_TextAnnotation ann) {
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
@@ -1381,6 +1506,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 });
               },
             ),
+            ListTile(leading: const Icon(Icons.call_split_rounded), title: const Text('تقسيم النص'), onTap: () { Navigator.pop(sheetContext); _splitAnnotation(ann); }),
+            ListTile(leading: const Icon(Icons.copy_rounded), title: const Text('تكرار النص'), onTap: () { Navigator.pop(sheetContext); _duplicateAnnotation(ann); }),
             ListTile(
               leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: Text(tr('ed_action_delete'), style: const TextStyle(color: Colors.red)),
