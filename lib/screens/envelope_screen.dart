@@ -61,6 +61,8 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
   bool _showSender = true, _printing = false, _showGuides = false;
   double _senderDx = 0, _senderDy = 0, _recipientDx = 0, _recipientDy = 0;
   double _printerDx = 0, _printerDy = 0;
+  double? _carrierXmm;
+  double? _carrierYmm;
   double _senderFont = 7.0, _recipientFont = 9.5;
   Timer? _debounce;
 
