@@ -5,11 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
-import '../services/arabic_font_loader.dart';
+import '../services/secure_redaction.dart';
 import '../theme/app_theme.dart';
 
 class _RedactBox {
@@ -26,10 +25,9 @@ class _RedactBox {
   });
 }
 
-/// تعديل/حذف نص موجود بملف PDF: PDF لا يخزّن نصًا "قابلاً للتعديل" فعليًا
-/// (زي Word)، لذا الطريقة العملية المعتمدة بمعظم برامج تحرير PDF هي:
-/// تغطية المنطقة القديمة بمستطيل أبيض (إخفاء)، ثم كتابة نص جديد فوقها
-/// اختياريًا. هذا يعطي نفس النتيجة النهائية (استبدال/حذف) عمليًا.
+/// حجب آمن لمحتوى PDF مع إمكانية إضافة نص بديل.
+/// الصفحة التي تحتوي حجبًا تُسطّح إلى صورة، وتُمسح البكسلات الحساسة قبل
+/// إعادة إدراجها في PDF، لذلك لا تبقى طبقة النص/الصورة الأصلية تحت التغطية.
 class RedactEditScreen extends StatefulWidget {
   const RedactEditScreen({super.key});
 
@@ -95,6 +93,7 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
     if (width < 10 || height < 10) return; // تجاهل السحبات الصغيرة جدًا (نقرة غير مقصودة)
 
     final replacement = await _askReplacementText();
+    if (!mounted) return;
     setState(() {
       _boxes.add(_RedactBox(
         pageNumber: _currentPage,
@@ -112,70 +111,66 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('redact_dialog_title')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(tr('redact_dialog_desc'), style: const TextStyle(fontSize: 12)),
-            const SizedBox(height: 8),
-            TextField(controller: controller, autofocus: true, decoration: InputDecoration(hintText: tr('redact_field_hint'))),
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(tr('redact_dialog_title')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(tr('redact_dialog_desc'), style: const TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+              TextField(controller: controller, autofocus: true, decoration: InputDecoration(hintText: tr('redact_field_hint'))),
+            ],
+          ),
+          actions: [
+            ElevatedButton(onPressed: () => Navigator.pop(dialogContext, controller.text), child: Text(tr('redact_done_btn'))),
           ],
         ),
-        actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: Text(tr('redact_done_btn'))),
-        ],
-      ),
-    );
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _save() async {
-    if (_filePath == null || _boxes.isEmpty) return;
+    if (_filePath == null || _boxes.isEmpty || _saving) return;
     setState(() => _saving = true);
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
     try {
-      final bytes = await File(_filePath!).readAsBytes();
-      final document = sf.PdfDocument(inputBytes: bytes);
-      late final List<int> savedBytes;
-      try {
-        for (final b in _boxes) {
-          final pageIndex = b.pageNumber - 1;
-          if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
-          final page = document.pages[pageIndex];
-          final size = page.getClientSize();
+      final inputBytes = await File(_filePath!).readAsBytes();
+      final regions = _boxes
+          .map(
+            (b) => SecureRedactionRegion(
+              pageIndex: b.pageNumber - 1,
+              x: b.dx,
+              y: b.dy,
+              width: b.w,
+              height: b.h,
+              replacementText: b.replacementText,
+            ),
+          )
+          .toList(growable: false);
 
-          final rect = Rect.fromLTWH(b.dx * size.width, b.dy * size.height, b.w * size.width, b.h * size.height);
-
-          // تغطية المنطقة بالأبيض (إخفاء المحتوى القديم)
-          page.graphics.drawRectangle(
-            brush: sf.PdfSolidBrush(sf.PdfColor(255, 255, 255)),
-            bounds: rect,
-          );
-
-          if (b.replacementText.trim().isNotEmpty) {
-            final font = await ArabicFontLoader.loadSyncfusionFont((rect.height * 0.6).clamp(8, 24));
-            page.graphics.drawString(
-              b.replacementText,
-              font,
-              brush: sf.PdfSolidBrush(sf.PdfColor(0, 0, 0)),
-              bounds: rect,
-            );
-          }
-        }
-        savedBytes = await document.save();
-      } finally {
-        document.dispose();
-      }
+      final savedBytes = await SecureRedactionService.apply(
+        inputBytes: inputBytes,
+        regions: regions,
+      );
 
       final dir = await getApplicationDocumentsDirectory();
-      final originalName = _filePath!.split('/').last.replaceAll('.pdf', '');
-      final outPath = '${dir.path}/${originalName}_معدّل.pdf';
+      final originalName = _filePath!.split('/').last.replaceFirst(RegExp(r'\.pdf$', caseSensitive: false), '');
+      final outPath = await _uniqueOutputPath(dir.path, '${originalName}_محجوب_آمن', '.pdf');
       await File(outPath).writeAsBytes(savedBytes, flush: true);
+
+      // تحقق بنيوي بسيط: الملف الناتج يجب أن يكون موجودًا وغير فارغ قبل النجاح.
+      final outFile = File(outPath);
+      if (!await outFile.exists() || await outFile.length() == 0) {
+        throw StateError('فشل التحقق من ملف PDF الناتج.');
+      }
 
       if (!mounted) return;
       setState(() => _saving = false);
@@ -196,6 +191,16 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
+  }
+
+  Future<String> _uniqueOutputPath(String directory, String baseName, String extension) async {
+    var candidate = '$directory/$baseName$extension';
+    var suffix = 1;
+    while (await File(candidate).exists()) {
+      candidate = '$directory/$baseName ($suffix)$extension';
+      suffix++;
+    }
+    return candidate;
   }
 
   @override
