@@ -16,11 +16,17 @@ const double _mmToPoints = 72 / 25.4;
 
 class _EnvelopeLayout {
   final String code;
+
+  /// العرض الحقيقي للظرف عند وضعه أفقيًا.
   final double widthMm;
+
+  /// الارتفاع الحقيقي للظرف عند وضعه أفقيًا.
   final double heightMm;
+
   final double senderXmm;
   final double senderYmm;
   final double senderWidthMm;
+
   final double recipientXmm;
   final double recipientYmm;
   final double recipientWidthMm;
@@ -41,66 +47,105 @@ class _EnvelopeLayout {
 
   String get label =>
       '$code (${widthMm.toInt()}×${heightMm.toInt()} مم)';
+
+  /// المقاس الحقيقي للصفحة.
+  /// width دائمًا أكبر من height لأن الظرف عندنا أفقي.
+  PdfPageFormat get pageFormat {
+    final width = widthMm * _mmToPoints;
+    final height = heightMm * _mmToPoints;
+
+    return PdfPageFormat(
+      width,
+      height,
+      marginAll: 0,
+    );
+  }
 }
 
-/// كل الإحداثيات هنا بالميليمتر نسبةً إلى الورقة نفسها، وليس إلى Widget.
-/// هذه القائمة هي مصدر الحقيقة الوحيد للمعاينة والطباعة.
+/// ===============================================================
+/// تخطيط الأظرف
+///
+/// جميع المقاسات هنا معرفة بوضع LANDSCAPE.
+///
+/// مثال:
+/// DL = 220 × 110 mm
+///
+/// وليس:
+/// 110 × 220 mm
+///
+/// الإحداثيات أيضًا محسوبة بالنسبة لهذا الاتجاه.
+/// ===============================================================
 const List<_EnvelopeLayout> _envelopeLayouts = [
   _EnvelopeLayout(
     code: 'DL',
     widthMm: 220,
     heightMm: 110,
+
     senderXmm: 12,
     senderYmm: 9,
     senderWidthMm: 82,
+
+    // منطقة المستلم في النصف الأيمن تقريبًا.
     recipientXmm: 92,
-    recipientYmm: 43,
+    recipientYmm: 42,
     recipientWidthMm: 112,
-    recipientHeightMm: 43,
+    recipientHeightMm: 45,
   ),
+
   _EnvelopeLayout(
     code: 'C6',
     widthMm: 162,
     heightMm: 114,
+
     senderXmm: 10,
     senderYmm: 9,
     senderWidthMm: 65,
+
     recipientXmm: 67,
     recipientYmm: 45,
     recipientWidthMm: 85,
     recipientHeightMm: 45,
   ),
+
   _EnvelopeLayout(
     code: 'C6/C5',
     widthMm: 229,
     heightMm: 114,
+
     senderXmm: 12,
     senderYmm: 9,
     senderWidthMm: 85,
+
     recipientXmm: 96,
     recipientYmm: 45,
     recipientWidthMm: 117,
     recipientHeightMm: 45,
   ),
+
   _EnvelopeLayout(
     code: 'C5',
     widthMm: 229,
     heightMm: 162,
+
     senderXmm: 14,
     senderYmm: 12,
     senderWidthMm: 90,
+
     recipientXmm: 96,
     recipientYmm: 69,
     recipientWidthMm: 117,
     recipientHeightMm: 52,
   ),
+
   _EnvelopeLayout(
     code: 'C4',
     widthMm: 324,
     heightMm: 229,
+
     senderXmm: 16,
     senderYmm: 14,
     senderWidthMm: 120,
+
     recipientXmm: 136,
     recipientYmm: 98,
     recipientWidthMm: 166,
@@ -118,8 +163,11 @@ class EnvelopeScreen extends StatefulWidget {
 class _EnvelopeScreenState extends State<EnvelopeScreen> {
   _EnvelopeLayout _layout = _envelopeLayouts.first;
 
-  final _senderController = TextEditingController();
-  final _recipientController = TextEditingController();
+  final TextEditingController _senderController =
+      TextEditingController();
+
+  final TextEditingController _recipientController =
+      TextEditingController();
 
   bool _showSender = true;
   bool _printing = false;
@@ -136,12 +184,16 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
   @override
   void dispose() {
     _previewDebounce?.cancel();
+
     _senderController.dispose();
     _recipientController.dispose();
+
     super.dispose();
   }
 
-  bool _isRtlText(String text) => _rtlChars.hasMatch(text);
+  bool _isRtlText(String text) {
+    return _rtlChars.hasMatch(text);
+  }
 
   void _schedulePreview() {
     _previewDebounce?.cancel();
@@ -161,7 +213,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     required pw.Font font,
     required double fontSize,
   }) {
-    final rtl = _isRtlText(text);
+    final bool rtl = _isRtlText(text);
 
     return pw.Directionality(
       textDirection:
@@ -173,54 +225,81 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
         style: pw.TextStyle(
           font: font,
           fontSize: fontSize,
+          lineSpacing: 1.5,
         ),
       ),
     );
   }
 
-  /// يبني ملف الظرف كـ PDF.
+  /// =============================================================
+  /// مولد PDF الوحيد للمعاينة والطباعة.
   ///
-  /// مهم:
-  /// Printing و PdfPreview في النسخة الحالية يتوقعان Uint8List،
-  /// بينما pdf.Document.save() يعيد List<int>.
-  /// لذلك يتم التحويل صراحةً إلى Uint8List قبل إرجاع البيانات.
-  Future<Uint8List> _buildPdf() async {
-    // Snapshot يمنع تغير القيم في منتصف عملية بناء PDF.
-    final layout = _layout;
-    final sender = _senderController.text.trim();
-    final recipient = _recipientController.text.trim();
-    final showSender = _showSender;
-    final offsetX = _offsetXmm;
-    final offsetY = _offsetYmm;
+  /// لا يوجد هنا أي Portrait/Landscape conversion.
+  ///
+  /// المقاس يأتي مباشرة من EnvelopeLayout:
+  ///
+  /// DL:
+  /// width  = 220mm
+  /// height = 110mm
+  ///
+  /// لذلك الملف الناتج نفسه Landscape.
+  /// =============================================================
+  Future<Uint8List> _buildPdf({
+    _EnvelopeLayout? layoutOverride,
+  }) async {
+    final _EnvelopeLayout layout =
+        layoutOverride ?? _layout;
 
-    final arabicFont = await ArabicFontLoader.loadPwFont();
+    // Snapshot.
+    final String sender =
+        _senderController.text.trim();
 
-    final doc = pw.Document();
+    final String recipient =
+        _recipientController.text.trim();
 
-    final pageFormat = PdfPageFormat(
-      layout.widthMm * _mmToPoints,
-      layout.heightMm * _mmToPoints,
-      marginAll: 0,
-    );
+    final bool showSender = _showSender;
 
-    double mm(double value) => value * _mmToPoints;
+    final double offsetX = _offsetXmm;
+    final double offsetY = _offsetYmm;
+
+    final pw.Font arabicFont =
+        await ArabicFontLoader.loadPwFont();
+
+    final pw.Document doc = pw.Document();
+
+    final PdfPageFormat pageFormat =
+        layout.pageFormat;
+
+    double mm(double value) {
+      return value * _mmToPoints;
+    }
 
     doc.addPage(
       pw.Page(
         pageFormat: pageFormat,
+
+        // مهم جدًا:
+        // لا يوجد أي Margin يغير نظام الإحداثيات.
         margin: pw.EdgeInsets.zero,
+
         build: (_) {
           return pw.Stack(
             children: [
-              // -------------------------------------------------------
-              // عنوان المرسل
-              // -------------------------------------------------------
+              // =====================================================
+              // المرسل
+              // =====================================================
               if (showSender && sender.isNotEmpty)
                 pw.Positioned(
-                  left: mm(layout.senderXmm + offsetX),
-                  top: mm(layout.senderYmm + offsetY),
+                  left: mm(
+                    layout.senderXmm + offsetX,
+                  ),
+                  top: mm(
+                    layout.senderYmm + offsetY,
+                  ),
                   child: pw.SizedBox(
-                    width: mm(layout.senderWidthMm),
+                    width: mm(
+                      layout.senderWidthMm,
+                    ),
                     child: _addressText(
                       text: sender,
                       font: arabicFont,
@@ -229,16 +308,26 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
                 ),
 
-              // -------------------------------------------------------
-              // عنوان المستلم
-              // -------------------------------------------------------
+              // =====================================================
+              // المستلم
+              // =====================================================
               if (recipient.isNotEmpty)
                 pw.Positioned(
-                  left: mm(layout.recipientXmm + offsetX),
-                  top: mm(layout.recipientYmm + offsetY),
+                  left: mm(
+                    layout.recipientXmm +
+                        offsetX,
+                  ),
+                  top: mm(
+                    layout.recipientYmm +
+                        offsetY,
+                  ),
                   child: pw.SizedBox(
-                    width: mm(layout.recipientWidthMm),
-                    height: mm(layout.recipientHeightMm),
+                    width: mm(
+                      layout.recipientWidthMm,
+                    ),
+                    height: mm(
+                      layout.recipientHeightMm,
+                    ),
                     child: _addressText(
                       text: recipient,
                       font: arabicFont,
@@ -252,45 +341,73 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
       ),
     );
 
-    // pdf.save() => Future<List<int>>
-    // Printing/PdfPreview => Uint8List
-    final List<int> savedBytes = await doc.save();
+    final List<int> savedBytes =
+        await doc.save();
 
-    return Uint8List.fromList(savedBytes);
+    return Uint8List.fromList(
+      savedBytes,
+    );
   }
 
-  Future<void> _print(String errorPrefix) async {
+  /// =============================================================
+  /// الطباعة
+  /// =============================================================
+  Future<void> _print(
+    String errorPrefix,
+  ) async {
     if (_printing) {
       return;
     }
 
-    if (_recipientController.text.trim().isEmpty) {
+    if (_recipientController.text
+        .trim()
+        .isEmpty) {
       return;
     }
+
+    // Snapshot مهم جدًا.
+    //
+    // لو غيّر المستخدم المقاس أثناء فتح Dialog الطباعة
+    // لا نريد أن تتغير الصفحة أثناء العملية.
+    final _EnvelopeLayout printLayout =
+        _layout;
 
     setState(() {
       _printing = true;
     });
 
     try {
-      final Uint8List bytes = await _buildPdf();
-
       if (!mounted) {
         return;
       }
 
       await Printing.layoutPdf(
-        name: 'MN-Doc_Envelope_${_layout.code}.pdf',
-        onLayout: (_) async => bytes,
+        name:
+            'MN-Doc_Envelope_${printLayout.code}.pdf',
+
+        /// الـformat الذي يصل هنا يأتي من نظام الطباعة.
+        ///
+        /// نحن لا نستخدمه لتغيير مقاس الظرف.
+        /// نعيد دائمًا ملف PDF بالمقاس الحقيقي المختار.
+        onLayout: (
+          PdfPageFormat printerFormat,
+        ) async {
+          return _buildPdf(
+            layoutOverride: printLayout,
+          );
+        },
       );
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
-          content: Text('$errorPrefix $e'),
+          content: Text(
+            '$errorPrefix $e',
+          ),
         ),
       );
     } finally {
@@ -311,7 +428,8 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
       children: [
         Expanded(
           child: Text(
-            '$label: ${value.toStringAsFixed(1)} mm',
+            '$label: '
+            '${value.toStringAsFixed(1)} mm',
           ),
         ),
         Expanded(
@@ -321,7 +439,8 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
             min: -10,
             max: 10,
             divisions: 40,
-            label: '${value.toStringAsFixed(1)} mm',
+            label:
+                '${value.toStringAsFixed(1)} mm',
             onChanged: onChanged,
           ),
         ),
@@ -331,179 +450,287 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final settings = context.watch<AppSettingsController>();
-    final lang = settings.languageCode;
+    final settings =
+        context.watch<AppSettingsController>();
 
-    String tr(String key) => AppText.t(key, lang);
+    final lang =
+        settings.languageCode;
+
+    String tr(String key) {
+      return AppText.t(key, lang);
+    }
 
     return Directionality(
       textDirection:
-          settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+          settings.isRtl
+              ? TextDirection.rtl
+              : TextDirection.ltr,
+
       child: Scaffold(
         appBar: AppBar(
-          title: Text(tr('tool_envelope_t')),
+          title: Text(
+            tr('tool_envelope_t'),
+          ),
         ),
+
         body: Column(
           children: [
             Expanded(
               child: ListView(
                 padding:
-                    const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    const EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  8,
+                ),
+
                 children: [
-                  // ---------------------------------------------------
-                  // اختيار مقاس الظرف
-                  // ---------------------------------------------------
-                  DropdownButtonFormField<_EnvelopeLayout>(
+                  // =================================================
+                  // مقاس الظرف
+                  // =================================================
+                  DropdownButtonFormField<
+                      _EnvelopeLayout>(
                     initialValue: _layout,
-                    decoration: InputDecoration(
-                      labelText: tr('env_size_label'),
-                      border: const OutlineInputBorder(),
+
+                    decoration:
+                        InputDecoration(
+                      labelText:
+                          tr('env_size_label'),
+                      border:
+                          const OutlineInputBorder(),
                     ),
+
                     items: _envelopeLayouts
                         .map(
-                          (s) => DropdownMenuItem<
-                              _EnvelopeLayout>(
+                          (s) =>
+                              DropdownMenuItem<
+                                  _EnvelopeLayout>(
                             value: s,
-                            child: Text(s.label),
+                            child:
+                                Text(s.label),
                           ),
                         )
                         .toList(),
+
                     onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _layout = v;
-                        });
+                      if (v == null) {
+                        return;
                       }
+
+                      setState(() {
+                        _layout = v;
+
+                        // المعايرة تخص المقاس الحالي.
+                        // عند تغيير الظرف نبدأ من الصفر.
+                        _offsetXmm = 0;
+                        _offsetYmm = 0;
+                      });
                     },
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(
+                    height: 10,
+                  ),
 
-                  // ---------------------------------------------------
-                  // إظهار / إخفاء المرسل
-                  // ---------------------------------------------------
+                  // =================================================
+                  // المرسل
+                  // =================================================
                   SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding:
+                        EdgeInsets.zero,
+
                     value: _showSender,
+
                     onChanged: (v) {
                       setState(() {
                         _showSender = v;
                       });
                     },
-                    title: Text(tr('env_show_sender')),
-                    activeThumbColor: AppColors.primaryDark,
+
+                    title: Text(
+                      tr('env_show_sender'),
+                    ),
+
+                    activeThumbColor:
+                        AppColors.primaryDark,
                   ),
 
-                  // ---------------------------------------------------
-                  // عنوان المرسل
-                  // ---------------------------------------------------
                   if (_showSender)
                     TextField(
-                      controller: _senderController,
+                      controller:
+                          _senderController,
+
                       maxLines: 3,
+
                       textDirection:
-                          _isRtlText(_senderController.text)
-                              ? TextDirection.rtl
-                              : TextDirection.ltr,
-                      decoration: InputDecoration(
-                        labelText: tr('env_sender_label'),
-                        border: const OutlineInputBorder(),
+                          _isRtlText(
+                            _senderController
+                                .text,
+                          )
+                              ? TextDirection
+                                  .rtl
+                              : TextDirection
+                                  .ltr,
+
+                      decoration:
+                          InputDecoration(
+                        labelText:
+                            tr(
+                          'env_sender_label',
+                        ),
+                        border:
+                            const OutlineInputBorder(),
                       ),
+
                       onChanged: (_) {
                         _schedulePreview();
                       },
                     ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(
+                    height: 12,
+                  ),
 
-                  // ---------------------------------------------------
-                  // عنوان المستلم
-                  // ---------------------------------------------------
+                  // =================================================
+                  // المستلم
+                  // =================================================
                   TextField(
-                    controller: _recipientController,
+                    controller:
+                        _recipientController,
+
                     maxLines: 4,
+
                     textDirection:
-                        _isRtlText(_recipientController.text)
+                        _isRtlText(
+                          _recipientController
+                              .text,
+                        )
                             ? TextDirection.rtl
                             : TextDirection.ltr,
-                    decoration: InputDecoration(
-                      labelText: tr('env_recipient_label'),
-                      border: const OutlineInputBorder(),
+
+                    decoration:
+                        InputDecoration(
+                      labelText:
+                          tr(
+                        'env_recipient_label',
+                      ),
+                      border:
+                          const OutlineInputBorder(),
                     ),
+
                     onChanged: (_) {
                       _schedulePreview();
                     },
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(
+                    height: 12,
+                  ),
 
-                  // ---------------------------------------------------
-                  // معايرة الطابعة
-                  // ---------------------------------------------------
+                  // =================================================
+                  // المعايرة
+                  // =================================================
                   ExpansionTile(
-                    tilePadding: EdgeInsets.zero,
-                    title: Text(tr('env_calibration')),
-                    subtitle: Text(
-                      tr('env_calibration_note'),
+                    tilePadding:
+                        EdgeInsets.zero,
+
+                    title: Text(
+                      tr('env_calibration'),
                     ),
+
+                    subtitle: Text(
+                      tr(
+                        'env_calibration_note',
+                      ),
+                    ),
+
                     children: [
                       _calibrationSlider(
-                        label: tr('env_offset_x'),
-                        value: _offsetXmm,
+                        label:
+                            tr('env_offset_x'),
+                        value:
+                            _offsetXmm,
                         onChanged: (v) {
                           setState(() {
                             _offsetXmm = v;
                           });
                         },
                       ),
+
                       _calibrationSlider(
-                        label: tr('env_offset_y'),
-                        value: _offsetYmm,
+                        label:
+                            tr('env_offset_y'),
+                        value:
+                            _offsetYmm,
                         onChanged: (v) {
                           setState(() {
                             _offsetYmm = v;
                           });
                         },
                       ),
+
                       Align(
                         alignment:
-                            AlignmentDirectional.centerEnd,
-                        child: TextButton.icon(
+                            AlignmentDirectional
+                                .centerEnd,
+
+                        child:
+                            TextButton.icon(
                           onPressed: () {
                             setState(() {
                               _offsetXmm = 0;
                               _offsetYmm = 0;
                             });
                           },
+
                           icon: const Icon(
-                            Icons.restart_alt_rounded,
+                            Icons
+                                .restart_alt_rounded,
                           ),
+
                           label: Text(
-                            tr('env_reset_offsets'),
+                            tr(
+                              'env_reset_offsets',
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 8),
-
-                  Text(
-                    tr('env_preview_note'),
-                    style:
-                        Theme.of(context).textTheme.bodySmall,
+                  const SizedBox(
+                    height: 8,
                   ),
 
-                  const SizedBox(height: 8),
+                  Text(
+                    tr(
+                      'env_preview_note',
+                    ),
+                    style:
+                        Theme.of(context)
+                            .textTheme
+                            .bodySmall,
+                  ),
 
-                  // ---------------------------------------------------
-                  // المعاينة الحية
-                  // ---------------------------------------------------
+                  const SizedBox(
+                    height: 8,
+                  ),
+
+                  // =================================================
+                  // المعاينة
+                  //
+                  // هي نفس PDF المستخدم للطباعة.
+                  // =================================================
                   SizedBox(
                     height: 330,
+
                     child: ClipRRect(
                       borderRadius:
-                          BorderRadius.circular(12),
+                          BorderRadius.circular(
+                        12,
+                      ),
+
                       child: PdfPreview(
                         key: ValueKey(
                           '${_layout.code}|'
@@ -513,10 +740,24 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                           '${_senderController.text}|'
                           '${_recipientController.text}',
                         ),
-                        build: (_) => _buildPdf(),
+
+                        build: (
+                          PdfPageFormat _,
+                        ) {
+                          return _buildPdf(
+                            layoutOverride:
+                                _layout,
+                          );
+                        },
+
+                        initialPageFormat:
+                            _layout.pageFormat,
+
                         canDebug: false,
-                        canChangeOrientation: false,
-                        canChangePageFormat: false,
+                        canChangeOrientation:
+                            false,
+                        canChangePageFormat:
+                            false,
                         allowPrinting: false,
                         allowSharing: false,
                         useActions: false,
@@ -527,24 +768,36 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
               ),
             ),
 
-            // ---------------------------------------------------------
+            // =======================================================
             // زر الطباعة
-            // ---------------------------------------------------------
+            // =======================================================
             SafeArea(
               top: false,
+
               child: Padding(
                 padding:
-                    const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: ElevatedButton.icon(
+                    const EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  16,
+                ),
+
+                child:
+                    ElevatedButton.icon(
                   onPressed:
                       _printing ||
-                              _recipientController.text
+                              _recipientController
+                                  .text
                                   .trim()
                                   .isEmpty
                           ? null
                           : () => _print(
-                                tr('error_prefix'),
+                                tr(
+                                  'error_prefix',
+                                ),
                               ),
+
                   icon: _printing
                       ? const SizedBox(
                           width: 20,
@@ -557,14 +810,22 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                       : const Icon(
                           Icons.print_rounded,
                         ),
+
                   label: Text(
                     _printing
-                        ? tr('env_preparing_print')
-                        : tr('print_btn'),
+                        ? tr(
+                            'env_preparing_print',
+                          )
+                        : tr(
+                            'print_btn',
+                          ),
                   ),
-                  style: ElevatedButton.styleFrom(
+
+                  style:
+                      ElevatedButton.styleFrom(
                     backgroundColor:
                         AppColors.primaryDark,
+
                     minimumSize:
                         const Size(
                       double.infinity,
