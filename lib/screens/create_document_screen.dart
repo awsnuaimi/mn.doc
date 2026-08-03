@@ -33,19 +33,24 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
       final arabicFont = await ArabicFontLoader.loadPwFont();
       final doc = pw.Document();
       doc.addPage(
-        pw.Page(
+        pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          build: (context) => pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(
-                _titleController.text,
-                style: pw.TextStyle(font: arabicFont, fontSize: 22, fontWeight: pw.FontWeight.bold),
+          margin: const pw.EdgeInsets.all(40),
+          build: (context) => [
+            pw.Text(
+              _titleController.text,
+              style: pw.TextStyle(
+                font: arabicFont,
+                fontSize: 22,
+                fontWeight: pw.FontWeight.bold,
               ),
-              pw.SizedBox(height: 16),
-              pw.Text(_bodyController.text, style: pw.TextStyle(font: arabicFont, fontSize: 14)),
-            ],
-          ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text(
+              _bodyController.text,
+              style: pw.TextStyle(font: arabicFont, fontSize: 14),
+            ),
+          ],
         ),
       );
 
@@ -84,8 +89,8 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _saving = false);
       if (!mounted) return;
+      setState(() => _saving = false);
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('error_prefix', lang)} $e')));
     }

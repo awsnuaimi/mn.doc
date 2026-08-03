@@ -65,7 +65,10 @@ class _ComparePdfScreenState extends State<ComparePdfScreen> {
         textB = textB.split(RegExp(r'\s+')).take(_maxWords).join(' ');
       }
 
-      final diff = TextDiff.compare(textA, textB);
+      final rawDiff = await compute(textDiffIsolate, <String, String>{'old': textA, 'new': textB});
+      final diff = rawDiff
+          .map((item) => DiffToken(item[0] as String, DiffType.values[item[1] as int]))
+          .toList(growable: false);
 
       if (!mounted) return;
       setState(() {

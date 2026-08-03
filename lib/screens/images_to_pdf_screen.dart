@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -15,8 +14,8 @@ import 'pdf_editor_screen.dart';
 
 class _PickedImage {
   final String name;
-  final Uint8List bytes;
-  _PickedImage({required this.name, required this.bytes});
+  final String path;
+  const _PickedImage({required this.name, required this.path});
 }
 
 /// تحويل عدة صور إلى ملف PDF واحد (كل صورة = صفحة)، بترتيب قابل للتعديل.
@@ -32,29 +31,37 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
   bool _saving = false;
 
   Future<void> _addImages() async {
+    if (_saving) return;
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: true,
-      withData: true,
+      withData: false,
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
 
-    for (final f in result.files) {
-      if (f.bytes == null) continue;
-      setState(() => _images.add(_PickedImage(name: f.name, bytes: f.bytes!)));
-    }
+    final picked = result.files
+        .where((f) => f.path != null)
+        .map((f) => _PickedImage(name: f.name, path: f.path!))
+        .toList(growable: false);
+    if (picked.isEmpty) return;
+
+    setState(() => _images.addAll(picked));
   }
 
   Future<void> _exportToPdf() async {
     if (_images.isEmpty) return;
+    final images = List<_PickedImage>.of(_images);
     setState(() => _saving = true);
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
     try {
       final doc = pw.Document();
-      for (final img in _images) {
-        final image = pw.MemoryImage(img.bytes);
+      for (final img in images) {
+        // لا نحتفظ ببايتات كل الصور داخل State. نقرأ كل ملف فقط عند
+        // بناء الـPDF، مما يزيل النسخة الدائمة الكبيرة من RAM.
+        final imageBytes = await File(img.path).readAsBytes();
+        final image = pw.MemoryImage(imageBytes);
         doc.addPage(
           pw.Page(
             pageFormat: PdfPageFormat.a4,
@@ -75,7 +82,7 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
         context: context,
         builder: (_) => AlertDialog(
           title: Text(tr('scanner_success_title')),
-          content: Text('${tr('scanner_pagecount_label')} ${_images.length}'),
+          content: Text('${tr('scanner_pagecount_label')} ${images.length}'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('ed_close'))),
             ElevatedButton(
@@ -114,7 +121,7 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: ElevatedButton.icon(
-              onPressed: _addImages,
+              onPressed: _saving ? null : _addImages,
               icon: const Icon(Icons.add_photo_alternate_rounded),
               label: Text(tr('img2pdf_add_images')),
             ),
@@ -126,6 +133,7 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _images.length,
                     onReorder: (oldIndex, newIndex) {
+                      if (_saving) return;
                       setState(() {
                         if (newIndex > oldIndex) newIndex -= 1;
                         final item = _images.removeAt(oldIndex);
@@ -138,12 +146,12 @@ class _ImagesToPdfScreenState extends State<ImagesToPdfScreen> {
                         key: ValueKey('${img.name}_$index'),
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
-                          leading: ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.memory(img.bytes, width: 45, height: 55, fit: BoxFit.cover)),
+                          leading: ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.file(File(img.path), width: 45, height: 55, fit: BoxFit.cover, cacheWidth: 120)),
                           title: Text('${tr('scanner_page_label')} ${index + 1}'),
                           subtitle: Text(img.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                            onPressed: () => setState(() => _images.removeAt(index)),
+                            onPressed: _saving ? null : () => setState(() => _images.removeAt(index)),
                           ),
                         ),
                       );

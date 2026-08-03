@@ -17,7 +17,7 @@ class LocalSummarizer {
   // مستندات ضخمة جدًا (يُعالَج أول 300 ألف حرف فقط تقريبًا)
   static const int _maxInputLength = 300000;
 
-  static final Set<String> _stopWords = {
+  static final Set<String> _rawStopWords = {
     'من', 'إلى', 'على', 'في', 'عن', 'مع', 'هذا', 'هذه', 'ذلك', 'التي', 'الذي',
     'و', 'أو', 'ثم', 'كما', 'قد', 'لا', 'لم', 'لن', 'ما', 'هو', 'هي', 'كان',
     'كانت', 'إن', 'أن', 'هناك', 'أي', 'أيضا', 'أيضًا', 'إذ', 'بعد', 'قبل',
@@ -27,6 +27,11 @@ class LocalSummarizer {
     'was', 'were', 'for', 'with', 'that', 'this', 'it', 'as', 'by', 'at',
     'be', 'been', 'has', 'have', 'had', 'not', 'but', 'if', 'so', 'than',
   };
+
+  static late final Set<String> _stopWords = _rawStopWords
+      .map((word) => _normalizeArabic(word.toLowerCase()))
+      .toSet();
+
 
   /// يطبّع الحروف العربية المختلفة الأشكال لنفس الحرف الأساسي (مثل
   /// أ/إ/آ/ٱ → ا)، ويزيل التشكيل — بدونها تُحسب كلمات متطابقة معنويًا
@@ -40,7 +45,7 @@ class LocalSummarizer {
 
   /// يلخّص [text] ويعيد أهم [sentenceCount] جملة (افتراضيًا 5).
   static String summarize(String text, {int sentenceCount = 5}) {
-    final limitedText = text.length > _maxInputLength ? text.substring(0, _maxInputLength) : text;
+    final limitedText = _representativeInput(text);
 
     final sentences = limitedText
         .split(_sentenceSplitter)
@@ -81,4 +86,22 @@ class LocalSummarizer {
 
     return selected.map((i) => sentences[i]).join(' ');
   }
+
+  /// عند المستندات الضخمة نأخذ عينة ممثلة من البداية والوسط والنهاية بدل
+  /// قص النهاية بالكامل. هذا يحافظ على المقدمة والمحتوى الوسطي والخلاصة
+  /// ضمن المادة التي تدخل في التلخيص المحلي.
+  static String _representativeInput(String text) {
+    if (text.length <= _maxInputLength) return text;
+
+    final chunk = _maxInputLength ~/ 3;
+    final middleStart = ((text.length - chunk) ~/ 2)
+        .clamp(0, text.length - chunk)
+        .toInt();
+    final endStart = text.length - chunk;
+
+    return '${text.substring(0, chunk)}\n'
+        '${text.substring(middleStart, middleStart + chunk)}\n'
+        '${text.substring(endStart)}';
+  }
+
 }
