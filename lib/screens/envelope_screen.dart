@@ -22,6 +22,7 @@ class _EnvelopeLayout {
   final double senderXmm;
   final double senderYmm;
   final double senderWidthMm;
+  final double senderHeightMm;
 
   final double recipientXmm;
   final double recipientYmm;
@@ -35,6 +36,7 @@ class _EnvelopeLayout {
     required this.senderXmm,
     required this.senderYmm,
     required this.senderWidthMm,
+    required this.senderHeightMm,
     required this.recipientXmm,
     required this.recipientYmm,
     required this.recipientWidthMm,
@@ -44,10 +46,6 @@ class _EnvelopeLayout {
   String get label =>
       '$code (${widthMm.toInt()}×${heightMm.toInt()} مم)';
 
-  /// المقاس الفيزيائي الحقيقي للظرف.
-  ///
-  /// مثال DL:
-  /// 220mm عرض × 110mm ارتفاع.
   PdfPageFormat get pageFormat {
     return PdfPageFormat(
       widthMm * _mmToPoints,
@@ -57,78 +55,79 @@ class _EnvelopeLayout {
   }
 }
 
-/// ===============================================================
-/// تخطيطات الأظرف.
+/// جميع المقاسات معرفة بوضع أفقي.
 ///
-/// جميع الأظرف معرفة هنا بالشكل الأفقي المطلوب:
-///
-/// width > height
-///
-/// وهذه البيانات هي مصدر الحقيقة الوحيد لكل من:
-/// - المعاينة
-/// - إنشاء PDF
-/// - مهمة الطباعة
-/// ===============================================================
+/// القيم الافتراضية موضوعة داخل منطقة آمنة نسبيًا بعيدًا عن حواف الظرف.
+/// يمكن بعد ذلك معايرة كل عنوان بصورة مستقلة.
 const List<_EnvelopeLayout> _envelopeLayouts = [
   _EnvelopeLayout(
     code: 'DL',
     widthMm: 220,
     heightMm: 110,
-    senderXmm: 12,
-    senderYmm: 9,
-    senderWidthMm: 82,
-    recipientXmm: 92,
-    recipientYmm: 42,
-    recipientWidthMm: 112,
-    recipientHeightMm: 45,
+
+    // المرسل: أعلى اليسار لكن بعيد عن حافة الطابعة.
+    senderXmm: 20,
+    senderYmm: 16,
+    senderWidthMm: 78,
+    senderHeightMm: 24,
+
+    // المستلم: يمين/أسفل الوسط.
+    recipientXmm: 105,
+    recipientYmm: 53,
+    recipientWidthMm: 95,
+    recipientHeightMm: 38,
   ),
   _EnvelopeLayout(
     code: 'C6',
     widthMm: 162,
     heightMm: 114,
-    senderXmm: 10,
-    senderYmm: 9,
-    senderWidthMm: 65,
-    recipientXmm: 67,
-    recipientYmm: 45,
-    recipientWidthMm: 85,
-    recipientHeightMm: 45,
+    senderXmm: 16,
+    senderYmm: 16,
+    senderWidthMm: 62,
+    senderHeightMm: 24,
+    recipientXmm: 72,
+    recipientYmm: 55,
+    recipientWidthMm: 76,
+    recipientHeightMm: 38,
   ),
   _EnvelopeLayout(
     code: 'C6/C5',
     widthMm: 229,
     heightMm: 114,
-    senderXmm: 12,
-    senderYmm: 9,
-    senderWidthMm: 85,
-    recipientXmm: 96,
-    recipientYmm: 45,
-    recipientWidthMm: 117,
-    recipientHeightMm: 45,
+    senderXmm: 20,
+    senderYmm: 16,
+    senderWidthMm: 82,
+    senderHeightMm: 24,
+    recipientXmm: 108,
+    recipientYmm: 55,
+    recipientWidthMm: 100,
+    recipientHeightMm: 38,
   ),
   _EnvelopeLayout(
     code: 'C5',
     widthMm: 229,
     heightMm: 162,
-    senderXmm: 14,
-    senderYmm: 12,
-    senderWidthMm: 90,
-    recipientXmm: 96,
-    recipientYmm: 69,
-    recipientWidthMm: 117,
-    recipientHeightMm: 52,
+    senderXmm: 20,
+    senderYmm: 18,
+    senderWidthMm: 85,
+    senderHeightMm: 28,
+    recipientXmm: 108,
+    recipientYmm: 78,
+    recipientWidthMm: 100,
+    recipientHeightMm: 46,
   ),
   _EnvelopeLayout(
     code: 'C4',
     widthMm: 324,
     heightMm: 229,
-    senderXmm: 16,
-    senderYmm: 14,
-    senderWidthMm: 120,
-    recipientXmm: 136,
-    recipientYmm: 98,
-    recipientWidthMm: 166,
-    recipientHeightMm: 65,
+    senderXmm: 24,
+    senderYmm: 22,
+    senderWidthMm: 115,
+    senderHeightMm: 32,
+    recipientXmm: 150,
+    recipientYmm: 112,
+    recipientWidthMm: 145,
+    recipientHeightMm: 58,
   ),
 ];
 
@@ -151,8 +150,15 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
   bool _showSender = true;
   bool _printing = false;
 
-  double _offsetXmm = 0;
-  double _offsetYmm = 0;
+  // ================================================================
+  // معايرة مستقلة لكل عنوان.
+  // ================================================================
+
+  double _senderOffsetXmm = 0;
+  double _senderOffsetYmm = 0;
+
+  double _recipientOffsetXmm = 0;
+  double _recipientOffsetYmm = 0;
 
   Timer? _previewDebounce;
 
@@ -187,6 +193,16 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     );
   }
 
+  void _resetCalibration() {
+    setState(() {
+      _senderOffsetXmm = 0;
+      _senderOffsetYmm = 0;
+
+      _recipientOffsetXmm = 0;
+      _recipientOffsetYmm = 0;
+    });
+  }
+
   pw.Widget _addressText({
     required String text,
     required pw.Font font,
@@ -210,23 +226,20 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     );
   }
 
-  /// =============================================================
-  /// إنشاء PDF الظرف.
+  /// ===============================================================
+  /// PDF النهائي.
   ///
-  /// نفس الدالة تستخدم للمعاينة والطباعة.
-  ///
-  /// لا نقوم هنا بتدوير الصفحة.
-  /// المقاس نفسه محدد أصلًا أفقيًا:
-  ///
-  /// DL = 220 × 110 mm
-  /// =============================================================
+  /// مهم:
+  /// لا نرسم أي حدود أو علامات معايرة هنا.
+  /// هذا الملف هو الذي يذهب فعليًا إلى الطابعة.
+  /// ===============================================================
   Future<Uint8List> _buildPdf({
     _EnvelopeLayout? layoutOverride,
   }) async {
     final _EnvelopeLayout layout =
         layoutOverride ?? _layout;
 
-    // Snapshot للقيم الحالية.
+    // Snapshot.
     final String sender =
         _senderController.text.trim();
 
@@ -235,16 +248,23 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
 
     final bool showSender = _showSender;
 
-    final double offsetX = _offsetXmm;
-    final double offsetY = _offsetYmm;
+    final double senderOffsetX =
+        _senderOffsetXmm;
+
+    final double senderOffsetY =
+        _senderOffsetYmm;
+
+    final double recipientOffsetX =
+        _recipientOffsetXmm;
+
+    final double recipientOffsetY =
+        _recipientOffsetYmm;
 
     final pw.Font arabicFont =
         await ArabicFontLoader.loadPwFont();
 
-    final pw.Document doc = pw.Document();
-
-    final PdfPageFormat pageFormat =
-        layout.pageFormat;
+    final pw.Document doc =
+        pw.Document();
 
     double mm(double value) {
       return value * _mmToPoints;
@@ -252,26 +272,29 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
 
     doc.addPage(
       pw.Page(
-        pageFormat: pageFormat,
+        pageFormat: layout.pageFormat,
         margin: pw.EdgeInsets.zero,
         build: (_) {
           return pw.Stack(
             children: [
               // =====================================================
-              // عنوان المرسل
+              // المرسل
               // =====================================================
               if (showSender && sender.isNotEmpty)
                 pw.Positioned(
                   left: mm(
-                    layout.senderXmm + offsetX,
+                    layout.senderXmm +
+                        senderOffsetX,
                   ),
                   top: mm(
-                    layout.senderYmm + offsetY,
+                    layout.senderYmm +
+                        senderOffsetY,
                   ),
                   child: pw.SizedBox(
-                    width: mm(
-                      layout.senderWidthMm,
-                    ),
+                    width:
+                        mm(layout.senderWidthMm),
+                    height:
+                        mm(layout.senderHeightMm),
                     child: _addressText(
                       text: sender,
                       font: arabicFont,
@@ -281,15 +304,17 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                 ),
 
               // =====================================================
-              // عنوان المستلم
+              // المستلم
               // =====================================================
               if (recipient.isNotEmpty)
                 pw.Positioned(
                   left: mm(
-                    layout.recipientXmm + offsetX,
+                    layout.recipientXmm +
+                        recipientOffsetX,
                   ),
                   top: mm(
-                    layout.recipientYmm + offsetY,
+                    layout.recipientYmm +
+                        recipientOffsetY,
                   ),
                   child: pw.SizedBox(
                     width: mm(
@@ -314,21 +339,16 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     final List<int> savedBytes =
         await doc.save();
 
-    return Uint8List.fromList(savedBytes);
+    return Uint8List.fromList(
+      savedBytes,
+    );
   }
 
-  /// =============================================================
-  /// طباعة الظرف.
+  /// ===============================================================
+  /// الطباعة.
   ///
-  /// هنا التعديل المهم:
-  ///
-  /// 1. format = المقاس الحقيقي للظرف.
-  /// 2. dynamicLayout = false
-  /// 3. forceCustomPrintPaper = true
-  ///
-  /// الهدف هو عدم ترك مهمة الطباعة تبدأ بمقاس ورق عام ثم
-  /// تحاول إعادة تفسير ملف الظرف.
-  /// =============================================================
+  /// هذا الجزء يحافظ على الإصلاح الذي جعل الظرف يطبع أفقيًا.
+  /// ===============================================================
   Future<void> _print(
     String errorPrefix,
   ) async {
@@ -336,11 +356,12 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
       return;
     }
 
-    if (_recipientController.text.trim().isEmpty) {
+    if (_recipientController.text
+        .trim()
+        .isEmpty) {
       return;
     }
 
-    // Snapshot مهم حتى لا يتغير المقاس أثناء فتح نافذة الطباعة.
     final _EnvelopeLayout printLayout =
         _layout;
 
@@ -356,17 +377,12 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
         name:
             'MN-Doc_Envelope_${printLayout.code}.pdf',
 
-        // -----------------------------------------------------------
-        // مهم جدًا:
-        // نفرض على Print Job نفس المقاس الفيزيائي للظرف.
-        // -----------------------------------------------------------
         format: envelopeFormat,
 
-        // لا نسمح بإعادة بناء المستند وفق مقاس مختلف
-        // ترسله نافذة الطباعة.
+        // مهم:
+        // هذان الخياران هما اللذان نحافظ عليهما
+        // لأنهما نجحا في تثبيت الطباعة العرضية.
         dynamicLayout: false,
-
-        // طلب استخدام المقاس المخصص للورقة.
         forceCustomPrintPaper: true,
 
         onLayout: (_) async {
@@ -380,7 +396,8 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
           content: Text(
             '$errorPrefix $e',
@@ -396,31 +413,249 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     }
   }
 
-  Widget _calibrationSlider({
+  /// Slider بدقة نصف ميليمتر.
+  Widget _positionSlider({
     required String label,
     required double value,
     required ValueChanged<double> onChanged,
   }) {
-    return Row(
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Text(
-            '$label: ${value.toStringAsFixed(1)} mm',
+        Text(
+          '$label: ${value >= 0 ? '+' : ''}'
+          '${value.toStringAsFixed(1)} mm',
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        Expanded(
-          flex: 2,
-          child: Slider(
-            value: value,
-            min: -10,
-            max: 10,
-            divisions: 40,
-            label:
-                '${value.toStringAsFixed(1)} mm',
-            onChanged: onChanged,
-          ),
+        Slider(
+          value: value,
+          min: -30,
+          max: 30,
+
+          // 60mm / 0.5mm = 120 خطوة.
+          divisions: 120,
+
+          label:
+              '${value.toStringAsFixed(1)} mm',
+
+          onChanged: onChanged,
         ),
       ],
+    );
+  }
+
+  /// ===============================================================
+  /// معاينة هندسية خاصة بالتطبيق.
+  ///
+  /// هذه ليست PDF المطبوعة.
+  ///
+  /// الحدود الملونة هنا إرشادية فقط ولا تصل إلى الطابعة.
+  /// ===============================================================
+  Widget _buildEnvelopeGuidePreview() {
+    final layout = _layout;
+
+    final senderX =
+        layout.senderXmm +
+            _senderOffsetXmm;
+
+    final senderY =
+        layout.senderYmm +
+            _senderOffsetYmm;
+
+    final recipientX =
+        layout.recipientXmm +
+            _recipientOffsetXmm;
+
+    final recipientY =
+        layout.recipientYmm +
+            _recipientOffsetYmm;
+
+    return LayoutBuilder(
+      builder: (
+        context,
+        constraints,
+      ) {
+        final double availableWidth =
+            constraints.maxWidth;
+
+        final double scale =
+            availableWidth /
+                layout.widthMm;
+
+        final double previewHeight =
+            layout.heightMm * scale;
+
+        double px(double mm) {
+          return mm * scale;
+        }
+
+        return Center(
+          child: SizedBox(
+            width: availableWidth,
+            height: previewHeight,
+            child: Stack(
+              children: [
+                // الظرف.
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.black26,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // منطقة آمنة تقريبية.
+                Positioned(
+                  left: px(8),
+                  top: px(8),
+                  right: px(8),
+                  bottom: px(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color:
+                            Colors.grey.shade300,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ---------------------------------------------------
+                // المرسل.
+                // ---------------------------------------------------
+                if (_showSender)
+                  Positioned(
+                    left: px(senderX),
+                    top: px(senderY),
+                    width: px(
+                      layout.senderWidthMm,
+                    ),
+                    height: px(
+                      layout.senderHeightMm,
+                    ),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue
+                            .withOpacity(0.04),
+                        border: Border.all(
+                          color: Colors.blue
+                              .withOpacity(0.65),
+                        ),
+                      ),
+                      child: Align(
+                        alignment:
+                            _isRtlText(
+                              _senderController
+                                  .text,
+                            )
+                                ? Alignment
+                                    .topRight
+                                : Alignment
+                                    .topLeft,
+                        child: Text(
+                          _senderController
+                                  .text
+                                  .trim()
+                                  .isEmpty
+                              ? 'Sender'
+                              : _senderController
+                                  .text
+                                  .trim(),
+                          textDirection:
+                              _isRtlText(
+                                _senderController
+                                    .text,
+                              )
+                                  ? TextDirection
+                                      .rtl
+                                  : TextDirection
+                                      .ltr,
+                          overflow:
+                              TextOverflow.clip,
+                          style:
+                              const TextStyle(
+                            fontSize: 9,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // ---------------------------------------------------
+                // المستلم.
+                // ---------------------------------------------------
+                Positioned(
+                  left: px(recipientX),
+                  top: px(recipientY),
+                  width: px(
+                    layout.recipientWidthMm,
+                  ),
+                  height: px(
+                    layout.recipientHeightMm,
+                  ),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: Colors.green
+                          .withOpacity(0.04),
+                      border: Border.all(
+                        color: Colors.green
+                            .withOpacity(0.70),
+                      ),
+                    ),
+                    child: Align(
+                      alignment:
+                          _isRtlText(
+                            _recipientController
+                                .text,
+                          )
+                              ? Alignment.topRight
+                              : Alignment.topLeft,
+                      child: Text(
+                        _recipientController
+                                .text
+                                .trim()
+                                .isEmpty
+                            ? 'Recipient'
+                            : _recipientController
+                                .text
+                                .trim(),
+                        textDirection:
+                            _isRtlText(
+                              _recipientController
+                                  .text,
+                            )
+                                ? TextDirection.rtl
+                                : TextDirection.ltr,
+                        overflow:
+                            TextOverflow.clip,
+                        style:
+                            const TextStyle(
+                          fontSize: 11,
+                          fontWeight:
+                              FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -433,7 +668,10 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
         settings.languageCode;
 
     String tr(String key) {
-      return AppText.t(key, lang);
+      return AppText.t(
+        key,
+        lang,
+      );
     }
 
     return Directionality(
@@ -460,7 +698,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                 ),
                 children: [
                   // =================================================
-                  // اختيار مقاس الظرف
+                  // المقاس.
                   // =================================================
                   DropdownButtonFormField<
                       _EnvelopeLayout>(
@@ -474,26 +712,32 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                     ),
                     items: _envelopeLayouts
                         .map(
-                          (s) =>
+                          (layout) =>
                               DropdownMenuItem<
                                   _EnvelopeLayout>(
-                            value: s,
-                            child:
-                                Text(s.label),
+                            value: layout,
+                            child: Text(
+                              layout.label,
+                            ),
                           ),
                         )
                         .toList(),
-                    onChanged: (v) {
-                      if (v == null) {
+                    onChanged: (value) {
+                      if (value == null) {
                         return;
                       }
 
                       setState(() {
-                        _layout = v;
+                        _layout = value;
 
-                        // كل مقاس يبدأ بمعايرة صفرية.
-                        _offsetXmm = 0;
-                        _offsetYmm = 0;
+                        // كل مقاس له نقطة بداية مستقلة.
+                        _senderOffsetXmm = 0;
+                        _senderOffsetYmm = 0;
+
+                        _recipientOffsetXmm =
+                            0;
+                        _recipientOffsetYmm =
+                            0;
                       });
                     },
                   ),
@@ -502,16 +746,13 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                     height: 10,
                   ),
 
-                  // =================================================
-                  // إظهار عنوان المرسل
-                  // =================================================
                   SwitchListTile(
                     contentPadding:
                         EdgeInsets.zero,
                     value: _showSender,
-                    onChanged: (v) {
+                    onChanged: (value) {
                       setState(() {
-                        _showSender = v;
+                        _showSender = value;
                       });
                     },
                     title: Text(
@@ -521,9 +762,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                         AppColors.primaryDark,
                   ),
 
-                  // =================================================
-                  // عنوان المرسل
-                  // =================================================
                   if (_showSender)
                     TextField(
                       controller:
@@ -556,9 +794,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                     height: 12,
                   ),
 
-                  // =================================================
-                  // عنوان المستلم
-                  // =================================================
                   TextField(
                     controller:
                         _recipientController,
@@ -585,70 +820,142 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
 
                   const SizedBox(
-                    height: 12,
+                    height: 16,
                   ),
 
                   // =================================================
-                  // معايرة موضع الطباعة
+                  // معاينة هندسية.
+                  // =================================================
+                  Text(
+                    'معاينة موضع العناوين',
+                    style:
+                        Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                  ),
+
+                  const SizedBox(
+                    height: 8,
+                  ),
+
+                  _buildEnvelopeGuidePreview(),
+
+                  const SizedBox(
+                    height: 16,
+                  ),
+
+                  // =================================================
+                  // معايرة المرسل.
+                  // =================================================
+                  if (_showSender)
+                    ExpansionTile(
+                      tilePadding:
+                          EdgeInsets.zero,
+                      initiallyExpanded: false,
+                      leading: const Icon(
+                        Icons
+                            .person_outline_rounded,
+                      ),
+                      title: const Text(
+                        'موضع المرسل',
+                      ),
+                      subtitle: const Text(
+                        'تحريك عنوان المرسل بشكل مستقل',
+                      ),
+                      children: [
+                        _positionSlider(
+                          label:
+                              'أفقي X',
+                          value:
+                              _senderOffsetXmm,
+                          onChanged: (value) {
+                            setState(() {
+                              _senderOffsetXmm =
+                                  value;
+                            });
+                          },
+                        ),
+                        _positionSlider(
+                          label:
+                              'عمودي Y',
+                          value:
+                              _senderOffsetYmm,
+                          onChanged: (value) {
+                            setState(() {
+                              _senderOffsetYmm =
+                                  value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+
+                  // =================================================
+                  // معايرة المستلم.
                   // =================================================
                   ExpansionTile(
                     tilePadding:
                         EdgeInsets.zero,
-                    title: Text(
-                      tr('env_calibration'),
+                    initiallyExpanded: false,
+                    leading: const Icon(
+                      Icons
+                          .location_on_outlined,
                     ),
-                    subtitle: Text(
-                      tr(
-                        'env_calibration_note',
-                      ),
+                    title: const Text(
+                      'موضع المستلم',
+                    ),
+                    subtitle: const Text(
+                      'تحريك عنوان المستلم بشكل مستقل',
                     ),
                     children: [
-                      _calibrationSlider(
+                      _positionSlider(
                         label:
-                            tr('env_offset_x'),
+                            'أفقي X',
                         value:
-                            _offsetXmm,
-                        onChanged: (v) {
+                            _recipientOffsetXmm,
+                        onChanged: (value) {
                           setState(() {
-                            _offsetXmm = v;
+                            _recipientOffsetXmm =
+                                value;
                           });
                         },
                       ),
-                      _calibrationSlider(
+                      _positionSlider(
                         label:
-                            tr('env_offset_y'),
+                            'عمودي Y',
                         value:
-                            _offsetYmm,
-                        onChanged: (v) {
+                            _recipientOffsetYmm,
+                        onChanged: (value) {
                           setState(() {
-                            _offsetYmm = v;
+                            _recipientOffsetYmm =
+                                value;
                           });
                         },
-                      ),
-                      Align(
-                        alignment:
-                            AlignmentDirectional
-                                .centerEnd,
-                        child:
-                            TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _offsetXmm = 0;
-                              _offsetYmm = 0;
-                            });
-                          },
-                          icon: const Icon(
-                            Icons
-                                .restart_alt_rounded,
-                          ),
-                          label: Text(
-                            tr(
-                              'env_reset_offsets',
-                            ),
-                          ),
-                        ),
                       ),
                     ],
+                  ),
+
+                  Align(
+                    alignment:
+                        AlignmentDirectional
+                            .centerEnd,
+                    child: TextButton.icon(
+                      onPressed:
+                          _resetCalibration,
+                      icon: const Icon(
+                        Icons
+                            .restart_alt_rounded,
+                      ),
+                      label: Text(
+                        tr(
+                          'env_reset_offsets',
+                        ),
+                      ),
+                    ),
                   ),
 
                   const SizedBox(
@@ -656,9 +963,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
 
                   Text(
-                    tr(
-                      'env_preview_note',
-                    ),
+                    tr('env_preview_note'),
                     style:
                         Theme.of(context)
                             .textTheme
@@ -670,7 +975,9 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                   ),
 
                   // =================================================
-                  // المعاينة الحية
+                  // المعاينة الحقيقية للـPDF.
+                  //
+                  // لا تحتوي الحدود الإرشادية الموجودة أعلاه.
                   // =================================================
                   SizedBox(
                     height: 330,
@@ -683,24 +990,21 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                         key: ValueKey(
                           '${_layout.code}|'
                           '$_showSender|'
-                          '$_offsetXmm|'
-                          '$_offsetYmm|'
+                          '$_senderOffsetXmm|'
+                          '$_senderOffsetYmm|'
+                          '$_recipientOffsetXmm|'
+                          '$_recipientOffsetYmm|'
                           '${_senderController.text}|'
                           '${_recipientController.text}',
                         ),
-
-                        // نفس مولد PDF المستخدم في الطباعة.
                         build: (_) {
                           return _buildPdf(
                             layoutOverride:
                                 _layout,
                           );
                         },
-
-                        // المقاس الأولي للمعاينة مطابق تمامًا للظرف.
                         initialPageFormat:
                             _layout.pageFormat,
-
                         canDebug: false,
                         canChangeOrientation:
                             false,
@@ -716,9 +1020,6 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
               ),
             ),
 
-            // =======================================================
-            // زر الطباعة
-            // =======================================================
             SafeArea(
               top: false,
               child: Padding(
