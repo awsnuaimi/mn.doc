@@ -150,9 +150,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   // ------- تتبّع التعديلات غير المحفوظة -------
   bool _hasUnsavedChanges = false;
-  _TextAnnotation? _nudgingAnnotation; // النص الجاري ضبط موضعه حاليًا بأسهم الاتجاهات
-  _TextAnnotation? _nudgeSnapshot; // نسخة من موضعه الأصلي قبل بدء الضبط — لدعم "إلغاء" والرجوع لنفس المكان
-  static const double _nudgeStep = 3.0; // مقدار الحركة بكل ضغطة سهم (نقاط PDF مباشرة — دقة كاملة بدون أي تحويل)
+  // ------- تحريك النص بالسحب المباشر -------
+  _TextAnnotation? _movingAnnotation;
+  _TextAnnotation? _moveSnapshot;
+  List<_TextAnnotation>? _moveUndoSnapshot;
+  Timer? _moveHoldTimer;
+  int? _movePointerId;
+  Offset? _lastMovePointerPosition;
+  bool _moveGestureArmed = false;
+  static const Duration _moveHoldDuration = Duration(seconds: 3);
 
   // ------- البحث داخل PDF (مع Debounce) -------
   bool _searchVisible = false;
@@ -168,6 +174,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _searchResult.removeListener(_onSearchResultChanged);
     _searchDebounce?.cancel();
     _autoSaveDebounce?.cancel();
+    _moveHoldTimer?.cancel();
     super.dispose();
   }
 
@@ -989,45 +996,29 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 style: const TextStyle(fontSize: 12),
               ),
             ),
-          if (_nudgingAnnotation != null)
+          if (_movingAnnotation != null)
             Container(
               width: double.infinity,
               color: AppColors.primaryDark.withOpacity(0.15),
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
               child: Row(
                 children: [
-                  Expanded(
+                  const Expanded(
                     child: Text(
-                      tr('ed_nudge_hint'),
-                      style: const TextStyle(fontSize: 12),
+                      'اسحب النص بإصبعك إلى المكان المطلوب',
+                      style: TextStyle(fontSize: 12),
                     ),
                   ),
                   TextButton(
-                    onPressed: () {
-                      // نرجّع النص لمكانه الأصلي قبل بدء الضبط بالكامل.
-                      final ann = _nudgingAnnotation!;
-                      final snap = _nudgeSnapshot;
-                      setState(() {
-                        if (snap != null) {
-                          ann.pageNumber = snap.pageNumber;
-                          ann.dx = snap.dx;
-                          ann.dy = snap.dy;
-                        }
-                        _nudgingAnnotation = null;
-                        _nudgeSnapshot = null;
-                      });
-                    },
+                    onPressed: _cancelTextMove,
                     child: Text(tr('cancel'), style: const TextStyle(fontSize: 12)),
                   ),
                   TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _nudgingAnnotation = null;
-                        _nudgeSnapshot = null;
-                      });
-                      _scheduleAutoSave();
-                    },
-                    child: Text(tr('ed_nudge_done'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: _confirmTextMove,
+                    child: Text(
+                      tr('ed_nudge_done'),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),
@@ -1131,82 +1122,232 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     if (transform == null) return const SizedBox.shrink();
 
     final screenPoint = transform.pdfToViewer(Offset(ann.dx, ann.dy));
-    final isNudging = identical(ann, _nudgingAnnotation);
-
-    // حجم الخط في الـoverlay مشتق من حجم الخط الحقيقي في PDF ومن مقياس
-    // الصفحة نفسه؛ بذلك تتطابق نقطة البداية والحجم بصريًا قدر الإمكان.
+    final isMoving = identical(ann, _movingAnnotation);
     final previewFontSize = ann.fontSize * transform.scale;
+
+    // نعطي النص hit-area معقولة من دون تخزين أي إحداثيات شاشة في البيانات.
+    // أثناء السحب تتغير ann.dx/ann.dy مباشرة بنقاط PDF، لذلك المكان الظاهر
+    // والمكان الذي سيُحفظ لاحقًا هما الشيء نفسه حرفيًا.
+    final estimatedWidth = _estimateTextWidth(ann, transform.scale);
+    final estimatedHeight = _estimateTextHeight(ann, transform.scale);
 
     return Positioned(
       left: screenPoint.dx,
       top: screenPoint.dy,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () => _showAnnotationActionSheet(ann),
-            child: Container(
-              padding: EdgeInsets.zero,
-              decoration: BoxDecoration(
-                border: isNudging ? Border.all(color: AppColors.accent, width: 2) : null,
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Text(
-                ann.text,
-                textAlign: ann.alignment,
-                style: TextStyle(
-                  fontSize: previewFontSize,
-                  height: 1.3,
-                  color: ann.color,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) => _onTextPointerDown(ann, event),
+        onPointerMove: (event) => _onTextPointerMove(ann, event),
+        onPointerUp: (event) => _onTextPointerUp(ann, event),
+        onPointerCancel: (event) => _onTextPointerCancel(ann, event),
+        child: SizedBox(
+          width: estimatedWidth,
+          height: estimatedHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: isMoving ? null : () => _showAnnotationActionSheet(ann),
+                  child: Container(
+                    alignment: _alignmentFor(ann.alignment),
+                    padding: isMoving ? const EdgeInsets.symmetric(horizontal: 4, vertical: 2) : EdgeInsets.zero,
+                    decoration: BoxDecoration(
+                      border: isMoving ? Border.all(color: AppColors.accent, width: 2) : null,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      ann.text,
+                      textAlign: ann.alignment,
+                      maxLines: 3,
+                      overflow: TextOverflow.visible,
+                      style: TextStyle(
+                        fontSize: previewFontSize,
+                        height: 1.3,
+                        color: ann.color,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              if (isMoving) ..._buildMoveDirectionIndicators(),
+            ],
           ),
-          if (isNudging) _buildNudgeDPad(ann),
-        ],
+        ),
       ),
     );
   }
 
-  /// لوحة أسهم اتجاهات بسيطة لتحريك النص بدقة كاملة: كل ضغطة سهم تحرّك
-  /// النص مسافة ثابتة صغيرة (_nudgeStep) بنقاط PDF مباشرة — بدون أي
-  /// تحويل شاشة↔صفحة، وبالتالي دقة 100% مضمونة رياضيًا مهما كانت حالة
-  /// العرض. أبسط وأوثق بكثير من محاولة تفسير سحب بالإصبع.
-  Widget _buildNudgeDPad(_TextAnnotation ann) {
-    Widget arrow(IconData icon, double dx, double dy) => IconButton(
-          icon: Icon(icon, size: 18),
-          color: Colors.white,
-          padding: const EdgeInsets.all(4),
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          onPressed: () => setState(() {
-            ann.dx += dx;
-            ann.dy += dy;
-          }),
+  Alignment _alignmentFor(TextAlign alignment) {
+    switch (alignment) {
+      case TextAlign.left:
+      case TextAlign.start:
+        return Alignment.centerLeft;
+      case TextAlign.center:
+        return Alignment.center;
+      case TextAlign.right:
+      case TextAlign.end:
+        return Alignment.centerRight;
+      case TextAlign.justify:
+        return Alignment.center;
+    }
+  }
+
+  double _estimateTextWidth(_TextAnnotation ann, double scale) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: ann.text,
+        style: TextStyle(fontSize: ann.fontSize * scale, height: 1.3),
+      ),
+      textDirection: TextDirection.rtl,
+      maxLines: 3,
+    )..layout(maxWidth: 360 * scale);
+    return (painter.width + 12).clamp(48.0, 380.0 * scale);
+  }
+
+  double _estimateTextHeight(_TextAnnotation ann, double scale) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: ann.text,
+        style: TextStyle(fontSize: ann.fontSize * scale, height: 1.3),
+      ),
+      textDirection: TextDirection.rtl,
+      maxLines: 3,
+    )..layout(maxWidth: 360 * scale);
+    return (painter.height + 8).clamp(28.0, 160.0 * scale);
+  }
+
+  List<Widget> _buildMoveDirectionIndicators() {
+    Widget indicator(IconData icon) => IgnorePointer(
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: AppColors.accent,
+              shape: BoxShape.circle,
+              boxShadow: const [BoxShadow(blurRadius: 3, color: Colors.black26)],
+            ),
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
         );
 
-    return Container(
-      margin: const EdgeInsets.only(top: 4),
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: AppColors.primaryDark.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          arrow(Icons.keyboard_arrow_up_rounded, 0, -_nudgeStep),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              arrow(Icons.keyboard_arrow_left_rounded, -_nudgeStep, 0),
-              arrow(Icons.keyboard_arrow_right_rounded, _nudgeStep, 0),
-            ],
-          ),
-          arrow(Icons.keyboard_arrow_down_rounded, 0, _nudgeStep),
-        ],
-      ),
-    );
+    return [
+      Positioned(top: -38, left: 0, right: 0, child: Center(child: indicator(Icons.arrow_upward_rounded))),
+      Positioned(bottom: -38, left: 0, right: 0, child: Center(child: indicator(Icons.arrow_downward_rounded))),
+      Positioned(left: -38, top: 0, bottom: 0, child: Center(child: indicator(Icons.arrow_back_rounded))),
+      Positioned(right: -38, top: 0, bottom: 0, child: Center(child: indicator(Icons.arrow_forward_rounded))),
+    ];
+  }
+
+  void _onTextPointerDown(_TextAnnotation ann, PointerDownEvent event) {
+    _moveHoldTimer?.cancel();
+    _movePointerId = event.pointer;
+    _lastMovePointerPosition = event.position;
+
+    // إذا كان النص محددًا أصلًا، يبدأ السحب فورًا. وإلا ننتظر 3 ثوانٍ
+    // كما طلب المستخدم، ثم ندخل وضع التحريك من دون فتح نافذة أخرى.
+    if (identical(ann, _movingAnnotation)) {
+      _moveGestureArmed = true;
+      return;
+    }
+
+    _moveGestureArmed = false;
+    _moveHoldTimer = Timer(_moveHoldDuration, () {
+      if (!mounted || _movePointerId != event.pointer) return;
+      setState(() {
+        _movingAnnotation = ann;
+        _moveSnapshot = ann.copy();
+        _moveUndoSnapshot = _annotations.map((a) => a.copy()).toList();
+        _moveGestureArmed = true;
+      });
+    });
+  }
+
+  void _onTextPointerMove(_TextAnnotation ann, PointerMoveEvent event) {
+    if (_movePointerId != event.pointer) return;
+
+    final previous = _lastMovePointerPosition;
+    _lastMovePointerPosition = event.position;
+    if (previous == null) return;
+
+    if (!_moveGestureArmed || !identical(ann, _movingAnnotation)) {
+      // حركة الإصبع قبل اكتمال 3 ثوانٍ تلغي الضغط المطوّل حتى لا يدخل
+      // وضع النقل بالخطأ أثناء تمرير الصفحة.
+      if ((event.position - previous).distance > 3) {
+        _moveHoldTimer?.cancel();
+      }
+      return;
+    }
+
+    final transform = _pageTransforms[ann.pageNumber] ?? _fallbackPageTransform(ann.pageNumber);
+    final pageSize = _pdfPageSizes[ann.pageNumber];
+    if (transform == null || pageSize == null || transform.scale <= 0) return;
+
+    final viewerDelta = event.position - previous;
+    final pdfDelta = viewerDelta / transform.scale;
+
+    // هذه هي النقطة الحاسمة: لا نحرك Overlay مستقلًا. نحرك إحداثيات PDF
+    // نفسها مع كل حركة إصبع، والـOverlay يعاد إسقاطه منها فورًا.
+    final maxX = (pageSize.width - 4).clamp(0.0, pageSize.width);
+    final maxY = (pageSize.height - ann.fontSize * 1.4).clamp(0.0, pageSize.height);
+    setState(() {
+      ann.dx = (ann.dx + pdfDelta.dx).clamp(0.0, maxX).toDouble();
+      ann.dy = (ann.dy + pdfDelta.dy).clamp(0.0, maxY).toDouble();
+    });
+  }
+
+  void _onTextPointerUp(_TextAnnotation ann, PointerUpEvent event) {
+    if (_movePointerId != event.pointer) return;
+    _moveHoldTimer?.cancel();
+    _movePointerId = null;
+    _lastMovePointerPosition = null;
+    _moveGestureArmed = false;
+    // لا نثبت هنا. يبقى الإطار ظاهرًا حتى يختار المستخدم تثبيت أو إلغاء.
+  }
+
+  void _onTextPointerCancel(_TextAnnotation ann, PointerCancelEvent event) {
+    if (_movePointerId != event.pointer) return;
+    _moveHoldTimer?.cancel();
+    _movePointerId = null;
+    _lastMovePointerPosition = null;
+    _moveGestureArmed = false;
+  }
+
+  void _cancelTextMove() {
+    final ann = _movingAnnotation;
+    final snap = _moveSnapshot;
+    if (ann == null) return;
+    setState(() {
+      if (snap != null) {
+        ann.pageNumber = snap.pageNumber;
+        ann.dx = snap.dx;
+        ann.dy = snap.dy;
+      }
+      _movingAnnotation = null;
+      _moveSnapshot = null;
+      _moveUndoSnapshot = null;
+    });
+  }
+
+  void _confirmTextMove() {
+    final before = _moveUndoSnapshot;
+    if (_movingAnnotation == null) return;
+
+    // التثبيت لا يحسب أي موضع جديد إطلاقًا. ann.dx/ann.dy هما بالفعل
+    // الموضع النهائي الذي كان ظاهرًا أثناء السحب، لذلك لا توجد "قفزة".
+    if (before != null) {
+      _undoStack.add(before);
+      _redoStack.clear();
+      if (_undoStack.length > 20) _undoStack.removeAt(0);
+    }
+    setState(() {
+      _movingAnnotation = null;
+      _moveSnapshot = null;
+      _moveUndoSnapshot = null;
+      _hasUnsavedChanges = true;
+    });
+    _scheduleAutoSave();
   }
 
   /// عند الضغط على نص موجود: قائمة صغيرة "تعديل" أو "نقل" — النقل يعتمد
@@ -1233,15 +1374,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               title: Text(tr('ed_action_move')),
               onTap: () {
                 Navigator.pop(sheetContext);
-                _pushUndoState();
                 setState(() {
-                  _nudgeSnapshot = ann.copy();
-                  _nudgingAnnotation = ann;
+                  _movingAnnotation = ann;
+                  _moveSnapshot = ann.copy();
+                  _moveUndoSnapshot = _annotations.map((a) => a.copy()).toList();
                 });
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(tr('ed_nudge_hint'))),
-                );
               },
             ),
             ListTile(
