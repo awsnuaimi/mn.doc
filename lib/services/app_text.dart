@@ -339,6 +339,67 @@ class AppText {
       'tr': 'Kablosuz yazıcı ile doğrudan yazdırın veya dosya olarak kaydedin',
       'pl': 'Drukuj bezpośrednio przez drukarkę bezprzewodową lub zapisz jako plik',
     },
+    'tool_envelope_t': {
+      'ar': 'طباعة على ظرف', 'en': 'Print on Envelope', 'de': 'Auf Umschlag drucken',
+      'fr': 'Imprimer sur enveloppe', 'tr': 'Zarfa Yazdır', 'pl': 'Drukuj na kopercie',
+    },
+    'tool_envelope_s': {
+      'ar': 'اطبع عنوان المرسل والمستلم مباشرة على مغلّف بريدي',
+      'en': "Print sender and recipient addresses directly on an envelope",
+      'de': 'Absender- und Empfängeradresse direkt auf einen Umschlag drucken',
+      'fr': "Imprimez les adresses de l'expéditeur et du destinataire directement sur une enveloppe",
+      'tr': 'Gönderen ve alıcı adreslerini doğrudan zarfa yazdırın',
+      'pl': 'Wydrukuj adres nadawcy i odbiorcy bezpośrednio na kopercie',
+    },
+    'env_size_label': {
+      'ar': 'مقاس الظرف', 'en': 'Envelope size', 'de': 'Umschlaggröße',
+      'fr': "Taille de l'enveloppe", 'tr': 'Zarf boyutu', 'pl': 'Rozmiar koperty',
+    },
+    'env_show_sender': {
+      'ar': 'إظهار عنوان المرسل', 'en': 'Show sender address', 'de': 'Absenderadresse anzeigen',
+      'fr': "Afficher l'adresse de l'expéditeur", 'tr': 'Gönderen adresini göster', 'pl': 'Pokaż adres nadawcy',
+    },
+    'env_sender_label': {
+      'ar': 'عنوان المرسل', 'en': 'Sender address', 'de': 'Absenderadresse',
+      'fr': "Adresse de l'expéditeur", 'tr': 'Gönderen adresi', 'pl': 'Adres nadawcy',
+    },
+    'env_recipient_label': {
+      'ar': 'عنوان المستلم', 'en': 'Recipient address', 'de': 'Empfängeradresse',
+      'fr': 'Adresse du destinataire', 'tr': 'Alıcı adresi', 'pl': 'Adres odbiorcy',
+    },
+    'env_calibration': {
+      'ar': 'معايرة موضع الطباعة', 'en': 'Print position calibration', 'de': 'Druckposition kalibrieren',
+      'fr': "Calibrage de la position d'impression", 'tr': 'Yazdırma konumu kalibrasyonu', 'pl': 'Kalibracja położenia wydruku',
+    },
+    'env_calibration_note': {
+      'ar': 'صحّح انحراف الطابعة أفقيًا وعموديًا (±10 مم)', 'en': 'Correct printer offset horizontally and vertically (±10 mm)',
+      'de': 'Druckerversatz horizontal und vertikal korrigieren (±10 mm)', 'fr': "Corrigez le décalage de l'imprimante horizontalement et verticalement (±10 mm)",
+      'tr': 'Yazıcı kaymasını yatay ve dikey olarak düzeltin (±10 mm)', 'pl': 'Skoryguj przesunięcie drukarki w poziomie i pionie (±10 mm)',
+    },
+    'env_offset_x': {
+      'ar': 'الإزاحة الأفقية', 'en': 'Horizontal offset', 'de': 'Horizontaler Versatz',
+      'fr': 'Décalage horizontal', 'tr': 'Yatay kaydırma', 'pl': 'Przesunięcie poziome',
+    },
+    'env_offset_y': {
+      'ar': 'الإزاحة العمودية', 'en': 'Vertical offset', 'de': 'Vertikaler Versatz',
+      'fr': 'Décalage vertical', 'tr': 'Dikey kaydırma', 'pl': 'Przesunięcie pionowe',
+    },
+    'env_reset_offsets': {
+      'ar': 'إعادة الضبط', 'en': 'Reset offsets', 'de': 'Versatz zurücksetzen',
+      'fr': 'Réinitialiser les décalages', 'tr': 'Kaydırmaları sıfırla', 'pl': 'Wyzeruj przesunięcia',
+    },
+    'env_preview_note': {
+      'ar': 'المعاينة تستخدم نفس ملف PDF ونفس الإحداثيات التي ستُرسل للطابعة.',
+      'en': 'The preview uses the same PDF and coordinates that will be sent to the printer.',
+      'de': 'Die Vorschau verwendet dieselbe PDF-Datei und dieselben Koordinaten wie der Druck.',
+      'fr': "L'aperçu utilise le même PDF et les mêmes coordonnées que l'impression.",
+      'tr': 'Önizleme, yazıcıya gönderilecek aynı PDF ve koordinatları kullanır.',
+      'pl': 'Podgląd używa tego samego pliku PDF i współrzędnych, które zostaną wysłane do drukarki.',
+    },
+    'env_preparing_print': {
+      'ar': 'جارٍ تجهيز الطباعة...', 'en': 'Preparing print...', 'de': 'Druck wird vorbereitet...',
+      'fr': "Préparation de l'impression...", 'tr': 'Yazdırma hazırlanıyor...', 'pl': 'Przygotowywanie wydruku...',
+    },
     'tool_barcode_t': {
       'ar': 'التعرف على QR والباركود', 'en': 'QR & Barcode Recognition', 'de': 'QR- & Barcode-Erkennung',
       'fr': 'Reconnaissance QR et codes-barres', 'tr': 'QR ve Barkod Tanıma', 'pl': 'Rozpoznawanie kodów QR i kreskowych',
