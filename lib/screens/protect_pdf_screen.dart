@@ -28,6 +28,7 @@ class _ProtectPdfScreenState extends State<ProtectPdfScreen> {
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
     if (result == null || result.files.single.path == null) return;
+    if (!mounted) return;
     setState(() => _filePath = result.files.single.path!);
   }
 
@@ -54,8 +55,12 @@ class _ProtectPdfScreenState extends State<ProtectPdfScreen> {
         document.security.ownerPassword = '';
       }
 
-      final savedBytes = await document.save();
-      document.dispose();
+      late final List<int> savedBytes;
+      try {
+        savedBytes = await document.save();
+      } finally {
+        document.dispose();
+      }
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = _filePath!.split('/').last.replaceAll('.pdf', '');
@@ -81,8 +86,8 @@ class _ProtectPdfScreenState extends State<ProtectPdfScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _processing = false);
       if (!mounted) return;
+      setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_mode ? '${tr('error_prefix')} $e' : '${tr('protect_wrong_pw_error')} $e')),
       );

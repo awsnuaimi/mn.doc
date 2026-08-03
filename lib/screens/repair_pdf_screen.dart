@@ -32,6 +32,7 @@ class _RepairPdfScreenState extends State<RepairPdfScreen> {
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
     if (result == null || result.files.single.path == null) return;
+    if (!mounted) return;
     setState(() {
       _filePath = result.files.single.path!;
       _statusMessage = null;
@@ -57,6 +58,7 @@ class _RepairPdfScreenState extends State<RepairPdfScreen> {
       try {
         document = sf.PdfDocument(inputBytes: bytes);
       } catch (e) {
+        if (!mounted) return;
         setState(() {
           _processing = false;
           _success = false;
@@ -69,15 +71,21 @@ class _RepairPdfScreenState extends State<RepairPdfScreen> {
       // مشاكل الفهرسة الداخلية الشائعة في الملفات التالفة جزئيًا.
       document.fileStructure.incrementalUpdate = false;
 
-      final pageCount = document.pages.count;
-      final repairedBytes = await document.save();
-      document.dispose();
+      late final int pageCount;
+      late final List<int> repairedBytes;
+      try {
+        pageCount = document.pages.count;
+        repairedBytes = await document.save();
+      } finally {
+        document.dispose();
+      }
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = _filePath!.split('/').last.replaceAll('.pdf', '');
       final outPath = '${dir.path}/${originalName}_مُصلح.pdf';
       await File(outPath).writeAsBytes(repairedBytes, flush: true);
 
+      if (!mounted) return;
       setState(() {
         _processing = false;
         _success = true;
@@ -104,6 +112,7 @@ class _RepairPdfScreenState extends State<RepairPdfScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _processing = false;
         _success = false;

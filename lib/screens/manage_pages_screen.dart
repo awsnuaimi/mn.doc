@@ -33,6 +33,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       withData: true,
     );
     if (result == null || result.files.single.bytes == null) return;
+    if (!mounted) return;
 
     final bytes = result.files.single.bytes!;
     try {
@@ -91,8 +92,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _processing = false);
       if (!mounted) return;
+      setState(() => _processing = false);
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppText.t('error_prefix', lang)} $e')));
     }

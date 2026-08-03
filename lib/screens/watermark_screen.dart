@@ -31,6 +31,7 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
     if (result == null || result.files.single.path == null) return;
+    if (!mounted) return;
     setState(() => _filePath = result.files.single.path!);
   }
 
@@ -43,33 +44,38 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
     try {
       final bytes = await File(_filePath!).readAsBytes();
       final document = sf.PdfDocument(inputBytes: bytes);
+      late final List<int> savedBytes;
+      try {
+        final font = await ArabicFontLoader.loadSyncfusionFont(_fontSize, bold: true);
+        final brush = sf.PdfSolidBrush(sf.PdfColor(150, 150, 150));
 
-      final font = await ArabicFontLoader.loadSyncfusionFont(_fontSize, bold: true);
-      final brush = sf.PdfSolidBrush(sf.PdfColor(150, 150, 150));
+        for (int i = 0; i < document.pages.count; i++) {
+          final page = document.pages[i];
+          final size = page.getClientSize();
+          final graphics = page.graphics;
 
-      for (int i = 0; i < document.pages.count; i++) {
-        final page = document.pages[i];
-        final size = page.getClientSize();
-        final graphics = page.graphics;
+          graphics.save();
+          try {
+            graphics.setTransparency(_opacity);
+            graphics.translateTransform(size.width / 2, size.height / 2);
+            graphics.rotateTransform(_rotation);
 
-        graphics.save();
-        graphics.setTransparency(_opacity);
-        // انقل نقطة الأصل لمنتصف الصفحة، ثم دوّر، ثم ارسم النص متمركزًا
-        graphics.translateTransform(size.width / 2, size.height / 2);
-        graphics.rotateTransform(_rotation);
+            final textSize = font.measureString(_textController.text);
+            graphics.drawString(
+              _textController.text,
+              font,
+              brush: brush,
+              bounds: Rect.fromLTWH(-textSize.width / 2, -textSize.height / 2, textSize.width, textSize.height),
+            );
+          } finally {
+            graphics.restore();
+          }
+        }
 
-        final textSize = font.measureString(_textController.text);
-        graphics.drawString(
-          _textController.text,
-          font,
-          brush: brush,
-          bounds: Rect.fromLTWH(-textSize.width / 2, -textSize.height / 2, textSize.width, textSize.height),
-        );
-        graphics.restore();
+        savedBytes = await document.save();
+      } finally {
+        document.dispose();
       }
-
-      final savedBytes = await document.save();
-      document.dispose();
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = _filePath!.split('/').last.replaceAll('.pdf', '');
@@ -94,8 +100,8 @@ class _WatermarkScreenState extends State<WatermarkScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _processing = false);
       if (!mounted) return;
+      setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }

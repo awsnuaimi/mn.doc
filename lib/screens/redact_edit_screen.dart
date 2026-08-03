@@ -58,6 +58,7 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
     if (result == null || result.files.single.path == null) return;
+    if (!mounted) return;
     setState(() => _filePath = result.files.single.path!);
   }
 
@@ -140,34 +141,36 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
     try {
       final bytes = await File(_filePath!).readAsBytes();
       final document = sf.PdfDocument(inputBytes: bytes);
+      late final List<int> savedBytes;
+      try {
+        for (final b in _boxes) {
+          final pageIndex = b.pageNumber - 1;
+          if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+          final page = document.pages[pageIndex];
+          final size = page.getClientSize();
 
-      for (final b in _boxes) {
-        final pageIndex = b.pageNumber - 1;
-        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
-        final page = document.pages[pageIndex];
-        final size = page.getClientSize();
+          final rect = Rect.fromLTWH(b.dx * size.width, b.dy * size.height, b.w * size.width, b.h * size.height);
 
-        final rect = Rect.fromLTWH(b.dx * size.width, b.dy * size.height, b.w * size.width, b.h * size.height);
-
-        // تغطية المنطقة بالأبيض (إخفاء المحتوى القديم)
-        page.graphics.drawRectangle(
-          brush: sf.PdfSolidBrush(sf.PdfColor(255, 255, 255)),
-          bounds: rect,
-        );
-
-        if (b.replacementText.trim().isNotEmpty) {
-          final font = await ArabicFontLoader.loadSyncfusionFont((rect.height * 0.6).clamp(8, 24));
-          page.graphics.drawString(
-            b.replacementText,
-            font,
-            brush: sf.PdfSolidBrush(sf.PdfColor(0, 0, 0)),
+          // تغطية المنطقة بالأبيض (إخفاء المحتوى القديم)
+          page.graphics.drawRectangle(
+            brush: sf.PdfSolidBrush(sf.PdfColor(255, 255, 255)),
             bounds: rect,
           );
-        }
-      }
 
-      final savedBytes = await document.save();
-      document.dispose();
+          if (b.replacementText.trim().isNotEmpty) {
+            final font = await ArabicFontLoader.loadSyncfusionFont((rect.height * 0.6).clamp(8, 24));
+            page.graphics.drawString(
+              b.replacementText,
+              font,
+              brush: sf.PdfSolidBrush(sf.PdfColor(0, 0, 0)),
+              bounds: rect,
+            );
+          }
+        }
+        savedBytes = await document.save();
+      } finally {
+        document.dispose();
+      }
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = _filePath!.split('/').last.replaceAll('.pdf', '');
@@ -189,8 +192,8 @@ class _RedactEditScreenState extends State<RedactEditScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _saving = false);
       if (!mounted) return;
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }

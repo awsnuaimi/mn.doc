@@ -48,6 +48,7 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
       if (bytes == null) continue;
       try {
         final count = PdfPageOps.countPages(bytes);
+        if (!mounted) return;
         setState(() => _files.add(_PickedPdf(name: f.name, bytes: bytes!, pageCount: count)));
       } catch (_) {
         if (!mounted) return;
@@ -113,8 +114,8 @@ class _MergePdfScreenState extends State<MergePdfScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _merging = false);
       if (!mounted) return;
+      setState(() => _merging = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('merge_error_prefix')} $e')));
     }
   }

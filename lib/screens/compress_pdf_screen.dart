@@ -27,6 +27,7 @@ class _CompressPdfScreenState extends State<CompressPdfScreen> {
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
     if (result == null || result.files.single.path == null) return;
+    if (!mounted) return;
     final file = File(result.files.single.path!);
     setState(() {
       _filePath = file.path;
@@ -50,13 +51,15 @@ class _CompressPdfScreenState extends State<CompressPdfScreen> {
     try {
       final bytes = await File(_filePath!).readAsBytes();
       final document = sf.PdfDocument(inputBytes: bytes);
-
-      // إعادة بناء الملف بالكامل بدل التحديث الإضافي، مع أعلى مستوى ضغط متاح
-      document.fileStructure.incrementalUpdate = false;
-      document.compressionLevel = sf.PdfCompressionLevel.best;
-
-      final savedBytes = await document.save();
-      document.dispose();
+      late final List<int> savedBytes;
+      try {
+        // إعادة بناء الملف بالكامل بدل التحديث الإضافي، مع أعلى مستوى ضغط متاح
+        document.fileStructure.incrementalUpdate = false;
+        document.compressionLevel = sf.PdfCompressionLevel.best;
+        savedBytes = await document.save();
+      } finally {
+        document.dispose();
+      }
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = _filePath!.split('/').last.replaceAll('.pdf', '');
@@ -88,8 +91,8 @@ class _CompressPdfScreenState extends State<CompressPdfScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _processing = false);
       if (!mounted) return;
+      setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
   }
