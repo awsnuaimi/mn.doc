@@ -13,6 +13,8 @@ import '../services/arabic_font_loader.dart';
 import '../theme/app_theme.dart';
 
 const double _mmToPoints = 72 / 25.4;
+const double _carrierWidthMm = 297.0;
+const double _carrierHeightMm = 210.0;
 
 class _EnvelopeLayout {
   final String code;
@@ -81,6 +83,11 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     });
   }
 
+  double get _carrierX => _carrierXmm ?? ((_carrierWidthMm - _layout.widthMm) / 2.0);
+  double get _carrierY => _carrierYmm ?? ((_carrierHeightMm - _layout.heightMm) / 2.0);
+  double _maxCarrierX() => (_carrierWidthMm - _layout.widthMm).clamp(0.0, _carrierWidthMm).toDouble();
+  double _maxCarrierY() => (_carrierHeightMm - _layout.heightMm).clamp(0.0, _carrierHeightMm).toDouble();
+
   pw.Widget _pdfText(String text, pw.Font font, double size) {
     final rtl = _isRtl(text);
     return pw.Directionality(
@@ -101,7 +108,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     final doc = pw.Document();
     double mm(double v) => v * _mmToPoints;
 
-    final format = PdfPageFormat(mm(l.widthMm), mm(l.heightMm), marginAll: 0);
+    final format = PdfPageFormat(mm(_carrierWidthMm), mm(_carrierHeightMm), marginAll: 0);
 
     doc.addPage(pw.Page(
       pageFormat: format,
@@ -109,7 +116,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
       build: (_) => pw.Stack(children: [
         if (_showGuides)
           pw.Positioned(
-            left:mm(3), top:mm(3),
+            left:mm(_carrierX + 3), top:mm(_carrierY + 3),
             child:pw.Container(
               width:mm(l.widthMm-6), height:mm(l.heightMm-6),
               decoration:pw.BoxDecoration(border:pw.Border.all(width:.5)),
@@ -117,8 +124,8 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
           ),
         if (_showSender && sender.isNotEmpty)
           pw.Positioned(
-            left:mm(l.senderXmm + _senderDx + _printerDx),
-            top:mm(l.senderYmm + _senderDy + _printerDy),
+            left:mm(_carrierX + l.senderXmm + _senderDx + _printerDx),
+            top:mm(_carrierY + l.senderYmm + _senderDy + _printerDy),
             child:pw.Container(
               width:mm(l.senderWidthMm), height:mm(l.senderHeightMm),
               decoration:_showGuides ? pw.BoxDecoration(border:pw.Border.all(width:.35)) : null,
@@ -127,8 +134,8 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
           ),
         if (recipient.isNotEmpty)
           pw.Positioned(
-            left:mm(l.recipientXmm + _recipientDx + _printerDx),
-            top:mm(l.recipientYmm + _recipientDy + _printerDy),
+            left:mm(_carrierX + l.recipientXmm + _recipientDx + _printerDx),
+            top:mm(_carrierY + l.recipientYmm + _recipientDy + _printerDy),
             child:pw.Container(
               width:mm(l.recipientWidthMm), height:mm(l.recipientHeightMm),
               decoration:_showGuides ? pw.BoxDecoration(border:pw.Border.all(width:.35)) : null,
@@ -148,8 +155,8 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
       final bytes = await _buildPdf();
       if (!mounted) return;
       final format = PdfPageFormat(
-        _layout.widthMm * _mmToPoints,
-        _layout.heightMm * _mmToPoints,
+        _carrierWidthMm * _mmToPoints,
+        _carrierHeightMm * _mmToPoints,
         marginAll: 0,
       );
       await Printing.layoutPdf(
@@ -259,6 +266,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
     setState(() {
       _senderDx=0; _senderDy=0; _recipientDx=0; _recipientDy=0;
       _printerDx=0; _printerDy=0;
+      _carrierXmm=null; _carrierYmm=null;
     });
   }
 
@@ -283,6 +291,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                 onChanged:(v) {
                   if(v!=null) setState(() {
                     _layout=v;
+                    _carrierXmm=null; _carrierYmm=null;
                     _senderDx=0; _senderDy=0; _recipientDx=0; _recipientDy=0;
                   });
                 },
@@ -332,6 +341,12 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                 title:Text(tr('env_calibration')),
                 subtitle:Text(tr('env_calibration_note')),
                 children:[
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text('وضع الظرف داخل A4: حرّك X و Y حتى يطابق مكان الظرف الفعلي في درج Brother.'),
+                  ),
+                  _slider('الظرف أفقيًا داخل A4',_carrierX,0,_maxCarrierX(),(_maxCarrierX()*2).round().clamp(1,600),(v)=>setState(()=>_carrierXmm=v),suffix:' mm'),
+                  _slider('الظرف عموديًا داخل A4',_carrierY,0,_maxCarrierY(),(_maxCarrierY()*2).round().clamp(1,500),(v)=>setState(()=>_carrierYmm=v),suffix:' mm'),
                   _slider(tr('env_offset_x'),_printerDx,-15,15,60,(v)=>setState(()=>_printerDx=v),suffix:' mm'),
                   _slider(tr('env_offset_y'),_printerDy,-15,15,60,(v)=>setState(()=>_printerDy=v),suffix:' mm'),
                   SwitchListTile(
@@ -359,7 +374,7 @@ class _EnvelopeScreenState extends State<EnvelopeScreen> {
                 child:ClipRRect(
                   borderRadius:BorderRadius.circular(12),
                   child:PdfPreview(
-                    key:ValueKey('${_layout.code}|$_showSender|$_senderDx|$_senderDy|$_recipientDx|$_recipientDy|$_printerDx|$_printerDy|$_senderFont|$_recipientFont|$_showGuides|${_senderController.text}|${_recipientController.text}'),
+                    key:ValueKey('${_layout.code}|$_showSender|$_carrierX|$_carrierY|$_senderDx|$_senderDy|$_recipientDx|$_recipientDy|$_printerDx|$_printerDy|$_senderFont|$_recipientFont|$_showGuides|${_senderController.text}|${_recipientController.text}'),
                     build:(_)=>_buildPdf(),
                     canDebug:false,
                     canChangeOrientation:false,
