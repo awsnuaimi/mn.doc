@@ -65,7 +65,11 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
 
       await for (final page in Printing.raster(bytes, pages: pageIndices, dpi: 150)) {
         final png = await page.toPng();
-        final outPath = '${dir.path}/${baseName}_صفحة_$pageNum.png';
+        final outPath = await _uniqueOutputPath(
+          dir.path,
+          '${baseName}_صفحة_$pageNum',
+          '.png',
+        );
         await File(outPath).writeAsBytes(png, flush: true);
         paths.add(outPath);
         pageNum++;
@@ -81,6 +85,21 @@ class _PdfToImagesScreenState extends State<PdfToImagesScreen> {
       setState(() => _converting = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('pdf2img_convert_error')} $e')));
     }
+  }
+
+
+  Future<String> _uniqueOutputPath(
+    String directory,
+    String baseName,
+    String extension,
+  ) async {
+    var candidate = '$directory/$baseName$extension';
+    var suffix = 1;
+    while (await File(candidate).exists()) {
+      candidate = '$directory/$baseName ($suffix)$extension';
+      suffix++;
+    }
+    return candidate;
   }
 
   @override

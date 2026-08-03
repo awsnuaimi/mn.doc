@@ -62,9 +62,14 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
 
       final pagesToExport = _selectedPage == -1 ? List.generate(_pageCount, (i) => i) : [_selectedPage];
 
+      final extractedPages = TableExtractor.extractPagesAsRows(
+        _bytes!,
+        pagesToExport,
+      );
+
       for (final pageIndex in pagesToExport) {
         final sheet = excelFile['${tr('scanner_page_label')} ${pageIndex + 1}'];
-        final rows = TableExtractor.extractPageAsRows(_bytes!, pageIndex);
+        final rows = extractedPages[pageIndex] ?? const <List<String>>[];
         for (final row in rows) {
           sheet.appendRow(row.map((cell) => xls.TextCellValue(cell)).toList());
         }
@@ -76,7 +81,11 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
 
       final dir = await getApplicationDocumentsDirectory();
       final originalName = (_fileName ?? 'file').replaceAll('.pdf', '');
-      final outPath = '${dir.path}/${originalName}_جداول.xlsx';
+      final outPath = await _uniqueOutputPath(
+        dir.path,
+        '${originalName}_جداول',
+        '.xlsx',
+      );
       await File(outPath).writeAsBytes(bytes, flush: true);
 
       if (!mounted) return;
@@ -101,6 +110,21 @@ class _ExtractTableScreenState extends State<ExtractTableScreen> {
       setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
+  }
+
+
+  Future<String> _uniqueOutputPath(
+    String directory,
+    String baseName,
+    String extension,
+  ) async {
+    var candidate = '$directory/$baseName$extension';
+    var suffix = 1;
+    while (await File(candidate).exists()) {
+      candidate = '$directory/$baseName ($suffix)$extension';
+      suffix++;
+    }
+    return candidate;
   }
 
   @override

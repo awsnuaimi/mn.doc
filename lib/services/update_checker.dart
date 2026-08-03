@@ -35,10 +35,12 @@ class UpdateChecker {
     final currentVersion = packageInfo.version;
 
     try {
-      final response = await http.get(
-        Uri.parse('https://api.github.com/repos/$_githubOwner/$_githubRepo/releases/latest'),
-        headers: {'Accept': 'application/vnd.github+json'},
-      );
+      final response = await http
+          .get(
+            Uri.parse('https://api.github.com/repos/$_githubOwner/$_githubRepo/releases/latest'),
+            headers: {'Accept': 'application/vnd.github+json'},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 404) {
         return UpdateCheckResult(
@@ -82,8 +84,12 @@ class UpdateChecker {
     final latestParts = latest.split('.').map((p) => int.tryParse(p) ?? 0).toList();
     final currentParts = current.split(RegExp(r'[.+]')).map((p) => int.tryParse(p) ?? 0).toList();
 
-    for (int i = 0; i < latestParts.length; i++) {
-      final l = latestParts[i];
+    final partCount = latestParts.length > currentParts.length
+        ? latestParts.length
+        : currentParts.length;
+
+    for (int i = 0; i < partCount; i++) {
+      final l = i < latestParts.length ? latestParts[i] : 0;
       final c = i < currentParts.length ? currentParts[i] : 0;
       if (l > c) return true;
       if (l < c) return false;
