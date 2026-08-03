@@ -108,6 +108,12 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
   }
 
   @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsController>();
     final lang = settings.languageCode;

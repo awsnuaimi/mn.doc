@@ -61,6 +61,7 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
 
     if (_listening) {
       await _speech.stop();
+      if (!mounted) return;
       setState(() => _listening = false);
       return;
     }
@@ -69,6 +70,7 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
     await _speech.listen(
       localeId: _localeId,
       onResult: (result) {
+        if (!mounted) return;
         setState(() {
           _textController.text = result.recognizedWords;
           _textController.selection = TextSelection.collapsed(offset: _textController.text.length);
@@ -123,6 +125,13 @@ class _VoiceDictationScreenState extends State<VoiceDictationScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('error_prefix')} $e')));
     }
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    _textController.dispose();
+    super.dispose();
   }
 
   @override

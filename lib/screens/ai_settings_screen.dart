@@ -28,6 +28,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
   Future<void> _load() async {
     final key = await AiSettings.getApiKey();
+    if (!mounted) return;
     _controller.text = key ?? '';
     setState(() => _loading = false);
   }
@@ -41,11 +42,17 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
   Future<void> _clear() async {
     await AiSettings.clearApiKey();
-    _controller.clear();
     if (!mounted) return;
+    _controller.clear();
     setState(() {});
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.t('aisettings_deleted_msg', lang))));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override

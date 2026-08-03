@@ -92,6 +92,13 @@ class _CreateDocumentScreenState extends State<CreateDocumentScreen> {
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsController>();
     final lang = settings.languageCode;

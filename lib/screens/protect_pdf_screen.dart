@@ -90,6 +90,13 @@ class _ProtectPdfScreenState extends State<ProtectPdfScreen> {
   }
 
   @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsController>();
     final lang = settings.languageCode;

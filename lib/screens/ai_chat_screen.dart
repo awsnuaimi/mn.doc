@@ -99,6 +99,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
   }
 
   @override
+  void dispose() {
+    _inputController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsController>();
     final lang = settings.languageCode;
