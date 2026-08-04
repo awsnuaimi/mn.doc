@@ -65,54 +65,6 @@ class _PdfPageTransform {
 }
 
 
-
-enum _DrawTool { none, pen, line, arrow, rectangle, ellipse }
-
-class _DrawElement {
-  final int pageNumber;
-  final _DrawTool tool;
-  final List<Offset> points;
-  final Color color;
-  final double width;
-  final double opacity;
-
-  const _DrawElement({required this.pageNumber, required this.tool, required this.points, required this.color, required this.width, this.opacity = 1.0});
-}
-
-class _DrawingPainter extends CustomPainter {
-  final List<_DrawElement> elements;
-  final _DrawElement? preview;
-  final _PdfPageTransform transform;
-  const _DrawingPainter({required this.elements, required this.preview, required this.transform});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final e in [...elements, if (preview != null) preview!]) {
-      if (e.points.isEmpty) continue;
-      final paint = Paint()..color=e.color.withOpacity(e.opacity)..strokeWidth=e.width*transform.scale..style=PaintingStyle.stroke..strokeCap=StrokeCap.round..strokeJoin=StrokeJoin.round;
-      final pts=e.points.map(transform.pdfToViewer).toList();
-      if (e.tool == _DrawTool.pen) {
-        final path=Path()..moveTo(pts.first.dx, pts.first.dy);
-        for (final q in pts.skip(1)) path.lineTo(q.dx,q.dy);
-        canvas.drawPath(path, paint);
-      } else if (e.tool == _DrawTool.line || e.tool == _DrawTool.arrow) {
-        if (pts.length < 2) continue;
-        canvas.drawLine(pts.first, pts.last, paint);
-        if (e.tool == _DrawTool.arrow) {
-          final a=pts.first, b=pts.last; final ang=(b-a).direction; final len=14.0 + paint.strokeWidth*1.5;
-          canvas.drawLine(b, b-Offset.fromDirection(ang-0.55,len), paint);
-          canvas.drawLine(b, b-Offset.fromDirection(ang+0.55,len), paint);
-        }
-      } else {
-        if (pts.length < 2) continue;
-        final r=Rect.fromPoints(pts.first,pts.last);
-        if (e.tool == _DrawTool.rectangle) canvas.drawRect(r,paint); else canvas.drawOval(r,paint);
-      }
-    }
-  }
-  @override bool shouldRepaint(covariant _DrawingPainter oldDelegate) => true;
-}
-
 class PdfEditorScreen extends StatefulWidget {
   final String filePath;
   const PdfEditorScreen({super.key, required this.filePath});
@@ -143,17 +95,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   int _currentPage = 1;
   double _zoomLevel = 1.0;
 
-  // ------- الرسم والأشكال -------
-  final List<_DrawElement> _drawElements = [];
-  final List<_DrawElement> _drawRedo = [];
-  _DrawTool _drawTool = _DrawTool.none;
-  Color _drawColor = Colors.red;
-  double _drawWidth = 2.5;
-  double _drawOpacity = 1.0;
-  List<Offset>? _activeDrawPoints;
-
-  bool get _drawingMode => _drawTool != _DrawTool.none;
-
   // ------- تراجع/إعادة (Undo/Redo) لتعليقات النص المضافة -------
   final List<List<_TextAnnotation>> _undoStack = [];
   final List<List<_TextAnnotation>> _redoStack = [];
@@ -169,12 +110,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _undo() {
-    if (_drawElements.isNotEmpty) {
-      setState(() => _drawRedo.add(_drawElements.removeLast()));
-      _hasUnsavedChanges = true;
-      _scheduleAutoSave();
-      return;
-    }
     if (_undoStack.isEmpty) return;
     _redoStack.add(_annotations.map((a) => a.copy()).toList());
     final prev = _undoStack.removeLast();
@@ -187,12 +122,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _redo() {
-    if (_drawRedo.isNotEmpty) {
-      setState(() => _drawElements.add(_drawRedo.removeLast()));
-      _hasUnsavedChanges = true;
-      _scheduleAutoSave();
-      return;
-    }
     if (_redoStack.isEmpty) return;
     _undoStack.add(_annotations.map((a) => a.copy()).toList());
     final next = _redoStack.removeLast();
@@ -680,7 +609,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // فلو المستخدم أضاف/عدّل نصًا بالمنتصف، تعديل _annotations الحيّة
     // أثناء المرور عليها ممكن يرمي ConcurrentModificationError.
     final annotationsSnapshot = _annotations.map((a) => a.copy()).toList(growable: false);
-    final drawingsSnapshot = List<_DrawElement>.from(_drawElements, growable: false);
 
     try {
       for (final ann in annotationsSnapshot) {
@@ -727,29 +655,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           ),
           format: sf.PdfStringFormat(alignment: pdfAlignment),
         );
-      }
-
-      // تثبيت الرسم والأشكال داخل صفحات PDF نفسها.
-      for (final e in drawingsSnapshot) {
-        final pageIndex=e.pageNumber-1;
-        if (pageIndex < 0 || pageIndex >= document.pages.count || e.points.isEmpty) continue;
-        final page=document.pages[pageIndex];
-        final pen=sf.PdfPen(sf.PdfColor(e.color.red,e.color.green,e.color.blue,(255*e.opacity).round()), width: e.width);
-        if (e.tool == _DrawTool.pen) {
-          for (var i=1;i<e.points.length;i++) page.graphics.drawLine(pen,e.points[i-1],e.points[i]);
-        } else if (e.tool == _DrawTool.line || e.tool == _DrawTool.arrow) {
-          if (e.points.length < 2) continue;
-          final a=e.points.first, b=e.points.last; page.graphics.drawLine(pen,a,b);
-          if (e.tool == _DrawTool.arrow) {
-            final ang=(b-a).direction; final len=10.0+e.width*2;
-            page.graphics.drawLine(pen,b,b-Offset.fromDirection(ang-0.55,len));
-            page.graphics.drawLine(pen,b,b-Offset.fromDirection(ang+0.55,len));
-          }
-        } else if (e.points.length >= 2) {
-          final r=Rect.fromPoints(e.points.first,e.points.last);
-          if (e.tool == _DrawTool.rectangle) page.graphics.drawRectangle(pen: pen,bounds:r);
-          if (e.tool == _DrawTool.ellipse) page.graphics.drawEllipse(r, pen: pen);
-        }
       }
 
       savedBytes = await document.save();
@@ -894,130 +799,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   Future<void> _saveDocument() => _runQueuedSave(showResult: true);
 
-
-  // ------- إدارة صفحات PDF -------
-  Future<void> _runPageTool(String action) async {
-    if (_saving) return;
-    setState(() => _saving = true);
-    try {
-      // نصدّر أولًا حتى لا تضيع النصوص/التعليقات الحالية قبل تعديل الصفحات.
-      final sourcePath = await _exportToFile();
-      final bytes = await File(sourcePath).readAsBytes();
-      final document = sf.PdfDocument(inputBytes: bytes);
-      late final List<int> resultBytes;
-      try {
-        final index = (_currentPage - 1).clamp(0, document.pages.count - 1);
-        switch (action) {
-          case 'rotate_right':
-            document.pages[index].rotation = _nextRotation(document.pages[index].rotation, 1);
-            break;
-          case 'rotate_left':
-            document.pages[index].rotation = _nextRotation(document.pages[index].rotation, -1);
-            break;
-          case 'delete':
-            if (document.pages.count <= 1) {
-              throw Exception('لا يمكن حذف الصفحة الوحيدة في المستند');
-            }
-            document.pages.removeAt(index);
-            break;
-          case 'blank_before':
-            final size = document.pages[index].size;
-            document.pages.insert(index, size);
-            break;
-          case 'blank_after':
-            final size = document.pages[index].size;
-            document.pages.insert(index + 1, size);
-            break;
-          case 'duplicate':
-            final source = document.pages[index];
-            final template = source.createTemplate();
-            final newPage = document.pages.insert(index + 1, source.size);
-            newPage.graphics.drawPdfTemplate(template, Offset.zero);
-            break;
-          case 'move_prev':
-            if (index == 0) return;
-            resultBytes = await _rebuildWithPageOrder(document, index, index - 1);
-            await _finishPageTool(resultBytes, sourcePath);
-            return;
-          case 'move_next':
-            if (index >= document.pages.count - 1) return;
-            resultBytes = await _rebuildWithPageOrder(document, index, index + 1);
-            await _finishPageTool(resultBytes, sourcePath);
-            return;
-        }
-        resultBytes = await document.save();
-      } finally {
-        document.dispose();
-      }
-      await _finishPageTool(resultBytes, sourcePath);
-    } catch (e, stack) {
-      if (kDebugMode) {
-        debugPrint('فشل تعديل الصفحات: $e');
-        debugPrintStack(stackTrace: stack);
-      }
-      if (mounted) {
-        setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تعذر تنفيذ تعديل الصفحة: $e')),
-        );
-      }
-    }
-  }
-
-  sf.PdfPageRotateAngle _nextRotation(sf.PdfPageRotateAngle current, int direction) {
-    const values = <sf.PdfPageRotateAngle>[
-      sf.PdfPageRotateAngle.rotateAngle0,
-      sf.PdfPageRotateAngle.rotateAngle90,
-      sf.PdfPageRotateAngle.rotateAngle180,
-      sf.PdfPageRotateAngle.rotateAngle270,
-    ];
-    var i = values.indexOf(current);
-    if (i < 0) i = 0;
-    return values[(i + direction) % values.length];
-  }
-
-  Future<List<int>> _rebuildWithPageOrder(sf.PdfDocument source, int from, int to) async {
-    final order = List<int>.generate(source.pages.count, (i) => i);
-    final moved = order.removeAt(from);
-    order.insert(to, moved);
-    final rebuilt = sf.PdfDocument();
-    try {
-      // نحذف الصفحة الافتراضية فقط إذا أنشأتها المكتبة تلقائيًا.
-      for (final oldIndex in order) {
-        final oldPage = source.pages[oldIndex];
-        final page = rebuilt.pages.insert(
-          rebuilt.pages.count,
-          oldPage.size,
-        );
-        // PdfPageCollection.insert في إصدار Syncfusion المستخدم بالمشروع
-        // لا يقبل named parameter باسم rotation. أنشئ الصفحة أولًا ثم
-        // طبّق دوران الصفحة الأصلية على الصفحة الجديدة.
-        page.rotation = oldPage.rotation;
-        page.graphics.drawPdfTemplate(oldPage.createTemplate(), Offset.zero);
-      }
-      return await rebuilt.save();
-    } finally {
-      rebuilt.dispose();
-    }
-  }
-
-  Future<void> _finishPageTool(List<int> bytes, String sourcePath) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final raw = sourcePath.split('/').last;
-    final base = raw.toLowerCase().endsWith('.pdf') ? raw.substring(0, raw.length - 4) : raw;
-    final outPath = '${dir.path}/${base}_pages_${DateTime.now().millisecondsSinceEpoch}.pdf';
-    await File(outPath).writeAsBytes(bytes, flush: true);
-    if (!mounted) return;
-    setState(() {
-      _saving = false;
-      _hasUnsavedChanges = false;
-    });
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
-    );
-  }
-
   Widget build(BuildContext context) {
     final hasSearchResult = _searchResult.hasResult;
     final settings = context.watch<AppSettingsController>();
@@ -1059,12 +840,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           IconButton(
             icon: const Icon(Icons.undo_rounded),
             tooltip: tr('undo'),
-            onPressed: (_undoStack.isEmpty && _drawElements.isEmpty) ? null : _undo,
+            onPressed: _undoStack.isEmpty ? null : _undo,
           ),
           IconButton(
             icon: const Icon(Icons.redo_rounded),
             tooltip: tr('redo'),
-            onPressed: (_redoStack.isEmpty && _drawRedo.isEmpty) ? null : _redo,
+            onPressed: _redoStack.isEmpty ? null : _redo,
           ),
           IconButton(
             icon: const Icon(Icons.search_rounded),
@@ -1081,26 +862,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             tooltip: tr('ed_addtext_tooltip'),
             onPressed: () => setState(() => _addTextMode = !_addTextMode),
           ),
-          PopupMenuButton<_DrawTool>(
-            icon: Icon(_drawingMode ? Icons.draw_rounded : Icons.draw_outlined),
-            tooltip: 'الرسم والأشكال',
-            onSelected: (tool) {
-              if ((_zoomLevel-1.0).abs()>0.01 && tool != _DrawTool.none) {
-                _resetZoom();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت إعادة التكبير إلى 100% لضمان دقة الرسم')));
-              }
-              setState(() { _drawTool=tool; _addTextMode=false; });
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value:_DrawTool.pen, child:ListTile(leading:Icon(Icons.gesture_rounded),title:Text('قلم حر'))),
-              PopupMenuItem(value:_DrawTool.line, child:ListTile(leading:Icon(Icons.horizontal_rule_rounded),title:Text('خط مستقيم'))),
-              PopupMenuItem(value:_DrawTool.arrow, child:ListTile(leading:Icon(Icons.arrow_forward_rounded),title:Text('سهم'))),
-              PopupMenuItem(value:_DrawTool.rectangle, child:ListTile(leading:Icon(Icons.crop_square_rounded),title:Text('مستطيل'))),
-              PopupMenuItem(value:_DrawTool.ellipse, child:ListTile(leading:Icon(Icons.circle_outlined),title:Text('دائرة / بيضاوي'))),
-              PopupMenuDivider(),
-              PopupMenuItem(value:_DrawTool.none, child:ListTile(leading:Icon(Icons.pan_tool_alt_outlined),title:Text('إنهاء الرسم'))),
-            ],
-          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.smart_toy_rounded),
             tooltip: tr('ed_ai_tooltip'),
@@ -1110,24 +871,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               PopupMenuItem(value: 'chat', child: Text(tr('ed_ai_chat'))),
               PopupMenuItem(value: 'translate', child: Text(tr('ed_ai_translate'))),
               PopupMenuItem(value: 'read_aloud', child: Text(tr('tool_tts_t'))),
-            ],
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.layers_rounded),
-            tooltip: 'إدارة الصفحات',
-            onSelected: _runPageTool,
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'rotate_right', child: ListTile(leading: Icon(Icons.rotate_right_rounded), title: Text('تدوير 90° يمين'))),
-              PopupMenuItem(value: 'rotate_left', child: ListTile(leading: Icon(Icons.rotate_left_rounded), title: Text('تدوير 90° يسار'))),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'blank_before', child: ListTile(leading: Icon(Icons.note_add_outlined), title: Text('صفحة فارغة قبل'))),
-              PopupMenuItem(value: 'blank_after', child: ListTile(leading: Icon(Icons.post_add_rounded), title: Text('صفحة فارغة بعد'))),
-              PopupMenuItem(value: 'duplicate', child: ListTile(leading: Icon(Icons.copy_all_rounded), title: Text('نسخ الصفحة'))),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'move_prev', child: ListTile(leading: Icon(Icons.arrow_upward_rounded), title: Text('نقل الصفحة للخلف'))),
-              PopupMenuItem(value: 'move_next', child: ListTile(leading: Icon(Icons.arrow_downward_rounded), title: Text('نقل الصفحة للأمام'))),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline_rounded, color: Colors.red), title: Text('حذف الصفحة', style: TextStyle(color: Colors.red)))),
             ],
           ),
           _saving
@@ -1242,26 +985,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ],
               ),
             ),
-          if (_drawingMode)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              color: AppColors.accent.withOpacity(0.10),
-              child: Row(children:[
-                const Text('الرسم  '),
-                ...[Colors.black,Colors.red,Colors.blue,Colors.green,Colors.orange,Colors.purple].map((c)=>GestureDetector(
-                  onTap:()=>setState(()=>_drawColor=c),
-                  child:Container(margin:const EdgeInsets.all(3),width:24,height:24,decoration:BoxDecoration(color:c,shape:BoxShape.circle,border:Border.all(color:_drawColor==c?Colors.white:Colors.transparent,width:3))),
-                )),
-                const SizedBox(width:8),
-                const Icon(Icons.line_weight_rounded,size:18),
-                SizedBox(width:105,child:Slider(value:_drawWidth,min:1,max:10,divisions:18,onChanged:(v)=>setState(()=>_drawWidth=v))),
-                const Icon(Icons.opacity_rounded,size:18),
-                SizedBox(width:105,child:Slider(value:_drawOpacity,min:0.2,max:1.0,divisions:8,onChanged:(v)=>setState(()=>_drawOpacity=v))),
-                IconButton(tooltip:'حذف آخر رسم',onPressed:_drawElements.isEmpty?null:(){setState(()=>_drawRedo.add(_drawElements.removeLast()));_scheduleAutoSave();},icon:const Icon(Icons.undo_rounded)),
-                IconButton(tooltip:'مسح رسومات الصفحة',onPressed:(){setState(()=>_drawElements.removeWhere((e)=>e.pageNumber==_currentPage));_scheduleAutoSave();},icon:const Icon(Icons.delete_sweep_outlined)),
-              ]),
-            ),
           if (_addTextMode)
             Container(
               width: double.infinity,
@@ -1337,19 +1060,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._annotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildAnnotationOverlay(ann)),
-                if (_drawingMode)
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanStart: (d) => _startDrawing(d.localPosition),
-                      onPanUpdate: (d) => _updateDrawing(d.localPosition),
-                      onPanEnd: (_) => _finishDrawing(),
-                      child: CustomPaint(
-                        painter: _drawingPainterForCurrentPage(),
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
                 // أزرار التكبير/التصغير العائمة
                 Positioned(
                   bottom: 16,
@@ -1387,34 +1097,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       ),
       ),
     );
-  }
-
-  Offset? _viewerToPdf(Offset local) {
-    final transform=_pageTransforms[_currentPage] ?? _fallbackPageTransform(_currentPage);
-    final pageSize=_pdfPageSizes[_currentPage];
-    if (transform==null || pageSize==null || transform.scale<=0) return null;
-    final p=(local-transform.origin)/transform.scale;
-    return Offset(p.dx.clamp(0.0,pageSize.width).toDouble(),p.dy.clamp(0.0,pageSize.height).toDouble());
-  }
-
-  void _startDrawing(Offset local) {
-    if (!_drawingMode) return;
-    final p=_viewerToPdf(local); if (p==null) return;
-    setState(()=>_activeDrawPoints=[p]);
-  }
-  void _updateDrawing(Offset local) {
-    if (_activeDrawPoints==null) return; final p=_viewerToPdf(local); if(p==null)return;
-    setState(() { if(_drawTool==_DrawTool.pen) _activeDrawPoints!.add(p); else if(_activeDrawPoints!.length==1) _activeDrawPoints!.add(p); else _activeDrawPoints![1]=p; });
-  }
-  void _finishDrawing() {
-    final pts=_activeDrawPoints; if(pts==null || pts.length<2){setState(()=>_activeDrawPoints=null);return;}
-    setState(() { _drawElements.add(_DrawElement(pageNumber:_currentPage,tool:_drawTool,points:List.of(pts),color:_drawColor,width:_drawWidth,opacity:_drawOpacity)); _drawRedo.clear(); _activeDrawPoints=null; _hasUnsavedChanges=true; });
-    _scheduleAutoSave();
-  }
-  _DrawingPainter? _drawingPainterForCurrentPage() {
-    final transform=_pageTransforms[_currentPage] ?? _fallbackPageTransform(_currentPage); if(transform==null)return null;
-    final preview=_activeDrawPoints==null?null:_DrawElement(pageNumber:_currentPage,tool:_drawTool,points:List.of(_activeDrawPoints!),color:_drawColor,width:_drawWidth,opacity:_drawOpacity);
-    return _DrawingPainter(elements:_drawElements.where((e)=>e.pageNumber==_currentPage).toList(),preview:preview,transform:transform);
   }
 
   Widget _annotationChip({required IconData icon, required String label, required PdfAnnotationMode mode}) {
