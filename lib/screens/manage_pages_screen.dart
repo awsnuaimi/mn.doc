@@ -43,6 +43,50 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   bool _loadingThumbnails = false;
   bool _hasUnsavedStructuralChanges = false;
 
+  // Undo/Redo مستقل للعمليات البنيوية داخل مدير الصفحات.
+  // اللقطات خفيفة لأنها تحفظ ترتيب الصفحات ودورانها فقط، ولا تنسخ PDF أو الصور المصغرة.
+  final List<List<_ManagedPage>> _structuralUndo = <List<_ManagedPage>>[];
+  final List<List<_ManagedPage>> _structuralRedo = <List<_ManagedPage>>[];
+  static const int _structuralHistoryLimit = 30;
+
+  List<_ManagedPage> _capturePages() =>
+      _pages.map((p) => p.copy()).toList(growable: false);
+
+  void _recordStructuralState() {
+    _structuralUndo.add(_capturePages());
+    _structuralRedo.clear();
+    if (_structuralUndo.length > _structuralHistoryLimit) {
+      _structuralUndo.removeAt(0);
+    }
+  }
+
+  void _restorePages(List<_ManagedPage> snapshot) {
+    _pages
+      ..clear()
+      ..addAll(snapshot.map((p) => p.copy()));
+    _selectedOriginalIndexes.clear();
+    _hasUnsavedStructuralChanges = true;
+  }
+
+  void _undoStructural() {
+    if (_structuralUndo.isEmpty || _processing) return;
+    final current = _capturePages();
+    final previous = _structuralUndo.removeLast();
+    _structuralRedo.add(current);
+    setState(() => _restorePages(previous));
+  }
+
+  void _redoStructural() {
+    if (_structuralRedo.isEmpty || _processing) return;
+    final current = _capturePages();
+    final next = _structuralRedo.removeLast();
+    _structuralUndo.add(current);
+    if (_structuralUndo.length > _structuralHistoryLimit) {
+      _structuralUndo.removeAt(0);
+    }
+    setState(() => _restorePages(next));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -99,6 +143,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _selectedOriginalIndexes.clear();
         _thumbnails.clear();
         _hasUnsavedStructuralChanges = false;
+        _structuralUndo.clear();
+        _structuralRedo.clear();
       });
       await _generateThumbnails(bytes, count);
     } catch (e) {
@@ -154,7 +200,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       _pages.where((p) => _selectedOriginalIndexes.contains(p.originalIndex));
 
   void _rotateSelected(int delta) {
-    if (_selectedOriginalIndexes.isEmpty) return;
+    if (_selectedOriginalIndexes.isEmpty || _processing) return;
+    _recordStructuralState();
     setState(() {
       _hasUnsavedStructuralChanges = true;
       for (final page in _selectedPages) {
@@ -165,7 +212,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   }
 
   void _duplicateSelected() {
-    if (_selectedOriginalIndexes.isEmpty) return;
+    if (_selectedOriginalIndexes.isEmpty || _processing) return;
+    _recordStructuralState();
     setState(() {
       _hasUnsavedStructuralChanges = true;
       final selected = _selectedPages.toList();
@@ -201,6 +249,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       ),
     );
     if (ok != true || !mounted) return;
+    _recordStructuralState();
     setState(() {
       _hasUnsavedStructuralChanges = true;
       _pages.removeWhere((p) => _selectedOriginalIndexes.contains(p.originalIndex));
@@ -428,6 +477,16 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
           actions: _bytes == null
               ? null
               : [
+                  IconButton(
+                    onPressed: (_processing || _structuralUndo.isEmpty) ? null : _undoStructural,
+                    icon: const Icon(Icons.undo_rounded),
+                    tooltip: 'تراجع عن عملية الصفحات',
+                  ),
+                  IconButton(
+                    onPressed: (_processing || _structuralRedo.isEmpty) ? null : _redoStructural,
+                    icon: const Icon(Icons.redo_rounded),
+                    tooltip: 'إعادة عملية الصفحات',
+                  ),
                   IconButton(onPressed: _selectAll, icon: const Icon(Icons.select_all_rounded), tooltip: 'تحديد الكل'),
                   IconButton(onPressed: _pickFile, icon: const Icon(Icons.folder_open_rounded), tooltip: 'فتح PDF آخر'),
                 ],
@@ -466,11 +525,14 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                       padding: const EdgeInsets.only(bottom: 12),
                       itemCount: _pages.length,
                       onReorder: (oldIndex, newIndex) {
+                        if (_processing) return;
+                        if (newIndex > oldIndex) newIndex -= 1;
+                        if (newIndex == oldIndex) return;
+                        _recordStructuralState();
                         setState(() {
-                          if (newIndex > oldIndex) newIndex -= 1;
-                          if (newIndex == oldIndex) return;
                           final item = _pages.removeAt(oldIndex);
                           _pages.insert(newIndex, item);
+                          _selectedOriginalIndexes.clear();
                           _hasUnsavedStructuralChanges = true;
                         });
                       },
