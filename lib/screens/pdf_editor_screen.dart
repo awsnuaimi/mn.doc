@@ -1552,12 +1552,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // التثبيت لا يحسب أي موضع جديد إطلاقًا. ann.dx/ann.dy هما بالفعل
     // الموضع النهائي الذي كان ظاهرًا أثناء السحب، لذلك لا توجد "قفزة".
     if (before != null) {
-      _history.record_EditorSnapshot(
-  textAnnotations: before.map((a) => a.copy()).toList(growable: false),
-  imageAnnotations:
-      _imageAnnotations.map((a) => a.copy()).toList(growable: false),
-)
-    }
+  _history.record(_EditorSnapshot(
+    textAnnotations: before.map((a) => a.copy()).toList(growable: false),
+    imageAnnotations:
+        _imageAnnotations.map((a) => a.copy()).toList(growable: false),
+  ));
+}
     setState(() {
       _movingAnnotation = null;
       _moveSnapshot = null;
