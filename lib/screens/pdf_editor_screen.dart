@@ -1038,6 +1038,244 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   Future<void> _saveDocument() => _runQueuedSave(showResult: true);
 
+  // ═══════════════════════════════════════════════════════════════
+  // إدارة صفحات PDF — حذف / تدوير / صفحة فارغة / نسخ
+  // ═══════════════════════════════════════════════════════════════
+
+  Future<String> _preparePageOperationSource() async {
+    // نمر عبر طابور الحفظ أولًا حتى تدخل النصوص والصور والتواقيع
+    // والتعليقات وحقول النماذج في النسخة التي سنجري عليها عملية الصفحات.
+    await _runQueuedSave(showResult: false);
+    return _lastExportedPath ?? widget.filePath;
+  }
+
+  sf.PdfPageRotateAngle _rotateRightValue(sf.PdfPageRotateAngle value) {
+    switch (value) {
+      case sf.PdfPageRotateAngle.rotateAngle0:
+        return sf.PdfPageRotateAngle.rotateAngle90;
+      case sf.PdfPageRotateAngle.rotateAngle90:
+        return sf.PdfPageRotateAngle.rotateAngle180;
+      case sf.PdfPageRotateAngle.rotateAngle180:
+        return sf.PdfPageRotateAngle.rotateAngle270;
+      case sf.PdfPageRotateAngle.rotateAngle270:
+        return sf.PdfPageRotateAngle.rotateAngle0;
+    }
+  }
+
+  sf.PdfPageRotateAngle _rotateLeftValue(sf.PdfPageRotateAngle value) {
+    switch (value) {
+      case sf.PdfPageRotateAngle.rotateAngle0:
+        return sf.PdfPageRotateAngle.rotateAngle270;
+      case sf.PdfPageRotateAngle.rotateAngle90:
+        return sf.PdfPageRotateAngle.rotateAngle0;
+      case sf.PdfPageRotateAngle.rotateAngle180:
+        return sf.PdfPageRotateAngle.rotateAngle90;
+      case sf.PdfPageRotateAngle.rotateAngle270:
+        return sf.PdfPageRotateAngle.rotateAngle180;
+    }
+  }
+
+  Future<void> _runPageOperation(String operation) async {
+    if (_saving) return;
+
+    if (operation == 'delete' && _pdfPageSizes.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يمكن حذف الصفحة الوحيدة في المستند.')),
+      );
+      return;
+    }
+
+    if (operation == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('حذف الصفحة'),
+          content: Text('هل تريد حذف الصفحة $_currentPage نهائيًا من النسخة الجديدة؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('حذف'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _saving = true);
+    sf.PdfDocument? document;
+    try {
+      final sourcePath = await _preparePageOperationSource();
+      final sourceBytes = await File(sourcePath).readAsBytes();
+      document = sf.PdfDocument(inputBytes: sourceBytes);
+
+      final pageIndex = (_currentPage - 1).clamp(0, document.pages.count - 1);
+
+      switch (operation) {
+        case 'rotate_right':
+          final page = document.pages[pageIndex];
+          page.rotation = _rotateRightValue(page.rotation);
+          break;
+
+        case 'rotate_left':
+          final page = document.pages[pageIndex];
+          page.rotation = _rotateLeftValue(page.rotation);
+          break;
+
+        case 'delete':
+          document.pages.removeAt(pageIndex);
+          break;
+
+        case 'blank_before':
+          final currentSize = document.pages[pageIndex].size;
+          document.pages.insert(pageIndex, currentSize);
+          break;
+
+        case 'blank_after':
+          final currentSize = document.pages[pageIndex].size;
+          document.pages.insert(pageIndex + 1, currentSize);
+          break;
+
+        case 'duplicate':
+          // createTemplate يلتقط محتوى الصفحة الحالية، ثم نرسمه على صفحة
+          // جديدة بالحجم نفسه. هذا يتجنب الاعتماد على API نسخ غير موجودة.
+          final sourcePage = document.pages[pageIndex];
+          final template = sourcePage.createTemplate();
+          final newPage = document.pages.insert(pageIndex + 1, sourcePage.size);
+          newPage.graphics.drawPdfTemplate(
+            template,
+            Offset.zero,
+            sourcePage.size,
+          );
+          break;
+      }
+
+      final bytes = await document.save();
+      final dir = await getApplicationDocumentsDirectory();
+      final rawName = widget.filePath.split('/').last;
+      final baseName = rawName.toLowerCase().endsWith('.pdf')
+          ? rawName.substring(0, rawName.length - 4)
+          : rawName;
+      final outPath =
+          '${dir.path}/${baseName}_pages_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+      final tmp = File('$outPath.tmp');
+      await tmp.writeAsBytes(bytes, flush: true);
+      await tmp.rename(outPath);
+
+      if (!mounted) return;
+      setState(() => _saving = false);
+
+      // نفتح النسخة البنيوية الجديدة فورًا؛ هكذا يعيد SfPdfViewer تحميل
+      // عدد الصفحات وترتيبها ودورانها من الملف نفسه.
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
+      );
+    } catch (e, stack) {
+      if (kDebugMode) {
+        debugPrint('فشلت عملية إدارة الصفحات: $e');
+        debugPrintStack(stackTrace: stack);
+      }
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر تنفيذ عملية الصفحة. لم يتم تعديل الملف الأصلي.')),
+      );
+    } finally {
+      document?.dispose();
+    }
+  }
+
+  void _showPageTools() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.description_rounded),
+                title: const Text('إدارة الصفحات'),
+                subtitle: Text(
+                  'الصفحة الحالية: $_currentPage من ${_pdfPageSizes.isEmpty ? "…" : _pdfPageSizes.length}',
+                ),
+              ),
+              const Divider(),
+              Row(
+                children: [
+                  Expanded(
+                    child: ListTile(
+                      leading: const Icon(Icons.rotate_right_rounded),
+                      title: const Text('تدوير يمين'),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _runPageOperation('rotate_right');
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: ListTile(
+                      leading: const Icon(Icons.rotate_left_rounded),
+                      title: const Text('تدوير يسار'),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _runPageOperation('rotate_left');
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_all_rounded),
+                title: const Text('نسخ الصفحة'),
+                subtitle: const Text('إنشاء نسخة بعد الصفحة الحالية'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _runPageOperation('duplicate');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.note_add_rounded),
+                title: const Text('صفحة فارغة قبل الحالية'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _runPageOperation('blank_before');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.post_add_rounded),
+                title: const Text('صفحة فارغة بعد الحالية'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _runPageOperation('blank_after');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                title: const Text('حذف الصفحة', style: TextStyle(color: Colors.red)),
+                subtitle: const Text('لا يتم تعديل الملف الأصلي'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _runPageOperation('delete');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
   Widget build(BuildContext context) {
     final hasSearchResult = _searchResult.hasResult;
     final settings = context.watch<AppSettingsController>();
@@ -1095,6 +1333,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             icon: const Icon(Icons.bookmark_border_rounded),
             tooltip: tr('ed_bookmarks_tooltip'),
             onPressed: () => _pdfViewerStateKey.currentState?.openBookmarkView(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.layers_rounded),
+            tooltip: 'إدارة الصفحات',
+            onPressed: _showPageTools,
           ),
           IconButton(
             icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
