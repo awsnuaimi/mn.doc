@@ -925,17 +925,52 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   Future<void> _saveDocument() => _runQueuedSave(showResult: true);
 
-  Future<void> _openPageManager() async {
-    String sourcePath = widget.filePath;
-    try {
-      if (_hasUnsavedChanges || (_annotations.isNotEmpty || _imageAnnotations.isNotEmpty) || _hasFormFields) {
-        await _runQueuedSave(showResult: false);
-        sourcePath = _lastExportedPath ?? widget.filePath;
+  /// يثبت أحدث Revision فعليًا قبل أي عملية بنيوية على الصفحات.
+  /// لا يكفي انتظار حفظ كان موجودًا بالطابور، لأن المستخدم قد يعدّل المستند
+  /// أثناء ذلك الحفظ. لذلك نعيد الحفظ حتى تتطابق النسخة المحفوظة مع الحالية.
+  Future<bool> _flushLatestRevisionForStructuralOperation() async {
+    if (_disposed) return false;
+
+    _autoSaveDebounce?.cancel();
+    await (_saveQueue ?? Future.value()).catchError((_) {});
+    if (_disposed || !mounted) return false;
+
+    final needsExport = _hasUnsavedChanges ||
+        _annotations.isNotEmpty ||
+        _imageAnnotations.isNotEmpty ||
+        _hasFormFields;
+    if (!needsExport) return true;
+
+    // حد أمان يمنع حلقة لا نهائية لو فشل التصدير أو استمرت تعديلات جديدة
+    // بالتزامن مع محاولة فتح مدير الصفحات.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final revisionBeforeSave = _documentRevision;
+      await _runQueuedSave(showResult: false);
+      if (_disposed || !mounted) return false;
+
+      if (_savedRevision == _documentRevision &&
+          _savedRevision == revisionBeforeSave &&
+          _lastExportedPath != null) {
+        return true;
       }
-    } catch (_) {
-      sourcePath = _lastExportedPath ?? widget.filePath;
     }
-    if (!mounted) return;
+
+    return false;
+  }
+
+  Future<void> _openPageManager() async {
+    final ready = await _flushLatestRevisionForStructuralOperation();
+    if (!mounted || !ready) {
+      if (mounted) {
+        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppText.t('ed_save_error_prefix', lang))),
+        );
+      }
+      return;
+    }
+
+    final sourcePath = _lastExportedPath ?? widget.filePath;
 
     // مدير الصفحات عملية بنيوية مستقلة. ننتظر نتيجتها بدل ترك المحرر
     // الحالي حيًا خلف محرر جديد؛ وعند نجاحها نستبدل هذه الشاشة بالملف
