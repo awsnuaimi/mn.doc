@@ -34,6 +34,7 @@ class _TextAnnotation {
   double fontSize;
   Color color;
   TextAlign alignment;
+  double boxWidth; // عرض صندوق النص بنقاط PDF
 
   _TextAnnotation({
     required this.pageNumber,
@@ -43,6 +44,7 @@ class _TextAnnotation {
     this.fontSize = 16,
     this.color = Colors.black,
     this.alignment = TextAlign.right,
+    this.boxWidth = 240,
   });
 
   _TextAnnotation copy() => _TextAnnotation(
@@ -53,6 +55,7 @@ class _TextAnnotation {
         fontSize: fontSize,
         color: color,
         alignment: alignment,
+        boxWidth: boxWidth,
       );
 }
 
@@ -288,6 +291,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         fontSize: result.fontSize,
         color: result.color,
         alignment: result.alignment,
+        boxWidth: result.boxWidth,
       ));
     });
     _scheduleAutoSave();
@@ -298,11 +302,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     double initialSize = 16,
     Color initialColor = Colors.black,
     TextAlign initialAlignment = TextAlign.right,
+    double initialBoxWidth = 240,
   }) {
     final controller = TextEditingController(text: initialText);
     double fontSize = initialSize;
     Color color = initialColor;
     TextAlign alignment = initialAlignment;
+    double boxWidth = initialBoxWidth.clamp(80.0, 500.0);
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
@@ -412,11 +418,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('عرض صندوق النص'),
+                      Expanded(
+                        child: Slider(
+                          value: boxWidth, min: 80, max: 500, divisions: 84,
+                          label: '${boxWidth.round()} pt',
+                          onChanged: (v) => setSheetState(() => boxWidth = v),
+                        ),
+                      ),
+                      SizedBox(width: 48, child: Text('${boxWidth.round()}', textAlign: TextAlign.center)),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(
                       context,
-                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color, alignment: alignment),
+                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color, alignment: alignment, boxWidth: boxWidth),
                     ),
                     child: Text(tr('ed_dialog_add')),
                   ),
@@ -435,6 +455,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       initialSize: ann.fontSize,
       initialColor: ann.color,
       initialAlignment: ann.alignment,
+      initialBoxWidth: ann.boxWidth,
     );
     if (result == null) return;
     _pushUndoState();
@@ -446,6 +467,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ann.fontSize = result.fontSize;
         ann.color = result.color;
         ann.alignment = result.alignment;
+        ann.boxWidth = result.boxWidth;
       }
     });
     _scheduleAutoSave();
@@ -838,7 +860,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final safeX = ann.dx.clamp(0.0, (pageSize.width - minBoxWidth).clamp(0.0, pageSize.width)).toDouble();
         final safeY = ann.dy.clamp(0.0, (pageSize.height - boxHeight).clamp(0.0, pageSize.height)).toDouble();
         final availableWidth = pageSize.width - safeX;
-        final boxWidth = availableWidth < minBoxWidth ? minBoxWidth : availableWidth;
+        final requestedWidth = ann.boxWidth.clamp(minBoxWidth, pageSize.width);
+        final boxWidth = requestedWidth > availableWidth ? availableWidth : requestedWidth;
 
         page.graphics.drawString(
           ann.text,
@@ -1359,7 +1382,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // نعطي النص hit-area معقولة من دون تخزين أي إحداثيات شاشة في البيانات.
     // أثناء السحب تتغير ann.dx/ann.dy مباشرة بنقاط PDF، لذلك المكان الظاهر
     // والمكان الذي سيُحفظ لاحقًا هما الشيء نفسه حرفيًا.
-    final estimatedWidth = _estimateTextWidth(ann, transform.scale);
+    final estimatedWidth = (ann.boxWidth * transform.scale).clamp(48.0, 520.0 * transform.scale);
     final estimatedHeight = _estimateTextHeight(ann, transform.scale);
 
     return Positioned(
@@ -1391,7 +1414,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     child: Text(
                       ann.text,
                       textAlign: ann.alignment,
-                      maxLines: 3,
+                      maxLines: 8,
                       overflow: TextOverflow.visible,
                       style: TextStyle(
                         fontSize: previewFontSize,
@@ -1584,6 +1607,67 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// عند الضغط على نص موجود: قائمة صغيرة "تعديل" أو "نقل" — النقل يعتمد
   /// على نفس آلية الضغط الدقيقة المستخدمة بالإضافة (بدل السحب بالإصبع
   /// غير المضمون هندسيًا)، فيضغط المستخدم على المكان الجديد مباشرة.
+  Future<void> _splitTextAnnotation(_TextAnnotation ann) async {
+    final source = ann.text.trim();
+    if (source.length < 2) return;
+    final middle = source.length ~/ 2;
+    int cut = source.lastIndexOf(' ', middle);
+    if (cut < 1) cut = source.indexOf(' ', middle);
+    if (cut < 1) cut = middle;
+
+    final leftController = TextEditingController(text: source.substring(0, cut).trim());
+    final rightController = TextEditingController(text: source.substring(cut).trim());
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تقسيم النص'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('عدّل الجزأين ثم اضغط تقسيم. سيصبح كل جزء صندوق نص مستقلًا ويمكن نقله وتغيير عرضه.'),
+            const SizedBox(height: 12),
+            TextField(controller: leftController, maxLines: 4, decoration: const InputDecoration(labelText: 'الجزء الأول')),
+            const SizedBox(height: 10),
+            TextField(controller: rightController, maxLines: 4, decoration: const InputDecoration(labelText: 'الجزء الثاني')),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, [leftController.text.trim(), rightController.text.trim()]),
+            child: const Text('تقسيم'),
+          ),
+        ],
+      ),
+    );
+    leftController.dispose();
+    rightController.dispose();
+    if (result == null || result.length != 2 || result[0].isEmpty || result[1].isEmpty || !mounted) return;
+
+    final pageSize = _pdfPageSizes[ann.pageNumber];
+    _pushUndoState();
+    setState(() {
+      final halfWidth = (ann.boxWidth / 2).clamp(80.0, 250.0);
+      ann.text = result[0];
+      ann.boxWidth = halfWidth;
+      final desiredX = ann.dx + halfWidth + 12;
+      final secondX = pageSize == null ? desiredX : desiredX.clamp(0.0, (pageSize.width - halfWidth).clamp(0.0, pageSize.width)).toDouble();
+      final secondY = (pageSize != null && (secondX - ann.dx).abs() < 20)
+          ? (ann.dy + ann.fontSize * 2.2).clamp(0.0, pageSize.height - ann.fontSize * 1.4).toDouble()
+          : ann.dy;
+      _annotations.add(_TextAnnotation(
+        pageNumber: ann.pageNumber,
+        dx: secondX,
+        dy: secondY,
+        text: result[1],
+        fontSize: ann.fontSize,
+        color: ann.color,
+        alignment: ann.alignment,
+        boxWidth: halfWidth,
+      ));
+    });
+    _scheduleAutoSave();
+  }
+
   void _showAnnotationActionSheet(_TextAnnotation ann) {
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
@@ -1613,6 +1697,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.call_split_rounded),
+              title: const Text('تقسيم النص'),
+              subtitle: const Text('تحويل النص إلى صندوقين مستقلين'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _splitTextAnnotation(ann);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: Text(tr('ed_action_delete'), style: const TextStyle(color: Colors.red)),
               onTap: () {
@@ -1634,5 +1727,6 @@ class _TextDialogResult {
   final double fontSize;
   final Color color;
   final TextAlign alignment;
-  _TextDialogResult({required this.text, required this.fontSize, required this.color, this.alignment = TextAlign.right});
+  final double boxWidth;
+  _TextDialogResult({required this.text, required this.fontSize, required this.color, this.alignment = TextAlign.right, this.boxWidth = 240});
 }
