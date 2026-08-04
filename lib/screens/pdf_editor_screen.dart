@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
@@ -13,6 +15,7 @@ import '../services/app_settings.dart';
 import '../services/app_text.dart';
 import '../services/isolate_helpers.dart';
 import '../services/arabic_font_loader.dart';
+import '../services/signature_library.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
@@ -53,6 +56,33 @@ class _TextAnnotation {
       );
 }
 
+class _PdfImageElement {
+  int pageNumber;
+  double dx;
+  double dy;
+  double width;
+  double height;
+  double rotation;
+  Uint8List bytes;
+  String kind;
+
+  _PdfImageElement({
+    required this.pageNumber,
+    required this.dx,
+    required this.dy,
+    required this.width,
+    required this.height,
+    required this.bytes,
+    this.rotation = 0,
+    this.kind = 'image',
+  });
+
+  _PdfImageElement copy() => _PdfImageElement(
+        pageNumber: pageNumber, dx: dx, dy: dy, width: width, height: height,
+        rotation: rotation, bytes: Uint8List.fromList(bytes), kind: kind,
+      );
+}
+
 /// تحويل هندسي من إحداثيات صفحة PDF (points) إلى إحداثيات الـViewer (pixels).
 /// يُعاد حسابه/معايرته من ضغطة Syncfusion الحقيقية، ولا يدخل في بيانات النص.
 class _PdfPageTransform {
@@ -77,6 +107,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final PdfViewerController _controller = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
+  final List<_PdfImageElement> _imageElements = [];
   final GlobalKey _viewerKey = GlobalKey();
 
   // أبعاد الصفحات الأصلية بنقاط PDF + التحويل الحالي للصفحة المعروضة.
@@ -428,7 +459,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// طازجًا عبر طابور الحفظ نفسه أولًا لضمان قراءة أحدث حالة فعليًا —
   /// وليس مجرد التحقق من وجود نسخة محفوظة قد تكون قديمة.
   Future<String> _currentBestFilePath() async {
-    if (_annotations.isNotEmpty || _hasFormFields) {
+    if (_annotations.isNotEmpty || _imageElements.isNotEmpty || _hasFormFields) {
       try {
         return await _runQueuedSave(showResult: false).then((_) => _lastExportedPath ?? widget.filePath);
       } catch (_) {
@@ -585,6 +616,172 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
+  Future<void> _addImageFromGallery() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 95);
+    if (picked == null) return;
+    final bytes = await File(picked.path).readAsBytes();
+    _insertImageElement(bytes, kind: 'image');
+  }
+
+  Future<void> _addSavedMark() async {
+    final marks = await SignatureLibrary.list();
+    if (!mounted) return;
+    if (marks.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا توجد تواقيع أو أختام محفوظة. أنشئ توقيعًا من أداة التوقيع أولًا.')),
+      );
+      return;
+    }
+    final mark = await showModalBottomSheet<SavedMark>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: marks.length,
+          itemBuilder: (_, i) {
+            final m = marks[i];
+            return ListTile(
+              leading: SizedBox(width: 56, height: 40, child: Image.file(File(m.filePath), fit: BoxFit.contain)),
+              title: Text(m.name),
+              subtitle: Text(m.type == MarkType.signature ? 'توقيع' : 'ختم'),
+              onTap: () => Navigator.pop(sheetContext, m),
+            );
+          },
+        ),
+      ),
+    );
+    if (mark == null) return;
+    final bytes = await File(mark.filePath).readAsBytes();
+    _insertImageElement(bytes, kind: mark.type == MarkType.signature ? 'signature' : 'stamp');
+  }
+
+  void _insertImageElement(Uint8List bytes, {required String kind}) {
+    final pageSize = _pdfPageSizes[_currentPage];
+    if (pageSize == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('انتظر حتى يكتمل تحميل صفحة PDF ثم حاول مجددًا.')));
+      return;
+    }
+    final w = kind == 'image' ? 180.0 : 150.0;
+    final h = kind == 'image' ? 120.0 : 65.0;
+    setState(() {
+      _imageElements.add(_PdfImageElement(
+        pageNumber: _currentPage,
+        dx: ((pageSize.width - w) / 2).clamp(0.0, pageSize.width),
+        dy: ((pageSize.height - h) / 2).clamp(0.0, pageSize.height),
+        width: w, height: h, bytes: bytes, kind: kind,
+      ));
+      _hasUnsavedChanges = true;
+    });
+    _scheduleAutoSave();
+  }
+
+  Future<void> _showImageElementActions(_PdfImageElement e) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+            leading: const Icon(Icons.aspect_ratio_rounded),
+            title: const Text('الحجم والتدوير'),
+            onTap: () { Navigator.pop(sheetContext); _editImageGeometry(e); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.copy_rounded),
+            title: const Text('نسخ'),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              final c = e.copy();
+              c.dx += 12; c.dy += 12;
+              setState(() { _imageElements.add(c); _hasUnsavedChanges = true; });
+              _scheduleAutoSave();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+            title: const Text('حذف', style: TextStyle(color: Colors.red)),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              setState(() { _imageElements.remove(e); _hasUnsavedChanges = true; });
+              _scheduleAutoSave();
+            },
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _editImageGeometry(_PdfImageElement e) async {
+    double width = e.width, rotation = e.rotation;
+    final ratio = e.height <= 0 ? 1.0 : e.width / e.height;
+    final result = await showModalBottomSheet<List<double>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('الحجم والتدوير', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Row(children: [
+              const Text('الحجم'),
+              Expanded(child: Slider(value: width.clamp(50, 400), min: 50, max: 400, onChanged: (v) => setSheet(() => width = v))),
+              Text('${width.round()}'),
+            ]),
+            Row(children: [
+              const Text('التدوير'),
+              Expanded(child: Slider(value: rotation.clamp(-180, 180), min: -180, max: 180, divisions: 72, onChanged: (v) => setSheet(() => rotation = v))),
+              Text('${rotation.round()}°'),
+            ]),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, [width, rotation]), child: const Text('تطبيق')),
+          ]),
+        ),
+      )),
+    );
+    if (result == null) return;
+    setState(() {
+      e.width = result[0];
+      e.height = result[0] / ratio;
+      e.rotation = result[1];
+      _hasUnsavedChanges = true;
+    });
+    _scheduleAutoSave();
+  }
+
+  Widget _buildImageElementOverlay(_PdfImageElement e) {
+    final transform = _pageTransforms[e.pageNumber] ?? _fallbackPageTransform(e.pageNumber);
+    if (transform == null) return const SizedBox.shrink();
+    final point = transform.pdfToViewer(Offset(e.dx, e.dy));
+    return Positioned(
+      left: point.dx,
+      top: point.dy,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _showImageElementActions(e),
+        onPanUpdate: (d) {
+          final pageSize = _pdfPageSizes[e.pageNumber];
+          if (pageSize == null || transform.scale <= 0) return;
+          final delta = d.delta / transform.scale;
+          setState(() {
+            e.dx = (e.dx + delta.dx).clamp(0.0, (pageSize.width - e.width).clamp(0.0, pageSize.width)).toDouble();
+            e.dy = (e.dy + delta.dy).clamp(0.0, (pageSize.height - e.height).clamp(0.0, pageSize.height)).toDouble();
+            _hasUnsavedChanges = true;
+          });
+        },
+        onPanEnd: (_) => _scheduleAutoSave(),
+        child: Transform.rotate(
+          angle: e.rotation * 3.141592653589793 / 180.0,
+          child: Container(
+            width: e.width * transform.scale,
+            height: e.height * transform.scale,
+            decoration: BoxDecoration(border: Border.all(color: AppColors.accent, width: 1.5)),
+            child: Image.memory(e.bytes, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _setAnnotationMode(PdfAnnotationMode mode) {
     setState(() {
       _controller.annotationMode =
@@ -655,6 +852,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           ),
           format: sf.PdfStringFormat(alignment: pdfAlignment),
         );
+      }
+
+      final imageSnapshot = _imageElements.map((e) => e.copy()).toList(growable: false);
+      for (final e in imageSnapshot) {
+        final pageIndex = e.pageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+        final page = document.pages[pageIndex];
+        final graphics = page.graphics;
+        final bitmap = sf.PdfBitmap(e.bytes);
+        graphics.save();
+        try {
+          final cx = e.dx + e.width / 2;
+          final cy = e.dy + e.height / 2;
+          graphics.translateTransform(cx, cy);
+          graphics.rotateTransform(e.rotation);
+          graphics.drawImage(bitmap, Rect.fromLTWH(-e.width / 2, -e.height / 2, e.width, e.height));
+        } finally {
+          graphics.restore();
+        }
       }
 
       savedBytes = await document.save();
@@ -863,6 +1079,18 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             onPressed: () => setState(() => _addTextMode = !_addTextMode),
           ),
           PopupMenuButton<String>(
+            icon: const Icon(Icons.add_photo_alternate_rounded),
+            tooltip: 'إضافة صورة / توقيع / ختم',
+            onSelected: (value) {
+              if (value == 'image') _addImageFromGallery();
+              if (value == 'mark') _addSavedMark();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'image', child: ListTile(leading: Icon(Icons.image_rounded), title: Text('إضافة صورة'))),
+              PopupMenuItem(value: 'mark', child: ListTile(leading: Icon(Icons.draw_rounded), title: Text('توقيع أو ختم محفوظ'))),
+            ],
+          ),
+          PopupMenuButton<String>(
             icon: const Icon(Icons.smart_toy_rounded),
             tooltip: tr('ed_ai_tooltip'),
             onSelected: _openAiFeature,
@@ -1060,6 +1288,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._annotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildAnnotationOverlay(ann)),
+                ..._imageElements
+                    .where((e) => e.pageNumber == _currentPage)
+                    .map((e) => _buildImageElementOverlay(e)),
                 // أزرار التكبير/التصغير العائمة
                 Positioned(
                   bottom: 16,
