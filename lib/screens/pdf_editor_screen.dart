@@ -36,6 +36,10 @@ class _TextAnnotation {
   Color color;
   TextAlign alignment;
   double boxWidth; // عرض مربع النص بنقاط PDF
+  bool bold;
+  bool underline;
+  bool strikeThrough;
+  double lineHeight;
 
   _TextAnnotation({
     required this.pageNumber,
@@ -46,6 +50,10 @@ class _TextAnnotation {
     this.color = Colors.black,
     this.alignment = TextAlign.right,
     this.boxWidth = 220,
+    this.bold = false,
+    this.underline = false,
+    this.strikeThrough = false,
+    this.lineHeight = 1.3,
   });
 
   _TextAnnotation copy() => _TextAnnotation(
@@ -57,6 +65,10 @@ class _TextAnnotation {
         color: color,
         alignment: alignment,
         boxWidth: boxWidth,
+        bold: bold,
+        underline: underline,
+        strikeThrough: strikeThrough,
+        lineHeight: lineHeight,
       );
 }
 
@@ -312,6 +324,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         fontSize: result.fontSize,
         color: result.color,
         alignment: result.alignment,
+        bold: result.bold,
+        underline: result.underline,
+        strikeThrough: result.strikeThrough,
+        lineHeight: result.lineHeight,
       ));
     });
     _scheduleAutoSave();
@@ -322,11 +338,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     double initialSize = 16,
     Color initialColor = Colors.black,
     TextAlign initialAlignment = TextAlign.right,
+    bool initialBold = false,
+    bool initialUnderline = false,
+    bool initialStrikeThrough = false,
+    double initialLineHeight = 1.3,
   }) {
     final controller = TextEditingController(text: initialText);
     double fontSize = initialSize;
     Color color = initialColor;
     TextAlign alignment = initialAlignment;
+    bool bold = initialBold;
+    bool underline = initialUnderline;
+    bool strikeThrough = initialStrikeThrough;
+    double lineHeight = initialLineHeight;
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
@@ -436,11 +460,49 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        label: const Text('B', style: TextStyle(fontWeight: FontWeight.bold)),
+                        selected: bold,
+                        onSelected: (v) => setSheetState(() => bold = v),
+                      ),
+                      FilterChip(
+                        label: const Text('U', style: TextStyle(decoration: TextDecoration.underline)),
+                        selected: underline,
+                        onSelected: (v) => setSheetState(() => underline = v),
+                      ),
+                      FilterChip(
+                        label: const Text('S', style: TextStyle(decoration: TextDecoration.lineThrough)),
+                        selected: strikeThrough,
+                        onSelected: (v) => setSheetState(() => strikeThrough = v),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      const Text('تباعد الأسطر'),
+                      Expanded(
+                        child: Slider(
+                          value: lineHeight,
+                          min: 1.0,
+                          max: 2.0,
+                          divisions: 10,
+                          label: lineHeight.toStringAsFixed(1),
+                          onChanged: (v) => setSheetState(() => lineHeight = v),
+                        ),
+                      ),
+                      SizedBox(width: 38, child: Text(lineHeight.toStringAsFixed(1))),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(
                       context,
-                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color, alignment: alignment),
+                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color, alignment: alignment, bold: bold, underline: underline, strikeThrough: strikeThrough, lineHeight: lineHeight),
                     ),
                     child: Text(tr('ed_dialog_add')),
                   ),
@@ -459,6 +521,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       initialSize: ann.fontSize,
       initialColor: ann.color,
       initialAlignment: ann.alignment,
+      initialBold: ann.bold,
+      initialUnderline: ann.underline,
+      initialStrikeThrough: ann.strikeThrough,
+      initialLineHeight: ann.lineHeight,
     );
     if (result == null) return;
     _pushUndoState();
@@ -470,6 +536,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ann.fontSize = result.fontSize;
         ann.color = result.color;
         ann.alignment = result.alignment;
+        ann.bold = result.bold;
+        ann.underline = result.underline;
+        ann.strikeThrough = result.strikeThrough;
+        ann.lineHeight = result.lineHeight;
       }
     });
     _scheduleAutoSave();
@@ -690,7 +760,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final approxCharsPerLine = (ann.boxWidth / (ann.fontSize * 0.58)).clamp(4.0, 200.0);
         final wrappedLines = (ann.text.length / approxCharsPerLine).ceil().clamp(1, 50);
         final lineCount = wrappedLines > explicitLines ? wrappedLines : explicitLines;
-        final boxHeight = ann.fontSize * 1.35 * lineCount;
+        final boxHeight = ann.fontSize * ann.lineHeight * lineCount;
 
         // نحصر موضع النص ضمن حدود الصفحة فعليًا (وليس بس عرض الصندوق) —
         // يحمي من حالات نادرة تكون فيها dx/dy خارج الصفحة قليلًا (مثلًا
@@ -702,18 +772,30 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final requestedWidth = ann.boxWidth.clamp(minBoxWidth, pageSize.width).toDouble();
         final boxWidth = requestedWidth > availableWidth ? availableWidth : requestedWidth;
 
-        page.graphics.drawString(
-          ann.text,
-          font,
-          brush: brush,
-          bounds: Rect.fromLTWH(
-            safeX,
-            safeY,
-            boxWidth,
-            boxHeight,
-          ),
-          format: sf.PdfStringFormat(alignment: pdfAlignment),
-        );
+        final textBounds = Rect.fromLTWH(safeX, safeY, boxWidth, boxHeight);
+        final textFormat = sf.PdfStringFormat(alignment: pdfAlignment);
+        page.graphics.drawString(ann.text, font, brush: brush, bounds: textBounds, format: textFormat);
+        // محاكاة Bold آمنة مع نفس الخط العربي المضمّن، بدون الاعتماد على ملف خط إضافي.
+        if (ann.bold) {
+          page.graphics.drawString(ann.text, font, brush: brush, bounds: Rect.fromLTWH(safeX + 0.45, safeY, boxWidth, boxHeight), format: textFormat);
+        }
+        // خطوط التنسيق تُرسم على كل سطر تقديري داخل مربع النص.
+        if (ann.underline || ann.strikeThrough) {
+          final pen = sf.PdfPen(sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue), width: (ann.fontSize / 18).clamp(0.6, 1.5));
+          final step = ann.fontSize * ann.lineHeight;
+          for (var line = 0; line < lineCount; line++) {
+            final top = safeY + line * step;
+            if (top > safeY + boxHeight) break;
+            if (ann.underline) {
+              final y = top + ann.fontSize * 1.05;
+              page.graphics.drawLine(pen, Offset(safeX, y), Offset(safeX + boxWidth, y));
+            }
+            if (ann.strikeThrough) {
+              final y = top + ann.fontSize * 0.55;
+              page.graphics.drawLine(pen, Offset(safeX, y), Offset(safeX + boxWidth, y));
+            }
+          }
+        }
       }
 
       final imageSnapshot = _imageAnnotations.map((a) => a.copy()).toList(growable: false);
@@ -1243,7 +1325,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       overflow: TextOverflow.visible,
                       style: TextStyle(
                         fontSize: previewFontSize,
-                        height: 1.3,
+                        height: ann.lineHeight,
+                        fontWeight: ann.bold ? FontWeight.bold : FontWeight.normal,
+                        decoration: ann.underline && ann.strikeThrough
+                            ? TextDecoration.combine([TextDecoration.underline, TextDecoration.lineThrough])
+                            : ann.underline
+                                ? TextDecoration.underline
+                                : ann.strikeThrough
+                                    ? TextDecoration.lineThrough
+                                    : TextDecoration.none,
                         color: ann.color,
                       ),
                     ),
@@ -1304,7 +1394,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final painter = TextPainter(
       text: TextSpan(
         text: ann.text,
-        style: TextStyle(fontSize: ann.fontSize * scale, height: 1.3),
+        style: TextStyle(fontSize: ann.fontSize * scale, height: ann.lineHeight, fontWeight: ann.bold ? FontWeight.bold : FontWeight.normal),
       ),
       textDirection: TextDirection.rtl,
       maxLines: 3,
@@ -1616,12 +1706,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         color: ann.color,
         alignment: ann.alignment,
         boxWidth: halfWidth,
+        bold: ann.bold,
+        underline: ann.underline,
+        strikeThrough: ann.strikeThrough,
+        lineHeight: ann.lineHeight,
       ));
     });
     _scheduleAutoSave();
   }
 
-  void _duplicateAnnotation(_TextAnnotation ann) { _pushUndoState(); setState(() => _annotations.add(_TextAnnotation(pageNumber:ann.pageNumber,dx:ann.dx+18,dy:ann.dy+18,text:ann.text,fontSize:ann.fontSize,color:ann.color,alignment:ann.alignment,boxWidth:ann.boxWidth))); _scheduleAutoSave(); }
+  void _duplicateAnnotation(_TextAnnotation ann) { _pushUndoState(); setState(() => _annotations.add(_TextAnnotation(pageNumber:ann.pageNumber,dx:ann.dx+18,dy:ann.dy+18,text:ann.text,fontSize:ann.fontSize,color:ann.color,alignment:ann.alignment,boxWidth:ann.boxWidth,bold:ann.bold,underline:ann.underline,strikeThrough:ann.strikeThrough,lineHeight:ann.lineHeight))); _scheduleAutoSave(); }
 
   void _showAnnotationActionSheet(_TextAnnotation ann) {
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
@@ -1675,5 +1769,9 @@ class _TextDialogResult {
   final double fontSize;
   final Color color;
   final TextAlign alignment;
-  _TextDialogResult({required this.text, required this.fontSize, required this.color, this.alignment = TextAlign.right});
+  final bool bold;
+  final bool underline;
+  final bool strikeThrough;
+  final double lineHeight;
+  _TextDialogResult({required this.text, required this.fontSize, required this.color, this.alignment = TextAlign.right, this.bold = false, this.underline = false, this.strikeThrough = false, this.lineHeight = 1.3});
 }
