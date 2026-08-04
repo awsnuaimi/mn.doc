@@ -857,11 +857,24 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       sourcePath = _lastExportedPath ?? widget.filePath;
     }
     if (!mounted) return;
-    Navigator.push(
+
+    // مدير الصفحات عملية بنيوية مستقلة. ننتظر نتيجتها بدل ترك المحرر
+    // الحالي حيًا خلف محرر جديد؛ وعند نجاحها نستبدل هذه الشاشة بالملف
+    // الناتج فقط بعد اكتمال العملية بالكامل.
+    final managedPath = await Navigator.push<String>(
       context,
       MaterialPageRoute(
         builder: (_) => ManagePagesScreen(initialFilePath: sourcePath),
       ),
+    );
+    if (!mounted || managedPath == null || managedPath.isEmpty) return;
+
+    _autoSaveDebounce?.cancel();
+    await (_saveQueue ?? Future.value()).catchError((_) {});
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: managedPath)),
     );
   }
 

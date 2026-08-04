@@ -10,7 +10,6 @@ import '../services/pdf_page_ops.dart';
 import '../services/app_settings.dart';
 import '../services/app_text.dart';
 import '../theme/app_theme.dart';
-import 'pdf_editor_screen.dart';
 
 /// حذف صفحات معيّنة أو إعادة ترتيبها داخل ملف PDF واحد.
 class ManagePagesScreen extends StatefulWidget {
@@ -28,23 +27,31 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   final List<List<int>> _undoStack = <List<int>>[];
   final List<List<int>> _redoStack = <List<int>>[];
   bool _processing = false;
+  bool _hasPageChanges = false;
 
   void _recordPageState() {
     _undoStack.add(List<int>.from(_pageOrder));
     _redoStack.clear();
     if (_undoStack.length > 30) _undoStack.removeAt(0);
+    _hasPageChanges = true;
   }
 
   void _undoPages() {
     if (_undoStack.isEmpty || _processing) return;
     _redoStack.add(List<int>.from(_pageOrder));
-    setState(() => _pageOrder = _undoStack.removeLast());
+    setState(() {
+      _pageOrder = _undoStack.removeLast();
+      _hasPageChanges = true;
+    });
   }
 
   void _redoPages() {
     if (_redoStack.isEmpty || _processing) return;
     _undoStack.add(List<int>.from(_pageOrder));
-    setState(() => _pageOrder = _redoStack.removeLast());
+    setState(() {
+      _pageOrder = _redoStack.removeLast();
+      _hasPageChanges = true;
+    });
   }
 
   @override
@@ -69,6 +76,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _pageOrder = List.generate(count, (i) => i);
         _undoStack.clear();
         _redoStack.clear();
+        _hasPageChanges = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -97,6 +105,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _pageOrder = List.generate(count, (i) => i);
         _undoStack.clear();
         _redoStack.clear();
+        _hasPageChanges = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -119,7 +128,10 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       await File(outPath).writeAsBytes(outBytes, flush: true);
 
       if (!mounted) return;
-      setState(() => _processing = false);
+      setState(() {
+        _processing = false;
+        _hasPageChanges = false;
+      });
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       String tr(String key) => AppText.t(key, lang);
 
@@ -136,10 +148,10 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
-                );
+                // نعيد المسار للمحرر الأصلي بدل إنشاء محرر ثانٍ من داخل
+                // مدير الصفحات. هكذا تبقى العملية البنيوية transaction واحدة
+                // ولا تتكوّن شاشات متداخلة بحالات حفظ مختلفة.
+                Navigator.pop(context, outPath);
               },
               child: Text(tr('scanner_open_file')),
             ),
@@ -162,7 +174,31 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
 
     return Directionality(
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
-      child: Scaffold(
+      child: PopScope(
+        canPop: !_hasPageChanges && !_processing,
+        onPopInvoked: (didPop) async {
+          if (didPop || _processing) return;
+          final discard = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: Text(tr('unsaved_title')),
+              content: Text(tr('unsaved_body')),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(tr('cancel')),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(tr('discard_exit')),
+                ),
+              ],
+            ),
+          );
+          if (discard == true && mounted) Navigator.pop(context);
+        },
+        child: Scaffold(
       appBar: AppBar(
         title: Text(tr('tool_pages_t')),
         actions: [
@@ -261,6 +297,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                 ),
               ],
             ),
+      ),
       ),
     );
   }
