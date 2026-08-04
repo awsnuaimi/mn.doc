@@ -748,7 +748,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         } else if (e.points.length >= 2) {
           final r=Rect.fromPoints(e.points.first,e.points.last);
           if (e.tool == _DrawTool.rectangle) page.graphics.drawRectangle(pen: pen,bounds:r);
-          if (e.tool == _DrawTool.ellipse) page.graphics.drawEllipse(pen: pen,bounds:r);
+          if (e.tool == _DrawTool.ellipse) page.graphics.drawEllipse(r, pen: pen);
         }
       }
 
