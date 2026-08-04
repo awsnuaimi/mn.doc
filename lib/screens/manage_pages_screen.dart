@@ -25,7 +25,27 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   String? _fileName;
   Uint8List? _bytes;
   List<int> _pageOrder = []; // فهارس الصفحات الأصلية بالترتيب الحالي
+  final List<List<int>> _undoStack = <List<int>>[];
+  final List<List<int>> _redoStack = <List<int>>[];
   bool _processing = false;
+
+  void _recordPageState() {
+    _undoStack.add(List<int>.from(_pageOrder));
+    _redoStack.clear();
+    if (_undoStack.length > 30) _undoStack.removeAt(0);
+  }
+
+  void _undoPages() {
+    if (_undoStack.isEmpty || _processing) return;
+    _redoStack.add(List<int>.from(_pageOrder));
+    setState(() => _pageOrder = _undoStack.removeLast());
+  }
+
+  void _redoPages() {
+    if (_redoStack.isEmpty || _processing) return;
+    _undoStack.add(List<int>.from(_pageOrder));
+    setState(() => _pageOrder = _redoStack.removeLast());
+  }
 
   @override
   void initState() {
@@ -47,6 +67,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _fileName = path.split(Platform.pathSeparator).last;
         _bytes = bytes;
         _pageOrder = List.generate(count, (i) => i);
+        _undoStack.clear();
+        _redoStack.clear();
       });
     } catch (e) {
       if (!mounted) return;
@@ -73,6 +95,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _fileName = result.files.single.name;
         _bytes = bytes;
         _pageOrder = List.generate(count, (i) => i);
+        _undoStack.clear();
+        _redoStack.clear();
       });
     } catch (e) {
       if (!mounted) return;
@@ -139,7 +163,21 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     return Directionality(
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-      appBar: AppBar(title: Text(tr('tool_pages_t'))),
+      appBar: AppBar(
+        title: Text(tr('tool_pages_t')),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.undo_rounded),
+            tooltip: tr('undo'),
+            onPressed: (_undoStack.isEmpty || _processing) ? null : _undoPages,
+          ),
+          IconButton(
+            icon: const Icon(Icons.redo_rounded),
+            tooltip: tr('redo'),
+            onPressed: (_redoStack.isEmpty || _processing) ? null : _redoPages,
+          ),
+        ],
+      ),
       body: _bytes == null
           ? Center(
               child: Padding(
@@ -177,6 +215,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _pageOrder.length,
                     onReorder: (oldIndex, newIndex) {
+                      _recordPageState();
                       setState(() {
                         if (newIndex > oldIndex) newIndex -= 1;
                         final item = _pageOrder.removeAt(oldIndex);
@@ -196,7 +235,10 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                           title: Text('${tr('scanner_page_label')} $originalPageNumber (${tr('pages_original_label')})'),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                            onPressed: () => setState(() => _pageOrder.removeAt(index)),
+                            onPressed: () {
+                              _recordPageState();
+                              setState(() => _pageOrder.removeAt(index));
+                            },
                           ),
                         ),
                       );

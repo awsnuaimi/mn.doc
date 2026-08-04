@@ -65,6 +65,47 @@ class _PdfPageTransform {
   Offset pdfToViewer(Offset pdfPoint) => origin + pdfPoint * scale;
 }
 
+/// لقطة قابلة للتوسّع لحالة المحرر. حاليًا تحتوي النصوص المخصّصة،
+/// ويمكن إضافة الصور/التواقيع/الأختام إليها لاحقًا من دون تغيير منطق Undo/Redo.
+class _EditorSnapshot {
+  final List<_TextAnnotation> textAnnotations;
+
+  _EditorSnapshot({required this.textAnnotations});
+
+  factory _EditorSnapshot.capture(List<_TextAnnotation> annotations) =>
+      _EditorSnapshot(textAnnotations: annotations.map((a) => a.copy()).toList(growable: false));
+}
+
+class _EditorHistory {
+  final int limit;
+  final List<_EditorSnapshot> _undo = <_EditorSnapshot>[];
+  final List<_EditorSnapshot> _redo = <_EditorSnapshot>[];
+
+  _EditorHistory({this.limit = 20});
+
+  bool get canUndo => _undo.isNotEmpty;
+  bool get canRedo => _redo.isNotEmpty;
+
+  void record(_EditorSnapshot before) {
+    _undo.add(before);
+    _redo.clear();
+    if (_undo.length > limit) _undo.removeAt(0);
+  }
+
+  _EditorSnapshot? undo(_EditorSnapshot current) {
+    if (_undo.isEmpty) return null;
+    _redo.add(current);
+    return _undo.removeLast();
+  }
+
+  _EditorSnapshot? redo(_EditorSnapshot current) {
+    if (_redo.isEmpty) return null;
+    _undo.add(current);
+    if (_undo.length > limit) _undo.removeAt(0);
+    return _redo.removeLast();
+  }
+}
+
 
 class PdfEditorScreen extends StatefulWidget {
   final String filePath;
@@ -96,41 +137,33 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   int _currentPage = 1;
   double _zoomLevel = 1.0;
 
-  // ------- تراجع/إعادة (Undo/Redo) لتعليقات النص المضافة -------
-  final List<List<_TextAnnotation>> _undoStack = [];
-  final List<List<_TextAnnotation>> _redoStack = [];
+  // ------- تراجع/إعادة موحّد وقابل للتوسعة لكل عناصر المحرر -------
+  final _EditorHistory _history = _EditorHistory(limit: 20);
+
+  _EditorSnapshot _captureEditorState() => _EditorSnapshot.capture(_annotations);
+
+  void _restoreEditorState(_EditorSnapshot snapshot) {
+    _annotations
+      ..clear()
+      ..addAll(snapshot.textAnnotations.map((a) => a.copy()));
+  }
 
   void _pushUndoState() {
-    _undoStack.add(_annotations.map((a) => a.copy()).toList());
-    _redoStack.clear();
-    if (_undoStack.length > 20) _undoStack.removeAt(0); // حد أقصى لتفادي استهلاك ذاكرة زائد
-    _hasUnsavedChanges = true;
-    // نحدّث الواجهة هون مباشرة (مثلًا لتفعيل زري تراجع/إعادة فورًا)
-    // بدل الاعتماد على استدعاء خارجي قد يُنسى مستقبلًا عند إضافة مسار جديد.
+    _history.record(_captureEditorState());
     if (mounted) setState(() {});
   }
 
   void _undo() {
-    if (_undoStack.isEmpty) return;
-    _redoStack.add(_annotations.map((a) => a.copy()).toList());
-    final prev = _undoStack.removeLast();
-    setState(() {
-      _annotations
-        ..clear()
-        ..addAll(prev);
-    });
+    final previous = _history.undo(_captureEditorState());
+    if (previous == null) return;
+    setState(() => _restoreEditorState(previous));
     _scheduleAutoSave();
   }
 
   void _redo() {
-    if (_redoStack.isEmpty) return;
-    _undoStack.add(_annotations.map((a) => a.copy()).toList());
-    final next = _redoStack.removeLast();
-    setState(() {
-      _annotations
-        ..clear()
-        ..addAll(next);
-    });
+    final next = _history.redo(_captureEditorState());
+    if (next == null) return;
+    setState(() => _restoreEditorState(next));
     _scheduleAutoSave();
   }
 
@@ -151,6 +184,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   // ------- تتبّع التعديلات غير المحفوظة -------
   bool _hasUnsavedChanges = false;
+  int _documentRevision = 0;
+  int _savedRevision = 0;
+
+  void _markDocumentChanged() {
+    _documentRevision++;
+    _hasUnsavedChanges = _documentRevision != _savedRevision;
+  }
   // ------- تحريك النص بالسحب المباشر -------
   _TextAnnotation? _movingAnnotation;
   _TextAnnotation? _moveSnapshot;
@@ -703,7 +743,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// خصوصًا لو المستخدم عدّل/نقل نفس النص عدة مرات متتالية بسرعة.
   void _scheduleAutoSave() {
     if (_disposed) return;
-    _hasUnsavedChanges = true;
+    _markDocumentChanged();
     _autoSaveDebounce?.cancel();
     _autoSaveDebounce = Timer(const Duration(milliseconds: 1200), () {
       if (!_disposed) unawaited(_runQueuedSave(showResult: false));
@@ -729,10 +769,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     String? outPath;
     Object? error;
+    final revisionBeingSaved = _documentRevision;
     try {
       outPath = await _exportToFile();
       _lastExportedPath = outPath;
-      if (!_disposed) _hasUnsavedChanges = false;
+      if (!_disposed) {
+        _savedRevision = revisionBeingSaved;
+        _hasUnsavedChanges = _documentRevision != _savedRevision;
+        // لو حصل تعديل أثناء التصدير، لا نعتبره محفوظًا ونجدول نسخة لاحقة.
+        if (_hasUnsavedChanges) _scheduleAutoSave();
+      }
     } catch (e, stack) {
       error = e;
       if (kDebugMode) {
@@ -860,12 +906,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           IconButton(
             icon: const Icon(Icons.undo_rounded),
             tooltip: tr('undo'),
-            onPressed: _undoStack.isEmpty ? null : _undo,
+            onPressed: !_history.canUndo ? null : _undo,
           ),
           IconButton(
             icon: const Icon(Icons.redo_rounded),
             tooltip: tr('redo'),
-            onPressed: _redoStack.isEmpty ? null : _redo,
+            onPressed: !_history.canRedo ? null : _redo,
           ),
           IconButton(
             icon: const Icon(Icons.search_rounded),
@@ -1362,15 +1408,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // التثبيت لا يحسب أي موضع جديد إطلاقًا. ann.dx/ann.dy هما بالفعل
     // الموضع النهائي الذي كان ظاهرًا أثناء السحب، لذلك لا توجد "قفزة".
     if (before != null) {
-      _undoStack.add(before);
-      _redoStack.clear();
-      if (_undoStack.length > 20) _undoStack.removeAt(0);
+      _history.record(_EditorSnapshot(textAnnotations: before.map((a) => a.copy()).toList(growable: false)));
     }
     setState(() {
       _movingAnnotation = null;
       _moveSnapshot = null;
       _moveUndoSnapshot = null;
-      _hasUnsavedChanges = true;
     });
     _scheduleAutoSave();
   }
