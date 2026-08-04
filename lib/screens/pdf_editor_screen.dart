@@ -820,9 +820,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// يجدول حفظًا تلقائيًا بعد فترة قصيرة من التوقف عن التعديل (بدل تصدير
   /// الملف كاملًا فورًا مع كل تعديل) — مهم للأداء مع الملفات الكبيرة،
   /// خصوصًا لو المستخدم عدّل/نقل نفس النص عدة مرات متتالية بسرعة.
-  void _scheduleAutoSave() {
+  void _scheduleAutoSave({bool markChanged = true}) {
     if (_disposed) return;
-    _markDocumentChanged();
+    if (markChanged) _markDocumentChanged();
     _autoSaveDebounce?.cancel();
     _autoSaveDebounce = Timer(const Duration(milliseconds: 1200), () {
       if (!_disposed) unawaited(_runQueuedSave(showResult: false));
@@ -856,7 +856,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         _savedRevision = revisionBeingSaved;
         _hasUnsavedChanges = _documentRevision != _savedRevision;
         // لو حصل تعديل أثناء التصدير، لا نعتبره محفوظًا ونجدول نسخة لاحقة.
-        if (_hasUnsavedChanges) _scheduleAutoSave();
+        if (_hasUnsavedChanges) _scheduleAutoSave(markChanged: false);
       }
     } catch (e, stack) {
       error = e;
