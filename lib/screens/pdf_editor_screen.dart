@@ -1,7 +1,5 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:typed_data';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -15,8 +13,6 @@ import '../services/app_settings.dart';
 import '../services/app_text.dart';
 import '../services/isolate_helpers.dart';
 import '../services/arabic_font_loader.dart';
-import '../services/signature_library.dart';
-import '../widgets/signature_pad.dart';
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
@@ -35,11 +31,6 @@ class _TextAnnotation {
   double fontSize;
   Color color;
   TextAlign alignment;
-  double boxWidth; // عرض مربع النص بنقاط PDF
-  bool bold;
-  bool underline;
-  bool strikeThrough;
-  double lineHeight;
 
   _TextAnnotation({
     required this.pageNumber,
@@ -49,11 +40,6 @@ class _TextAnnotation {
     this.fontSize = 16,
     this.color = Colors.black,
     this.alignment = TextAlign.right,
-    this.boxWidth = 220,
-    this.bold = false,
-    this.underline = false,
-    this.strikeThrough = false,
-    this.lineHeight = 1.3,
   });
 
   _TextAnnotation copy() => _TextAnnotation(
@@ -64,38 +50,11 @@ class _TextAnnotation {
         fontSize: fontSize,
         color: color,
         alignment: alignment,
-        boxWidth: boxWidth,
-        bold: bold,
-        underline: underline,
-        strikeThrough: strikeThrough,
-        lineHeight: lineHeight,
       );
 }
 
 /// تحويل هندسي من إحداثيات صفحة PDF (points) إلى إحداثيات الـViewer (pixels).
 /// يُعاد حسابه/معايرته من ضغطة Syncfusion الحقيقية، ولا يدخل في بيانات النص.
-
-
-class _ImageAnnotation {
-  int pageNumber;
-  double dx;
-  double dy;
-  double width;
-  double height;
-  Uint8List bytes;
-  final bool isSignature;
-
-  _ImageAnnotation({required this.pageNumber, required this.dx, required this.dy, required this.width, required this.height, required this.bytes, this.isSignature = false});
-
-  _ImageAnnotation copy() => _ImageAnnotation(pageNumber: pageNumber, dx: dx, dy: dy, width: width, height: height, bytes: bytes, isSignature: isSignature);
-}
-
-class _EditorSnapshot {
-  final List<_TextAnnotation> texts;
-  final List<_ImageAnnotation> images;
-  _EditorSnapshot(this.texts, this.images);
-}
-
 class _PdfPageTransform {
   final double scale;
   final Offset origin;
@@ -118,9 +77,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final PdfViewerController _controller = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
-  final List<_ImageAnnotation> _imageAnnotations = [];
-  Uint8List? _pendingImageBytes;
-  bool _pendingImageIsSignature = false;
   final GlobalKey _viewerKey = GlobalKey();
 
   // أبعاد الصفحات الأصلية بنقاط PDF + التحويل الحالي للصفحة المعروضة.
@@ -140,25 +96,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   double _zoomLevel = 1.0;
 
   // ------- تراجع/إعادة (Undo/Redo) لتعليقات النص المضافة -------
-  final List<_EditorSnapshot> _undoStack = [];
-  final List<_EditorSnapshot> _redoStack = [];
-
-  _EditorSnapshot _snapshot() => _EditorSnapshot(
-        _annotations.map((a) => a.copy()).toList(),
-        _imageAnnotations.map((a) => a.copy()).toList(),
-      );
-
-  void _restoreSnapshot(_EditorSnapshot snap) {
-    _annotations
-      ..clear()
-      ..addAll(snap.texts.map((a) => a.copy()));
-    _imageAnnotations
-      ..clear()
-      ..addAll(snap.images.map((a) => a.copy()));
-  }
+  final List<List<_TextAnnotation>> _undoStack = [];
+  final List<List<_TextAnnotation>> _redoStack = [];
 
   void _pushUndoState() {
-    _undoStack.add(_snapshot());
+    _undoStack.add(_annotations.map((a) => a.copy()).toList());
     _redoStack.clear();
     if (_undoStack.length > 20) _undoStack.removeAt(0); // حد أقصى لتفادي استهلاك ذاكرة زائد
     _hasUnsavedChanges = true;
@@ -169,17 +111,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _undo() {
     if (_undoStack.isEmpty) return;
-    _redoStack.add(_snapshot());
+    _redoStack.add(_annotations.map((a) => a.copy()).toList());
     final prev = _undoStack.removeLast();
-    setState(() => _restoreSnapshot(prev));
+    setState(() {
+      _annotations
+        ..clear()
+        ..addAll(prev);
+    });
     _scheduleAutoSave();
   }
 
   void _redo() {
     if (_redoStack.isEmpty) return;
-    _undoStack.add(_snapshot());
+    _undoStack.add(_annotations.map((a) => a.copy()).toList());
     final next = _redoStack.removeLast();
-    setState(() => _restoreSnapshot(next));
+    setState(() {
+      _annotations
+        ..clear()
+        ..addAll(next);
+    });
     _scheduleAutoSave();
   }
 
@@ -203,7 +153,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   // ------- تحريك النص بالسحب المباشر -------
   _TextAnnotation? _movingAnnotation;
   _TextAnnotation? _moveSnapshot;
-  _EditorSnapshot? _moveUndoSnapshot;
+  List<_TextAnnotation>? _moveUndoSnapshot;
   Timer? _moveHoldTimer;
   int? _movePointerId;
   Offset? _lastMovePointerPosition;
@@ -260,23 +210,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _handlePdfTap(PdfGestureDetails details) async {
-    if (_pendingImageBytes != null) {
-      final pagePoint = details.pagePosition;
-      final pageNumber = details.pageNumber;
-      if (pageNumber < 1 || pagePoint.dx < 0 || pagePoint.dy < 0) return;
-      _calibratePageTransform(pageNumber: pageNumber, pdfPoint: pagePoint, viewerPoint: details.position);
-      final bytes = _pendingImageBytes!;
-      final isSignature = _pendingImageIsSignature;
-      _pushUndoState();
-      setState(() {
-        _imageAnnotations.add(_ImageAnnotation(pageNumber: pageNumber, dx: pagePoint.dx, dy: pagePoint.dy, width: isSignature ? 150 : 140, height: isSignature ? 65 : 110, bytes: bytes, isSignature: isSignature));
-        _pendingImageBytes = null;
-        _pendingImageIsSignature = false;
-        _hasUnsavedChanges = true;
-      });
-      _scheduleAutoSave();
-      return;
-    }
     if (!_addTextMode) return;
 
     // دقة تحديد الموضع (شاشة ↔ نقاط PDF) مضمونة فقط عند التكبير الافتراضي
@@ -324,10 +257,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         fontSize: result.fontSize,
         color: result.color,
         alignment: result.alignment,
-        bold: result.bold,
-        underline: result.underline,
-        strikeThrough: result.strikeThrough,
-        lineHeight: result.lineHeight,
       ));
     });
     _scheduleAutoSave();
@@ -338,19 +267,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     double initialSize = 16,
     Color initialColor = Colors.black,
     TextAlign initialAlignment = TextAlign.right,
-    bool initialBold = false,
-    bool initialUnderline = false,
-    bool initialStrikeThrough = false,
-    double initialLineHeight = 1.3,
   }) {
     final controller = TextEditingController(text: initialText);
     double fontSize = initialSize;
     Color color = initialColor;
     TextAlign alignment = initialAlignment;
-    bool bold = initialBold;
-    bool underline = initialUnderline;
-    bool strikeThrough = initialStrikeThrough;
-    double lineHeight = initialLineHeight;
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
 
@@ -460,49 +381,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilterChip(
-                        label: const Text('B', style: TextStyle(fontWeight: FontWeight.bold)),
-                        selected: bold,
-                        onSelected: (v) => setSheetState(() => bold = v),
-                      ),
-                      FilterChip(
-                        label: const Text('U', style: TextStyle(decoration: TextDecoration.underline)),
-                        selected: underline,
-                        onSelected: (v) => setSheetState(() => underline = v),
-                      ),
-                      FilterChip(
-                        label: const Text('S', style: TextStyle(decoration: TextDecoration.lineThrough)),
-                        selected: strikeThrough,
-                        onSelected: (v) => setSheetState(() => strikeThrough = v),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const Text('تباعد الأسطر'),
-                      Expanded(
-                        child: Slider(
-                          value: lineHeight,
-                          min: 1.0,
-                          max: 2.0,
-                          divisions: 10,
-                          label: lineHeight.toStringAsFixed(1),
-                          onChanged: (v) => setSheetState(() => lineHeight = v),
-                        ),
-                      ),
-                      SizedBox(width: 38, child: Text(lineHeight.toStringAsFixed(1))),
-                    ],
-                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(
                       context,
-                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color, alignment: alignment, bold: bold, underline: underline, strikeThrough: strikeThrough, lineHeight: lineHeight),
+                      _TextDialogResult(text: controller.text, fontSize: fontSize, color: color, alignment: alignment),
                     ),
                     child: Text(tr('ed_dialog_add')),
                   ),
@@ -521,10 +404,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       initialSize: ann.fontSize,
       initialColor: ann.color,
       initialAlignment: ann.alignment,
-      initialBold: ann.bold,
-      initialUnderline: ann.underline,
-      initialStrikeThrough: ann.strikeThrough,
-      initialLineHeight: ann.lineHeight,
     );
     if (result == null) return;
     _pushUndoState();
@@ -536,10 +415,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ann.fontSize = result.fontSize;
         ann.color = result.color;
         ann.alignment = result.alignment;
-        ann.bold = result.bold;
-        ann.underline = result.underline;
-        ann.strikeThrough = result.strikeThrough;
-        ann.lineHeight = result.lineHeight;
       }
     });
     _scheduleAutoSave();
@@ -553,7 +428,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// طازجًا عبر طابور الحفظ نفسه أولًا لضمان قراءة أحدث حالة فعليًا —
   /// وليس مجرد التحقق من وجود نسخة محفوظة قد تكون قديمة.
   Future<String> _currentBestFilePath() async {
-    if (_annotations.isNotEmpty || _imageAnnotations.isNotEmpty || _hasFormFields) {
+    if (_annotations.isNotEmpty || _hasFormFields) {
       try {
         return await _runQueuedSave(showResult: false).then((_) => _lastExportedPath ?? widget.filePath);
       } catch (_) {
@@ -756,11 +631,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
         // ارتفاع الصندوق يعتمد على عدد الأسطر الفعلي (النص يسمح حتى 3 أسطر)
         // بدل قيمة ثابتة، لتفادي قص أي سطر إضافي عند التصدير.
-        final explicitLines = '\n'.allMatches(ann.text).length + 1;
-        final approxCharsPerLine = (ann.boxWidth / (ann.fontSize * 0.58)).clamp(4.0, 200.0);
-        final wrappedLines = (ann.text.length / approxCharsPerLine).ceil().clamp(1, 50);
-        final lineCount = wrappedLines > explicitLines ? wrappedLines : explicitLines;
-        final boxHeight = ann.fontSize * ann.lineHeight * lineCount;
+        final lineCount = '\n'.allMatches(ann.text).length + 1;
+        final boxHeight = ann.fontSize * 1.3 * lineCount;
 
         // نحصر موضع النص ضمن حدود الصفحة فعليًا (وليس بس عرض الصندوق) —
         // يحمي من حالات نادرة تكون فيها dx/dy خارج الصفحة قليلًا (مثلًا
@@ -769,46 +641,20 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final safeX = ann.dx.clamp(0.0, (pageSize.width - minBoxWidth).clamp(0.0, pageSize.width)).toDouble();
         final safeY = ann.dy.clamp(0.0, (pageSize.height - boxHeight).clamp(0.0, pageSize.height)).toDouble();
         final availableWidth = pageSize.width - safeX;
-        final requestedWidth = ann.boxWidth.clamp(minBoxWidth, pageSize.width).toDouble();
-        final boxWidth = requestedWidth > availableWidth ? availableWidth : requestedWidth;
+        final boxWidth = availableWidth < minBoxWidth ? minBoxWidth : availableWidth;
 
-        final textBounds = Rect.fromLTWH(safeX, safeY, boxWidth, boxHeight);
-        final textFormat = sf.PdfStringFormat(alignment: pdfAlignment);
-        page.graphics.drawString(ann.text, font, brush: brush, bounds: textBounds, format: textFormat);
-        // محاكاة Bold آمنة مع نفس الخط العربي المضمّن، بدون الاعتماد على ملف خط إضافي.
-        if (ann.bold) {
-          page.graphics.drawString(ann.text, font, brush: brush, bounds: Rect.fromLTWH(safeX + 0.45, safeY, boxWidth, boxHeight), format: textFormat);
-        }
-        // خطوط التنسيق تُرسم على كل سطر تقديري داخل مربع النص.
-        if (ann.underline || ann.strikeThrough) {
-          final pen = sf.PdfPen(sf.PdfColor(ann.color.red, ann.color.green, ann.color.blue), width: (ann.fontSize / 18).clamp(0.6, 1.5));
-          final step = ann.fontSize * ann.lineHeight;
-          for (var line = 0; line < lineCount; line++) {
-            final top = safeY + line * step;
-            if (top > safeY + boxHeight) break;
-            if (ann.underline) {
-              final y = top + ann.fontSize * 1.05;
-              page.graphics.drawLine(pen, Offset(safeX, y), Offset(safeX + boxWidth, y));
-            }
-            if (ann.strikeThrough) {
-              final y = top + ann.fontSize * 0.55;
-              page.graphics.drawLine(pen, Offset(safeX, y), Offset(safeX + boxWidth, y));
-            }
-          }
-        }
-      }
-
-      final imageSnapshot = _imageAnnotations.map((a) => a.copy()).toList(growable: false);
-      for (final img in imageSnapshot) {
-        final pageIndex = img.pageNumber - 1;
-        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
-        final page = document.pages[pageIndex];
-        final pageSize = page.getClientSize();
-        final x = img.dx.clamp(0.0, pageSize.width).toDouble();
-        final y = img.dy.clamp(0.0, pageSize.height).toDouble();
-        final w = img.width.clamp(20.0, (pageSize.width - x).clamp(20.0, pageSize.width)).toDouble();
-        final h = img.height.clamp(20.0, (pageSize.height - y).clamp(20.0, pageSize.height)).toDouble();
-        page.graphics.drawImage(sf.PdfBitmap(img.bytes), Rect.fromLTWH(x, y, w, h));
+        page.graphics.drawString(
+          ann.text,
+          font,
+          brush: brush,
+          bounds: Rect.fromLTWH(
+            safeX,
+            safeY,
+            boxWidth,
+            boxHeight,
+          ),
+          format: sf.PdfStringFormat(alignment: pdfAlignment),
+        );
       }
 
       savedBytes = await document.save();
@@ -953,6 +799,127 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   Future<void> _saveDocument() => _runQueuedSave(showResult: true);
 
+
+  // ------- إدارة صفحات PDF -------
+  Future<void> _runPageTool(String action) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      // نصدّر أولًا حتى لا تضيع النصوص/التعليقات الحالية قبل تعديل الصفحات.
+      final sourcePath = await _exportToFile();
+      final bytes = await File(sourcePath).readAsBytes();
+      final document = sf.PdfDocument(inputBytes: bytes);
+      late final List<int> resultBytes;
+      try {
+        final index = (_currentPage - 1).clamp(0, document.pages.count - 1);
+        switch (action) {
+          case 'rotate_right':
+            document.pages[index].rotation = _nextRotation(document.pages[index].rotation, 1);
+            break;
+          case 'rotate_left':
+            document.pages[index].rotation = _nextRotation(document.pages[index].rotation, -1);
+            break;
+          case 'delete':
+            if (document.pages.count <= 1) {
+              throw Exception('لا يمكن حذف الصفحة الوحيدة في المستند');
+            }
+            document.pages.removeAt(index);
+            break;
+          case 'blank_before':
+            final size = document.pages[index].size;
+            document.pages.insert(index, size);
+            break;
+          case 'blank_after':
+            final size = document.pages[index].size;
+            document.pages.insert(index + 1, size);
+            break;
+          case 'duplicate':
+            final source = document.pages[index];
+            final template = source.createTemplate();
+            final newPage = document.pages.insert(index + 1, source.size);
+            newPage.graphics.drawPdfTemplate(template, Offset.zero);
+            break;
+          case 'move_prev':
+            if (index == 0) return;
+            resultBytes = await _rebuildWithPageOrder(document, index, index - 1);
+            await _finishPageTool(resultBytes, sourcePath);
+            return;
+          case 'move_next':
+            if (index >= document.pages.count - 1) return;
+            resultBytes = await _rebuildWithPageOrder(document, index, index + 1);
+            await _finishPageTool(resultBytes, sourcePath);
+            return;
+        }
+        resultBytes = await document.save();
+      } finally {
+        document.dispose();
+      }
+      await _finishPageTool(resultBytes, sourcePath);
+    } catch (e, stack) {
+      if (kDebugMode) {
+        debugPrint('فشل تعديل الصفحات: $e');
+        debugPrintStack(stackTrace: stack);
+      }
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر تنفيذ تعديل الصفحة: $e')),
+        );
+      }
+    }
+  }
+
+  sf.PdfPageRotateAngle _nextRotation(sf.PdfPageRotateAngle current, int direction) {
+    const values = <sf.PdfPageRotateAngle>[
+      sf.PdfPageRotateAngle.rotateAngle0,
+      sf.PdfPageRotateAngle.rotateAngle90,
+      sf.PdfPageRotateAngle.rotateAngle180,
+      sf.PdfPageRotateAngle.rotateAngle270,
+    ];
+    var i = values.indexOf(current);
+    if (i < 0) i = 0;
+    return values[(i + direction) % values.length];
+  }
+
+  Future<List<int>> _rebuildWithPageOrder(sf.PdfDocument source, int from, int to) async {
+    final order = List<int>.generate(source.pages.count, (i) => i);
+    final moved = order.removeAt(from);
+    order.insert(to, moved);
+    final rebuilt = sf.PdfDocument();
+    try {
+      // نحذف الصفحة الافتراضية فقط إذا أنشأتها المكتبة تلقائيًا.
+      for (final oldIndex in order) {
+        final oldPage = source.pages[oldIndex];
+        final page = rebuilt.pages.insert(
+          rebuilt.pages.count,
+          oldPage.size,
+          rotation: oldPage.rotation,
+        );
+        page.graphics.drawPdfTemplate(oldPage.createTemplate(), Offset.zero);
+      }
+      return await rebuilt.save();
+    } finally {
+      rebuilt.dispose();
+    }
+  }
+
+  Future<void> _finishPageTool(List<int> bytes, String sourcePath) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final raw = sourcePath.split('/').last;
+    final base = raw.toLowerCase().endsWith('.pdf') ? raw.substring(0, raw.length - 4) : raw;
+    final outPath = '${dir.path}/${base}_pages_${DateTime.now().millisecondsSinceEpoch}.pdf';
+    await File(outPath).writeAsBytes(bytes, flush: true);
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _hasUnsavedChanges = false;
+    });
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: outPath)),
+    );
+  }
+
   Widget build(BuildContext context) {
     final hasSearchResult = _searchResult.hasResult;
     final settings = context.watch<AppSettingsController>();
@@ -1025,6 +992,24 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               PopupMenuItem(value: 'chat', child: Text(tr('ed_ai_chat'))),
               PopupMenuItem(value: 'translate', child: Text(tr('ed_ai_translate'))),
               PopupMenuItem(value: 'read_aloud', child: Text(tr('tool_tts_t'))),
+            ],
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.layers_rounded),
+            tooltip: 'إدارة الصفحات',
+            onSelected: _runPageTool,
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'rotate_right', child: ListTile(leading: Icon(Icons.rotate_right_rounded), title: Text('تدوير 90° يمين'))),
+              PopupMenuItem(value: 'rotate_left', child: ListTile(leading: Icon(Icons.rotate_left_rounded), title: Text('تدوير 90° يسار'))),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'blank_before', child: ListTile(leading: Icon(Icons.note_add_outlined), title: Text('صفحة فارغة قبل'))),
+              PopupMenuItem(value: 'blank_after', child: ListTile(leading: Icon(Icons.post_add_rounded), title: Text('صفحة فارغة بعد'))),
+              PopupMenuItem(value: 'duplicate', child: ListTile(leading: Icon(Icons.copy_all_rounded), title: Text('نسخ الصفحة'))),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'move_prev', child: ListTile(leading: Icon(Icons.arrow_upward_rounded), title: Text('نقل الصفحة للخلف'))),
+              PopupMenuItem(value: 'move_next', child: ListTile(leading: Icon(Icons.arrow_downward_rounded), title: Text('نقل الصفحة للأمام'))),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline_rounded, color: Colors.red), title: Text('حذف الصفحة', style: TextStyle(color: Colors.red)))),
             ],
           ),
           _saving
@@ -1115,10 +1100,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     label: tr('ed_stickynote'),
                     mode: PdfAnnotationMode.stickyNote,
                   ),
-                  const SizedBox(width: 6),
-                  ActionChip(avatar: const Icon(Icons.draw_rounded, size: 18), label: const Text('توقيع'), onPressed: _chooseSignatureForPlacement),
-                  const SizedBox(width: 6),
-                  ActionChip(avatar: const Icon(Icons.image_rounded, size: 18), label: const Text('صورة'), onPressed: _pickImageForPlacement),
                 ],
               ),
             ),
@@ -1218,9 +1199,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._annotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildAnnotationOverlay(ann)),
-                ..._imageAnnotations
-                    .where((a) => a.pageNumber == _currentPage)
-                    .map((ann) => _buildImageOverlay(ann)),
                 // أزرار التكبير/التصغير العائمة
                 Positioned(
                   bottom: 16,
@@ -1325,15 +1303,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       overflow: TextOverflow.visible,
                       style: TextStyle(
                         fontSize: previewFontSize,
-                        height: ann.lineHeight,
-                        fontWeight: ann.bold ? FontWeight.bold : FontWeight.normal,
-                        decoration: ann.underline && ann.strikeThrough
-                            ? TextDecoration.combine([TextDecoration.underline, TextDecoration.lineThrough])
-                            : ann.underline
-                                ? TextDecoration.underline
-                                : ann.strikeThrough
-                                    ? TextDecoration.lineThrough
-                                    : TextDecoration.none,
+                        height: 1.3,
                         color: ann.color,
                       ),
                     ),
@@ -1341,29 +1311,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ),
               ),
               if (isMoving) ..._buildMoveDirectionIndicators(),
-              Positioned(
-                right: -11,
-                bottom: -11,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onPanStart: (_) => _pushUndoState(),
-                  onPanUpdate: (d) {
-                    final page = _pdfPageSizes[ann.pageNumber];
-                    if (page == null || transform.scale <= 0) return;
-                    setState(() {
-                      final maxWidth = (page.width - ann.dx).clamp(60.0, page.width).toDouble();
-                      ann.boxWidth = (ann.boxWidth + d.delta.dx / transform.scale).clamp(60.0, maxWidth).toDouble();
-                      _hasUnsavedChanges = true;
-                    });
-                  },
-                  onPanEnd: (_) => _scheduleAutoSave(),
-                  child: Container(
-                    width: 24, height: 24,
-                    decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
-                    child: const Icon(Icons.drag_handle_rounded, size: 15, color: Colors.white),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -1387,19 +1334,27 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   double _estimateTextWidth(_TextAnnotation ann, double scale) {
-    return (ann.boxWidth * scale).clamp(48.0, 600.0);
+    final painter = TextPainter(
+      text: TextSpan(
+        text: ann.text,
+        style: TextStyle(fontSize: ann.fontSize * scale, height: 1.3),
+      ),
+      textDirection: TextDirection.rtl,
+      maxLines: 3,
+    )..layout(maxWidth: 360 * scale);
+    return (painter.width + 12).clamp(48.0, 380.0 * scale);
   }
 
   double _estimateTextHeight(_TextAnnotation ann, double scale) {
     final painter = TextPainter(
       text: TextSpan(
         text: ann.text,
-        style: TextStyle(fontSize: ann.fontSize * scale, height: ann.lineHeight, fontWeight: ann.bold ? FontWeight.bold : FontWeight.normal),
+        style: TextStyle(fontSize: ann.fontSize * scale, height: 1.3),
       ),
       textDirection: TextDirection.rtl,
       maxLines: 3,
-    )..layout(maxWidth: ann.boxWidth * scale);
-    return (painter.height + 8).clamp(28.0, 400.0 * scale);
+    )..layout(maxWidth: 360 * scale);
+    return (painter.height + 8).clamp(28.0, 160.0 * scale);
   }
 
   List<Widget> _buildMoveDirectionIndicators() {
@@ -1442,7 +1397,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       setState(() {
         _movingAnnotation = ann;
         _moveSnapshot = ann.copy();
-        _moveUndoSnapshot = _snapshot();
+        _moveUndoSnapshot = _annotations.map((a) => a.copy()).toList();
         _moveGestureArmed = true;
       });
     });
@@ -1537,186 +1492,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// عند الضغط على نص موجود: قائمة صغيرة "تعديل" أو "نقل" — النقل يعتمد
   /// على نفس آلية الضغط الدقيقة المستخدمة بالإضافة (بدل السحب بالإصبع
   /// غير المضمون هندسيًا)، فيضغط المستخدم على المكان الجديد مباشرة.
-  Future<void> _pickImageForPlacement() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 95);
-    if (picked == null) return;
-    final bytes = await File(picked.path).readAsBytes();
-    if (!mounted) return;
-    setState(() { _pendingImageBytes = bytes; _pendingImageIsSignature = false; _addTextMode = false; });
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اضغط على المكان المطلوب داخل صفحة PDF لوضع الصورة.')));
-  }
-
-  Future<void> _chooseSignatureForPlacement() async {
-    final marks = await SignatureLibrary.list();
-    if (!mounted) return;
-    await showModalBottomSheet(context: context, builder: (sheetContext) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      ListTile(leading: const Icon(Icons.gesture_rounded), title: const Text('رسم توقيع جديد'), onTap: () { Navigator.pop(sheetContext); _drawSignatureForPlacement(); }),
-      ...marks.take(8).map((m) => ListTile(leading: Image.file(File(m.filePath), width: 56, height: 32, fit: BoxFit.contain), title: Text(m.name), subtitle: Text(m.type == MarkType.signature ? 'توقيع محفوظ' : 'ختم محفوظ'), onTap: () async { Navigator.pop(sheetContext); final b=await File(m.filePath).readAsBytes(); if (!mounted) return; _armImagePlacement(b, true); })),
-    ])));
-  }
-
-  Future<void> _drawSignatureForPlacement() async {
-    final key = GlobalKey<SignaturePadState>();
-    final bytes = await showDialog<Uint8List>(context: context, builder: (dialogContext) => AlertDialog(
-      title: const Text('ارسم التوقيع'),
-      content: SizedBox(width: 360, height: 220, child: SignaturePad(key: key)),
-      actions: [TextButton(onPressed: () => key.currentState?.clear(), child: const Text('مسح')), TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')), ElevatedButton(onPressed: () async { final b=await key.currentState?.exportAsPng(); if (b != null && dialogContext.mounted) Navigator.pop(dialogContext,b); }, child: const Text('استخدام'))],
-    ));
-    if (bytes != null && mounted) _armImagePlacement(bytes, true);
-  }
-
-  void _armImagePlacement(Uint8List bytes, bool signature) {
-    setState(() { _pendingImageBytes=bytes; _pendingImageIsSignature=signature; _addTextMode=false; });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(signature ? 'اضغط على المكان المطلوب داخل الصفحة لوضع التوقيع.' : 'اضغط على المكان المطلوب داخل الصفحة لوضع الصورة.')));
-  }
-
-  Widget _buildImageOverlay(_ImageAnnotation ann) {
-    final transform = _pageTransforms[ann.pageNumber] ?? _fallbackPageTransform(ann.pageNumber);
-    if (transform == null) return const SizedBox.shrink();
-    final pt = transform.pdfToViewer(Offset(ann.dx, ann.dy));
-    return Positioned(
-      left: pt.dx,
-      top: pt.dy,
-      child: GestureDetector(
-        onPanStart: (_) => _pushUndoState(),
-        onPanUpdate: (d) {
-          final page = _pdfPageSizes[ann.pageNumber];
-          if (page == null) return;
-          setState(() {
-            final maxX = (page.width - ann.width).clamp(0.0, page.width).toDouble();
-            final maxY = (page.height - ann.height).clamp(0.0, page.height).toDouble();
-            ann.dx = (ann.dx + d.delta.dx / transform.scale).clamp(0.0, maxX).toDouble();
-            ann.dy = (ann.dy + d.delta.dy / transform.scale).clamp(0.0, maxY).toDouble();
-            _hasUnsavedChanges = true;
-          });
-        },
-        onPanEnd: (_) => _scheduleAutoSave(),
-        onTap: () => _showImageActionSheet(ann),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: ann.width * transform.scale,
-              height: ann.height * transform.scale,
-              decoration: BoxDecoration(border: Border.all(color: AppColors.accent, width: 1.5)),
-              child: Image.memory(ann.bytes, fit: BoxFit.contain),
-            ),
-            Positioned(
-              right: -12,
-              bottom: -12,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanStart: (_) => _pushUndoState(),
-                onPanUpdate: (d) {
-                  final page = _pdfPageSizes[ann.pageNumber];
-                  if (page == null) return;
-                  setState(() {
-                    final ratio = ann.height <= 0 ? 1.0 : ann.width / ann.height;
-                    final deltaPdf = (d.delta.dx + d.delta.dy) / (2 * transform.scale);
-                    final newWidth = (ann.width + deltaPdf).clamp(25.0, page.width - ann.dx).toDouble();
-                    ann.width = newWidth;
-                    ann.height = (newWidth / ratio).clamp(20.0, page.height - ann.dy).toDouble();
-                    _hasUnsavedChanges = true;
-                  });
-                },
-                onPanEnd: (_) => _scheduleAutoSave(),
-                child: Container(
-                  width: 28, height: 28,
-                  decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle, boxShadow: const [BoxShadow(blurRadius: 3, color: Colors.black26)]),
-                  child: const Icon(Icons.open_in_full_rounded, size: 16, color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showImageActionSheet(_ImageAnnotation ann) {
-    showModalBottomSheet(context: context, builder: (sheetContext) => SafeArea(child: Wrap(children: [
-      ListTile(leading: const Icon(Icons.zoom_in_map_rounded), title: const Text('تكبير'), onTap: () { Navigator.pop(sheetContext); _pushUndoState(); setState(() { ann.width=(ann.width*1.15).clamp(25.0,500.0).toDouble(); ann.height=(ann.height*1.15).clamp(20.0,500.0).toDouble(); }); _scheduleAutoSave(); }),
-      ListTile(leading: const Icon(Icons.zoom_out_map_rounded), title: const Text('تصغير'), onTap: () { Navigator.pop(sheetContext); _pushUndoState(); setState(() { ann.width=(ann.width*.85).clamp(25.0,500.0).toDouble(); ann.height=(ann.height*.85).clamp(20.0,500.0).toDouble(); }); _scheduleAutoSave(); }),
-      ListTile(leading: const Icon(Icons.copy_rounded), title: const Text('تكرار'), onTap: () { Navigator.pop(sheetContext); _pushUndoState(); setState(() { _imageAnnotations.add(_ImageAnnotation(pageNumber:ann.pageNumber,dx:ann.dx+12,dy:ann.dy+12,width:ann.width,height:ann.height,bytes:ann.bytes,isSignature:ann.isSignature)); }); _scheduleAutoSave(); }),
-      ListTile(leading: const Icon(Icons.delete_outline_rounded,color:Colors.red), title: const Text('حذف',style:TextStyle(color:Colors.red)), onTap: () { Navigator.pop(sheetContext); _pushUndoState(); setState(() => _imageAnnotations.remove(ann)); _scheduleAutoSave(); }),
-    ])));
-  }
-
-  Future<void> _splitAnnotation(_TextAnnotation ann) async {
-    final c = TextEditingController(text: ann.text);
-    int splitAt = -1;
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تقسيم النص'),
-        content: SizedBox(
-          width: 420,
-          child: TextField(
-            controller: c,
-            autofocus: true,
-            maxLines: 7,
-            decoration: const InputDecoration(
-              helperText: 'ضع المؤشر في المكان الذي تريد فصل النص عنده، ثم اضغط تقسيم.',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              splitAt = c.selection.baseOffset;
-              Navigator.pop(ctx, true);
-            },
-            child: const Text('تقسيم'),
-          ),
-        ],
-      ),
-    );
-    if (accepted != true) return;
-    final value = c.text;
-    if (splitAt <= 0 || splitAt >= value.length) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ضع المؤشر بين جزأين من النص قبل الضغط على تقسيم.')),
-      );
-      return;
-    }
-    final first = value.substring(0, splitAt).trim();
-    final second = value.substring(splitAt).trim();
-    if (first.isEmpty || second.isEmpty) return;
-
-    final page = _pdfPageSizes[ann.pageNumber];
-    final halfWidth = (ann.boxWidth * 0.48).clamp(80.0, ann.boxWidth).toDouble();
-    final gap = 12.0;
-    final secondX = page == null
-        ? ann.dx + halfWidth + gap
-        : (ann.dx + halfWidth + gap).clamp(0.0, (page.width - halfWidth).clamp(0.0, page.width)).toDouble();
-
-    _pushUndoState();
-    setState(() {
-      ann.text = first;
-      ann.boxWidth = halfWidth;
-      _annotations.add(_TextAnnotation(
-        pageNumber: ann.pageNumber,
-        dx: secondX,
-        dy: ann.dy,
-        text: second,
-        fontSize: ann.fontSize,
-        color: ann.color,
-        alignment: ann.alignment,
-        boxWidth: halfWidth,
-        bold: ann.bold,
-        underline: ann.underline,
-        strikeThrough: ann.strikeThrough,
-        lineHeight: ann.lineHeight,
-      ));
-    });
-    _scheduleAutoSave();
-  }
-
-  void _duplicateAnnotation(_TextAnnotation ann) { _pushUndoState(); setState(() => _annotations.add(_TextAnnotation(pageNumber:ann.pageNumber,dx:ann.dx+18,dy:ann.dy+18,text:ann.text,fontSize:ann.fontSize,color:ann.color,alignment:ann.alignment,boxWidth:ann.boxWidth,bold:ann.bold,underline:ann.underline,strikeThrough:ann.strikeThrough,lineHeight:ann.lineHeight))); _scheduleAutoSave(); }
-
   void _showAnnotationActionSheet(_TextAnnotation ann) {
     final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
     String tr(String key) => AppText.t(key, lang);
@@ -1741,12 +1516,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 setState(() {
                   _movingAnnotation = ann;
                   _moveSnapshot = ann.copy();
-                  _moveUndoSnapshot = _snapshot();
+                  _moveUndoSnapshot = _annotations.map((a) => a.copy()).toList();
                 });
               },
             ),
-            ListTile(leading: const Icon(Icons.call_split_rounded), title: const Text('تقسيم النص'), onTap: () { Navigator.pop(sheetContext); _splitAnnotation(ann); }),
-            ListTile(leading: const Icon(Icons.copy_rounded), title: const Text('تكرار النص'), onTap: () { Navigator.pop(sheetContext); _duplicateAnnotation(ann); }),
             ListTile(
               leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: Text(tr('ed_action_delete'), style: const TextStyle(color: Colors.red)),
@@ -1769,9 +1542,5 @@ class _TextDialogResult {
   final double fontSize;
   final Color color;
   final TextAlign alignment;
-  final bool bold;
-  final bool underline;
-  final bool strikeThrough;
-  final double lineHeight;
-  _TextDialogResult({required this.text, required this.fontSize, required this.color, this.alignment = TextAlign.right, this.bold = false, this.underline = false, this.strikeThrough = false, this.lineHeight = 1.3});
+  _TextDialogResult({required this.text, required this.fontSize, required this.color, this.alignment = TextAlign.right});
 }
