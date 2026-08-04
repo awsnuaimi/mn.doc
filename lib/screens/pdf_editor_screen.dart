@@ -17,6 +17,7 @@ import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
+import 'manage_pages_screen.dart';
 
 /// نص مضاف إلى صفحة PDF.
 ///
@@ -799,6 +800,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   Future<void> _saveDocument() => _runQueuedSave(showResult: true);
 
+  Future<void> _openPageManager() async {
+    String sourcePath = widget.filePath;
+    try {
+      if (_hasUnsavedChanges || _annotations.isNotEmpty || _hasFormFields) {
+        await _runQueuedSave(showResult: false);
+        sourcePath = _lastExportedPath ?? widget.filePath;
+      }
+    } catch (_) {
+      sourcePath = _lastExportedPath ?? widget.filePath;
+    }
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ManagePagesScreen(initialFilePath: sourcePath),
+      ),
+    );
+  }
+
   Widget build(BuildContext context) {
     final hasSearchResult = _searchResult.hasResult;
     final settings = context.watch<AppSettingsController>();
@@ -856,6 +876,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             icon: const Icon(Icons.bookmark_border_rounded),
             tooltip: tr('ed_bookmarks_tooltip'),
             onPressed: () => _pdfViewerStateKey.currentState?.openBookmarkView(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.grid_view_rounded),
+            tooltip: 'إدارة الصفحات بالصور المصغرة',
+            onPressed: _saving ? null : _openPageManager,
           ),
           IconButton(
             icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
