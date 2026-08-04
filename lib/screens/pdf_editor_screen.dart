@@ -893,8 +893,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final page = rebuilt.pages.insert(
           rebuilt.pages.count,
           oldPage.size,
-          rotation: oldPage.rotation,
         );
+        // PdfPageCollection.insert في إصدار Syncfusion المستخدم بالمشروع
+        // لا يقبل named parameter باسم rotation. أنشئ الصفحة أولًا ثم
+        // طبّق دوران الصفحة الأصلية على الصفحة الجديدة.
+        page.rotation = oldPage.rotation;
         page.graphics.drawPdfTemplate(oldPage.createTemplate(), Offset.zero);
       }
       return await rebuilt.save();
