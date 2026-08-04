@@ -153,6 +153,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final List<_ImageAnnotation> _imageAnnotations = [];
   Uint8List? _pendingImageBytes;
   bool _addImageMode = false;
+
+  // حركة الصورة تُعامل كعملية واحدة في Undo/Redo مهما كان عدد أحداث السحب.
+  // لا نسجل لقطة عند مجرد لمس الصورة، بل فقط بعد أول حركة فعلية.
+  _EditorSnapshot? _imageDragBefore;
+  _ImageAnnotation? _draggingImage;
+  bool _imageDragChanged = false;
   final GlobalKey _viewerKey = GlobalKey();
 
   // أبعاد الصفحات الأصلية بنقاط PDF + التحويل الحالي للصفحة المعروضة.
@@ -1392,17 +1398,33 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     return Positioned(
       left: point.dx, top: point.dy, width: ann.width * transform.scale, height: ann.height * transform.scale,
       child: GestureDetector(
-        onPanStart: (_) => _pushUndoState(),
+        onPanStart: (_) {
+          _draggingImage = ann;
+          _imageDragBefore = _captureEditorState();
+          _imageDragChanged = false;
+        },
         onPanUpdate: (d) {
           final pageSize = _pdfPageSizes[ann.pageNumber];
           if (pageSize == null || transform.scale <= 0) return;
           final delta = d.delta / transform.scale;
+          if (delta.distanceSquared <= 0) return;
+
+          final nextX = (ann.dx + delta.dx)
+              .clamp(0.0, (pageSize.width - ann.width).clamp(0.0, pageSize.width))
+              .toDouble();
+          final nextY = (ann.dy + delta.dy)
+              .clamp(0.0, (pageSize.height - ann.height).clamp(0.0, pageSize.height))
+              .toDouble();
+          if ((nextX - ann.dx).abs() < 0.001 && (nextY - ann.dy).abs() < 0.001) return;
+
+          _imageDragChanged = true;
           setState(() {
-            ann.dx = (ann.dx + delta.dx).clamp(0.0, (pageSize.width - ann.width).clamp(0.0, pageSize.width)).toDouble();
-            ann.dy = (ann.dy + delta.dy).clamp(0.0, (pageSize.height - ann.height).clamp(0.0, pageSize.height)).toDouble();
+            ann.dx = nextX;
+            ann.dy = nextY;
           });
         },
-        onPanEnd: (_) => _scheduleAutoSave(),
+        onPanEnd: (_) => _finishImageDrag(ann),
+        onPanCancel: () => _finishImageDrag(ann),
         onTap: () => _showImageActionSheet(ann),
         child: Container(
           decoration: BoxDecoration(border: Border.all(color: AppColors.accent, width: 1)),
@@ -1410,6 +1432,20 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ),
       ),
     );
+  }
+
+  void _finishImageDrag(_ImageAnnotation ann) {
+    if (!identical(_draggingImage, ann)) return;
+    final before = _imageDragBefore;
+    final changed = _imageDragChanged;
+    _draggingImage = null;
+    _imageDragBefore = null;
+    _imageDragChanged = false;
+
+    if (!changed || before == null) return;
+    _history.record(before);
+    if (mounted) setState(() {}); // تفعيل زر Undo فورًا
+    _scheduleAutoSave();
   }
 
   void _resizeImage(_ImageAnnotation ann, double factor) {
