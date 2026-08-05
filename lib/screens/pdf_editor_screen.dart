@@ -57,6 +57,27 @@ class _TextAnnotation {
 }
 
 
+class _DrawingStroke {
+  int pageNumber;
+  final List<Offset> points; // PDF points
+  Color color;
+  double thickness; // PDF points
+
+  _DrawingStroke({
+    required this.pageNumber,
+    required this.points,
+    required this.color,
+    required this.thickness,
+  });
+
+  _DrawingStroke copy() => _DrawingStroke(
+        pageNumber: pageNumber,
+        points: List<Offset>.from(points),
+        color: color,
+        thickness: thickness,
+      );
+}
+
 class _ImageAnnotation {
   int pageNumber;
   double dx;
@@ -89,6 +110,7 @@ class _PdfPageTransform {
   const _PdfPageTransform({required this.scale, required this.origin});
 
   Offset pdfToViewer(Offset pdfPoint) => origin + pdfPoint * scale;
+  Offset viewerToPdf(Offset viewerPoint) => (viewerPoint - origin) / scale;
 }
 
 /// لقطة قابلة للتوسّع لحالة المحرر. تحتوي النصوص والصور المخصّصة.
@@ -97,13 +119,23 @@ class _PdfPageTransform {
 class _EditorSnapshot {
   final List<_TextAnnotation> textAnnotations;
   final List<_ImageAnnotation> imageAnnotations;
+  final List<_DrawingStroke> drawingStrokes;
 
-  _EditorSnapshot({required this.textAnnotations, required this.imageAnnotations});
+  _EditorSnapshot({
+    required this.textAnnotations,
+    required this.imageAnnotations,
+    required this.drawingStrokes,
+  });
 
-  factory _EditorSnapshot.capture(List<_TextAnnotation> annotations, List<_ImageAnnotation> images) =>
+  factory _EditorSnapshot.capture(
+    List<_TextAnnotation> annotations,
+    List<_ImageAnnotation> images,
+    List<_DrawingStroke> strokes,
+  ) =>
       _EditorSnapshot(
         textAnnotations: annotations.map((a) => a.copy()).toList(growable: false),
         imageAnnotations: images.map((a) => a.copy()).toList(growable: false),
+        drawingStrokes: strokes.map((s) => s.copy()).toList(growable: false),
       );
 }
 
@@ -151,6 +183,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
   final List<_ImageAnnotation> _imageAnnotations = [];
+  final List<_DrawingStroke> _drawingStrokes = [];
+  _DrawingStroke? _activeDrawingStroke;
+  bool _drawMode = false;
+  Color _drawColor = Colors.red;
+  double _drawThickness = 2.5;
   Uint8List? _pendingImageBytes;
   bool _addImageMode = false;
 
@@ -182,7 +219,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   // ------- تراجع/إعادة موحّد وقابل للتوسعة لكل عناصر المحرر -------
   final _EditorHistory _history = _EditorHistory(limit: 20);
 
-  _EditorSnapshot _captureEditorState() => _EditorSnapshot.capture(_annotations, _imageAnnotations);
+  _EditorSnapshot _captureEditorState() =>
+      _EditorSnapshot.capture(_annotations, _imageAnnotations, _drawingStrokes);
 
   void _restoreEditorState(_EditorSnapshot snapshot) {
     _annotations
@@ -191,6 +229,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _imageAnnotations
       ..clear()
       ..addAll(snapshot.imageAnnotations.map((a) => a.copy()));
+    _drawingStrokes
+      ..clear()
+      ..addAll(snapshot.drawingStrokes.map((s) => s.copy()));
+    _activeDrawingStroke = null;
   }
 
   void _pushUndoState() {
@@ -369,6 +411,174 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _scheduleAutoSave();
   }
 
+  void _toggleDrawMode() {
+    if ((_zoomLevel - 1.0).abs() > 0.01 && !_drawMode) {
+      final lang =
+          Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
+      );
+      return;
+    }
+    setState(() {
+      _drawMode = !_drawMode;
+      _addTextMode = false;
+      _addImageMode = false;
+      _pendingImageBytes = null;
+      _controller.annotationMode = PdfAnnotationMode.none;
+    });
+  }
+
+  void _onDrawPointerDown(PointerDownEvent event) {
+    if (!_drawMode || (_zoomLevel - 1.0).abs() > 0.01) return;
+    final transform =
+        _pageTransforms[_currentPage] ?? _fallbackPageTransform(_currentPage);
+    final pageSize = _pdfPageSizes[_currentPage];
+    if (transform == null || pageSize == null || transform.scale <= 0) return;
+
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final local = box.globalToLocal(event.position);
+    final pdf = transform.viewerToPdf(local);
+    if (pdf.dx < 0 ||
+        pdf.dy < 0 ||
+        pdf.dx > pageSize.width ||
+        pdf.dy > pageSize.height) {
+      return;
+    }
+
+    _pushUndoState();
+    setState(() {
+      _activeDrawingStroke = _DrawingStroke(
+        pageNumber: _currentPage,
+        points: <Offset>[pdf],
+        color: _drawColor,
+        thickness: _drawThickness,
+      );
+      _drawingStrokes.add(_activeDrawingStroke!);
+    });
+  }
+
+  void _onDrawPointerMove(PointerMoveEvent event) {
+    final stroke = _activeDrawingStroke;
+    if (!_drawMode || stroke == null) return;
+    final transform =
+        _pageTransforms[stroke.pageNumber] ?? _fallbackPageTransform(stroke.pageNumber);
+    final pageSize = _pdfPageSizes[stroke.pageNumber];
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (transform == null || pageSize == null || box == null) return;
+
+    final local = box.globalToLocal(event.position);
+    final pdf = transform.viewerToPdf(local);
+    final bounded = Offset(
+      pdf.dx.clamp(0.0, pageSize.width).toDouble(),
+      pdf.dy.clamp(0.0, pageSize.height).toDouble(),
+    );
+
+    if (stroke.points.isNotEmpty &&
+        (bounded - stroke.points.last).distance < 0.8) {
+      return;
+    }
+    setState(() => stroke.points.add(bounded));
+  }
+
+  void _finishDrawingStroke() {
+    final stroke = _activeDrawingStroke;
+    if (stroke == null) return;
+    setState(() {
+      if (stroke.points.length < 2) {
+        _drawingStrokes.remove(stroke);
+      }
+      _activeDrawingStroke = null;
+    });
+    if (stroke.points.length >= 2) _scheduleAutoSave();
+  }
+
+  Future<void> _showDrawSettings() async {
+    double thickness = _drawThickness;
+    Color color = _drawColor;
+    const colors = <Color>[
+      Colors.black,
+      Colors.red,
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+    ];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'إعدادات القلم',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text('السماكة'),
+                    Expanded(
+                      child: Slider(
+                        value: thickness,
+                        min: 1,
+                        max: 10,
+                        divisions: 18,
+                        label: thickness.toStringAsFixed(1),
+                        onChanged: (v) =>
+                            setSheetState(() => thickness = v),
+                      ),
+                    ),
+                  ],
+                ),
+                Wrap(
+                  spacing: 12,
+                  children: colors
+                      .map(
+                        (c) => GestureDetector(
+                          onTap: () => setSheetState(() => color = c),
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: c,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: color == c
+                                    ? AppColors.accent
+                                    : Colors.transparent,
+                                width: 3,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _drawThickness = thickness;
+                      _drawColor = color;
+                    });
+                    Navigator.pop(sheetContext);
+                  },
+                  child: const Text('تطبيق'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickImageForPdf() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 95);
     if (picked == null) return;
@@ -378,6 +588,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       _pendingImageBytes = bytes;
       _addImageMode = true;
       _addTextMode = false;
+      _drawMode = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اضغط على المكان المطلوب داخل الصفحة لإضافة الصورة')));
   }
@@ -548,7 +759,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// طازجًا عبر طابور الحفظ نفسه أولًا لضمان قراءة أحدث حالة فعليًا —
   /// وليس مجرد التحقق من وجود نسخة محفوظة قد تكون قديمة.
   Future<String> _currentBestFilePath() async {
-    if ((_annotations.isNotEmpty || _imageAnnotations.isNotEmpty) || _hasFormFields) {
+    if ((_annotations.isNotEmpty ||
+            _imageAnnotations.isNotEmpty ||
+            _drawingStrokes.isNotEmpty) ||
+        _hasFormFields) {
       try {
         return await _runQueuedSave(showResult: false).then((_) => _lastExportedPath ?? widget.filePath);
       } catch (_) {
@@ -738,6 +952,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // أثناء المرور عليها ممكن يرمي ConcurrentModificationError.
     final annotationsSnapshot = _annotations.map((a) => a.copy()).toList(growable: false);
     final imagesSnapshot = _imageAnnotations.map((a) => a.copy()).toList(growable: false);
+    final strokesSnapshot = _drawingStrokes.map((s) => s.copy()).toList(growable: false);
 
     try {
       for (final ann in annotationsSnapshot) {
@@ -797,6 +1012,29 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final safeY = ann.dy.clamp(0.0, (pageSize.height - safeH).clamp(0.0, pageSize.height)).toDouble();
         final image = sf.PdfBitmap(ann.bytes);
         page.graphics.drawImage(image, Rect.fromLTWH(safeX, safeY, safeW, safeH));
+      }
+
+      for (final stroke in strokesSnapshot) {
+        final pageIndex = stroke.pageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+        if (stroke.points.length < 2) continue;
+
+        final page = document.pages[pageIndex];
+        final pageSize = page.getClientSize();
+        final pen = sf.PdfPen(
+          sf.PdfColor(stroke.color.red, stroke.color.green, stroke.color.blue),
+          width: stroke.thickness,
+        );
+
+        for (var i = 1; i < stroke.points.length; i++) {
+          final a = stroke.points[i - 1];
+          final b = stroke.points[i];
+          final ax = a.dx.clamp(0.0, pageSize.width).toDouble();
+          final ay = a.dy.clamp(0.0, pageSize.height).toDouble();
+          final bx = b.dx.clamp(0.0, pageSize.width).toDouble();
+          final by = b.dy.clamp(0.0, pageSize.height).toDouble();
+          page.graphics.drawLine(pen, Offset(ax, ay), Offset(bx, by));
+        }
       }
 
       savedBytes = await document.save();
@@ -1098,6 +1336,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final needsExport = _hasUnsavedChanges ||
         _annotations.isNotEmpty ||
         _imageAnnotations.isNotEmpty ||
+        _drawingStrokes.isNotEmpty ||
         _hasFormFields;
     if (!needsExport) return true;
 
@@ -1364,6 +1603,33 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     label: tr('ed_stickynote'),
                     mode: PdfAnnotationMode.stickyNote,
                   ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      avatar: Icon(
+                        Icons.draw_rounded,
+                        size: 18,
+                        color: _drawMode ? Colors.white : AppColors.primaryDark,
+                      ),
+                      label: const Text('قلم'),
+                      selected: _drawMode,
+                      selectedColor: AppColors.primaryDark,
+                      labelStyle: TextStyle(
+                        color: _drawMode
+                            ? Colors.white
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white70
+                                : AppColors.textDark),
+                        fontSize: 12,
+                      ),
+                      onSelected: (_) => _toggleDrawMode(),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.tune_rounded),
+                    tooltip: 'إعدادات القلم',
+                    onPressed: _showDrawSettings,
+                  ),
                 ],
               ),
             ),
@@ -1384,6 +1650,28 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   Switch(
                     value: _flattenFormsOnSave,
                     onChanged: (v) => setState(() => _flattenFormsOnSave = v),
+                  ),
+                ],
+              ),
+            ),
+          if (_drawMode)
+            Container(
+              width: double.infinity,
+              color: _drawColor.withOpacity(0.10),
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.draw_rounded, size: 18, color: _drawColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'وضع الرسم الحر — ارسم بإصبعك على الصفحة',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  Text(
+                    '${_drawThickness.toStringAsFixed(1)} pt',
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ],
               ),
@@ -1466,6 +1754,34 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._imageAnnotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildImageOverlay(ann)),
+                ..._drawingStrokes
+                    .where((s) => s.pageNumber == _currentPage)
+                    .map((stroke) {
+                  final transform = _pageTransforms[stroke.pageNumber] ??
+                      _fallbackPageTransform(stroke.pageNumber);
+                  if (transform == null) return const SizedBox.shrink();
+                  return Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: _PdfDrawingPainter(
+                          stroke: stroke,
+                          transform: transform,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                if (_drawMode)
+                  Positioned.fill(
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _onDrawPointerDown,
+                      onPointerMove: _onDrawPointerMove,
+                      onPointerUp: (_) => _finishDrawingStroke(),
+                      onPointerCancel: (_) => _finishDrawingStroke(),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
                 // أزرار التكبير/التصغير العائمة
                 Positioned(
                   bottom: 16,
@@ -1890,6 +2206,39 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       ),
     );
   }
+}
+
+class _PdfDrawingPainter extends CustomPainter {
+  final _DrawingStroke stroke;
+  final _PdfPageTransform transform;
+
+  const _PdfDrawingPainter({
+    required this.stroke,
+    required this.transform,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (stroke.points.length < 2) return;
+    final paint = Paint()
+      ..color = stroke.color
+      ..strokeWidth = stroke.thickness * transform.scale
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    final first = transform.pdfToViewer(stroke.points.first);
+    path.moveTo(first.dx, first.dy);
+    for (var i = 1; i < stroke.points.length; i++) {
+      final p = transform.pdfToViewer(stroke.points[i]);
+      path.lineTo(p.dx, p.dy);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PdfDrawingPainter oldDelegate) => true;
 }
 
 class _TextDialogResult {
