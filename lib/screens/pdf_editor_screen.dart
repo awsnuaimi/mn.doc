@@ -242,6 +242,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final List<_ShapeAnnotation> _selectedShapes = [];
   List<_ShapeAnnotation> _shapeClipboardGroup = [];
   bool _multiSelectMode = false;
+  double? _snapGuideX;
+  double? _snapGuideY;
   String? _shapeDragPart; // body | start | end
   Offset? _shapeDragLastPdf;
   bool _shapeEditGestureChanged = false;
@@ -707,6 +709,58 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
+  Offset _snapDeltaForBounds(
+    Rect movingBounds,
+    Offset proposed,
+    int pageNumber,
+    Set<_ShapeAnnotation> moving,
+  ) {
+    final moved = movingBounds.shift(proposed);
+    final threshold = 6.0 / _zoomLevel;
+    double? bestDx, bestDy, guideX, guideY;
+
+    final pageSize = _pdfPageSizes[pageNumber];
+    final xTargets = <double>[];
+    final yTargets = <double>[];
+    if (pageSize != null) {
+      xTargets.addAll([0, pageSize.width / 2, pageSize.width]);
+      yTargets.addAll([0, pageSize.height / 2, pageSize.height]);
+    }
+    for (final other in _shapeAnnotations) {
+      if (other.pageNumber != pageNumber || moving.contains(other)) continue;
+      final b = _shapeBounds(other);
+      xTargets.addAll([b.left, b.center.dx, b.right]);
+      yTargets.addAll([b.top, b.center.dy, b.bottom]);
+    }
+
+    final movingXs = [moved.left, moved.center.dx, moved.right];
+    final movingYs = [moved.top, moved.center.dy, moved.bottom];
+
+    for (final mx in movingXs) {
+      for (final tx in xTargets) {
+        final d = tx - mx;
+        if (d.abs() <= threshold &&
+            (bestDx == null || d.abs() < bestDx.abs())) {
+          bestDx = d;
+          guideX = tx;
+        }
+      }
+    }
+    for (final my in movingYs) {
+      for (final ty in yTargets) {
+        final d = ty - my;
+        if (d.abs() <= threshold &&
+            (bestDy == null || d.abs() < bestDy.abs())) {
+          bestDy = d;
+          guideY = ty;
+        }
+      }
+    }
+    _snapGuideX = guideX;
+    _snapGuideY = guideY;
+    return proposed + Offset(bestDx ?? 0, bestDy ?? 0);
+  }
+
   void _onShapeEditPointerMove(PointerMoveEvent event) {
     final shape = _selectedShape;
     final part = _shapeDragPart;
@@ -722,7 +776,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         if (pageSize == null) return;
         final bounds = _selectedShapesBounds();
         if (bounds == null) return;
-        var corrected = delta;
+        var corrected = _snapDeltaForBounds(
+          bounds,
+          delta,
+          shape.pageNumber,
+          _selectedShapes.toSet(),
+        );
         if (bounds.left + corrected.dx < 0) {
           corrected += Offset(-(bounds.left + corrected.dx), 0);
         }
@@ -744,9 +803,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       } else if (part == 'end') {
         shape.end = pdf;
       } else {
-        final delta = pdf - last;
+        var delta = pdf - last;
         final pageSize = _pdfPageSizes[shape.pageNumber];
         if (pageSize == null) return;
+        delta = _snapDeltaForBounds(
+          _shapeBounds(shape),
+          delta,
+          shape.pageNumber,
+          {shape},
+        );
         final newStart = shape.start + delta;
         final newEnd = shape.end + delta;
         final minX = newStart.dx < newEnd.dx ? newStart.dx : newEnd.dx;
@@ -771,6 +836,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _shapeDragPart = null;
     _shapeDragLastPdf = null;
     _shapeEditGestureChanged = false;
+    if (_snapGuideX != null || _snapGuideY != null) {
+      setState(() {
+        _snapGuideX = null;
+        _snapGuideY = null;
+      });
+    }
   }
 
   Future<void> _editSelectedShapeProperties() async {
@@ -1054,6 +1125,78 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       bottom = bottom == null || b > bottom ? b : bottom;
     }
     return Rect.fromLTRB(left!, top!, right!, bottom!);
+  }
+
+  Rect _shapeBounds(_ShapeAnnotation shape) =>
+      Rect.fromPoints(shape.start, shape.end);
+
+  void _translateShape(_ShapeAnnotation shape, Offset delta) {
+    shape.start += delta;
+    shape.end += delta;
+  }
+
+  void _alignSelectedShapes(String mode) {
+    if (_selectedShapes.length < 2) return;
+    final bounds = _selectedShapesBounds();
+    if (bounds == null) return;
+    _pushUndoState();
+    setState(() {
+      for (final shape in _selectedShapes) {
+        final b = _shapeBounds(shape);
+        Offset delta = Offset.zero;
+        switch (mode) {
+          case 'left':
+            delta = Offset(bounds.left - b.left, 0);
+            break;
+          case 'right':
+            delta = Offset(bounds.right - b.right, 0);
+            break;
+          case 'top':
+            delta = Offset(0, bounds.top - b.top);
+            break;
+          case 'bottom':
+            delta = Offset(0, bounds.bottom - b.bottom);
+            break;
+          case 'centerH':
+            delta = Offset(bounds.center.dx - b.center.dx, 0);
+            break;
+          case 'centerV':
+            delta = Offset(0, bounds.center.dy - b.center.dy);
+            break;
+        }
+        _translateShape(shape, delta);
+      }
+    });
+    _scheduleAutoSave();
+  }
+
+  void _distributeSelectedShapes(bool horizontal) {
+    if (_selectedShapes.length < 3) return;
+    final items = List<_ShapeAnnotation>.from(_selectedShapes);
+    items.sort((a, b) => horizontal
+        ? _shapeBounds(a).center.dx.compareTo(_shapeBounds(b).center.dx)
+        : _shapeBounds(a).center.dy.compareTo(_shapeBounds(b).center.dy));
+    final first = _shapeBounds(items.first).center;
+    final last = _shapeBounds(items.last).center;
+    final step = horizontal
+        ? (last.dx - first.dx) / (items.length - 1)
+        : (last.dy - first.dy) / (items.length - 1);
+    _pushUndoState();
+    setState(() {
+      for (var i = 1; i < items.length - 1; i++) {
+        final b = _shapeBounds(items[i]);
+        final target = horizontal
+            ? first.dx + step * i
+            : first.dy + step * i;
+        _translateShape(
+          items[i],
+          horizontal
+              ? Offset(target - b.center.dx, 0)
+              : Offset(0, target - b.center.dy),
+        );
+      }
+    });
+    _scheduleAutoSave();
   }
 
   void _deleteSelectedShapes() {
@@ -2715,6 +2858,18 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       tooltip: 'حذف المجموعة',
                       onPressed: _deleteSelectedShapes,
                     ),
+                                     if (_selectedShapes.length >= 2) ...[
+                      IconButton(icon: const Icon(Icons.align_horizontal_left_rounded), tooltip: 'محاذاة لليسار', onPressed: () => _alignSelectedShapes('left')),
+                      IconButton(icon: const Icon(Icons.align_horizontal_center_rounded), tooltip: 'توسيط أفقي', onPressed: () => _alignSelectedShapes('centerH')),
+                      IconButton(icon: const Icon(Icons.align_horizontal_right_rounded), tooltip: 'محاذاة لليمين', onPressed: () => _alignSelectedShapes('right')),
+                      IconButton(icon: const Icon(Icons.align_vertical_top_rounded), tooltip: 'محاذاة للأعلى', onPressed: () => _alignSelectedShapes('top')),
+                      IconButton(icon: const Icon(Icons.align_vertical_center_rounded), tooltip: 'توسيط عمودي', onPressed: () => _alignSelectedShapes('centerV')),
+                      IconButton(icon: const Icon(Icons.align_vertical_bottom_rounded), tooltip: 'محاذاة للأسفل', onPressed: () => _alignSelectedShapes('bottom')),
+                    ],
+                    if (_selectedShapes.length >= 3) ...[
+                      IconButton(icon: const Icon(Icons.space_bar_rounded), tooltip: 'توزيع أفقي', onPressed: () => _distributeSelectedShapes(true)),
+                      IconButton(icon: const Icon(Icons.vertical_distribute_rounded), tooltip: 'توزيع عمودي', onPressed: () => _distributeSelectedShapes(false)),
+                    ],
                   ],
                   _shapeToolChip(
                     icon: Icons.horizontal_rule_rounded,
@@ -2925,6 +3080,22 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._imageAnnotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildImageOverlay(ann)),
+                if ((_snapGuideX != null || _snapGuideY != null) &&
+                    (_pageTransforms[_currentPage] ??
+                            _fallbackPageTransform(_currentPage)) !=
+                        null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: _PdfSnapGuidePainter(
+                          guideX: _snapGuideX,
+                          guideY: _snapGuideY,
+                          transform: (_pageTransforms[_currentPage] ??
+                              _fallbackPageTransform(_currentPage))!,
+                        ),
+                      ),
+                    ),
+                  ),
                 ..._shapeAnnotations
                     .where((s) => s.pageNumber == _currentPage)
                     .map((shape) {
@@ -3469,6 +3640,39 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       ),
     );
   }
+}
+
+class _PdfSnapGuidePainter extends CustomPainter {
+  final double? guideX;
+  final double? guideY;
+  final _PdfPageTransform transform;
+
+  const _PdfSnapGuidePainter({
+    required this.guideX,
+    required this.guideY,
+    required this.transform,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.blueAccent.withOpacity(0.75)
+      ..strokeWidth = 1.2;
+    if (guideX != null) {
+      final x = transform.pdfToViewer(Offset(guideX!, 0)).dx;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    if (guideY != null) {
+      final y = transform.pdfToViewer(Offset(0, guideY!)).dy;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PdfSnapGuidePainter oldDelegate) =>
+      guideX != oldDelegate.guideX ||
+      guideY != oldDelegate.guideY ||
+      transform != oldDelegate.transform;
 }
 
 class _PdfShapePainter extends CustomPainter {
