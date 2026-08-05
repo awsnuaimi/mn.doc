@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +19,7 @@ import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
+import 'manage_pages_screen.dart';
 
 /// نص مضاف إلى صفحة PDF.
 ///
@@ -53,6 +56,30 @@ class _TextAnnotation {
       );
 }
 
+
+class _ImageAnnotation {
+  int pageNumber;
+  double dx;
+  double dy;
+  double width;
+  double height;
+  final Uint8List bytes;
+
+  _ImageAnnotation({required this.pageNumber, required this.dx, required this.dy, required this.width, required this.height, required this.bytes});
+
+  // بيانات الصورة نفسها لا تتغير بعد إنشاء التعليق، لذلك نسخ حالة المحرر
+  // يشارك نفس Uint8List بدل استنساخ عدة ميغابايت مع كل Undo/Redo.
+  // الموضع والحجم يبقيان مستقلين لأنهما قيم scalar داخل كائن جديد.
+  _ImageAnnotation copy() => _ImageAnnotation(
+    pageNumber: pageNumber,
+    dx: dx,
+    dy: dy,
+    width: width,
+    height: height,
+    bytes: bytes,
+  );
+}
+
 /// تحويل هندسي من إحداثيات صفحة PDF (points) إلى إحداثيات الـViewer (pixels).
 /// يُعاد حسابه/معايرته من ضغطة Syncfusion الحقيقية، ولا يدخل في بيانات النص.
 class _PdfPageTransform {
@@ -62,6 +89,52 @@ class _PdfPageTransform {
   const _PdfPageTransform({required this.scale, required this.origin});
 
   Offset pdfToViewer(Offset pdfPoint) => origin + pdfPoint * scale;
+}
+
+/// لقطة قابلة للتوسّع لحالة المحرر. تحتوي النصوص والصور المخصّصة.
+/// نسخ الصور هنا خفيف: _ImageAnnotation.copy() ينسخ هندسة التعليق فقط
+/// ويشارك bytes الصورة غير المعدّلة بين اللقطات، لمنع تضخم ذاكرة Undo/Redo.
+class _EditorSnapshot {
+  final List<_TextAnnotation> textAnnotations;
+  final List<_ImageAnnotation> imageAnnotations;
+
+  _EditorSnapshot({required this.textAnnotations, required this.imageAnnotations});
+
+  factory _EditorSnapshot.capture(List<_TextAnnotation> annotations, List<_ImageAnnotation> images) =>
+      _EditorSnapshot(
+        textAnnotations: annotations.map((a) => a.copy()).toList(growable: false),
+        imageAnnotations: images.map((a) => a.copy()).toList(growable: false),
+      );
+}
+
+class _EditorHistory {
+  final int limit;
+  final List<_EditorSnapshot> _undo = <_EditorSnapshot>[];
+  final List<_EditorSnapshot> _redo = <_EditorSnapshot>[];
+
+  _EditorHistory({this.limit = 20});
+
+  bool get canUndo => _undo.isNotEmpty;
+  bool get canRedo => _redo.isNotEmpty;
+
+  void record(_EditorSnapshot before) {
+    _undo.add(before);
+    _redo.clear();
+    if (_undo.length > limit) _undo.removeAt(0);
+  }
+
+  _EditorSnapshot? undo(_EditorSnapshot current) {
+    if (_undo.isEmpty) return null;
+    _redo.add(current);
+    return _undo.removeLast();
+  }
+
+  _EditorSnapshot? redo(_EditorSnapshot current) {
+    if (_redo.isEmpty) return null;
+    _undo.add(current);
+    if (_undo.length > limit) _undo.removeAt(0);
+    return _redo.removeLast();
+  }
 }
 
 
@@ -77,6 +150,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final PdfViewerController _controller = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
+  final List<_ImageAnnotation> _imageAnnotations = [];
+  Uint8List? _pendingImageBytes;
+  bool _addImageMode = false;
+
+  // حركة الصورة تُعامل كعملية واحدة في Undo/Redo مهما كان عدد أحداث السحب.
+  // لا نسجل لقطة عند مجرد لمس الصورة، بل فقط بعد أول حركة فعلية.
+  _EditorSnapshot? _imageDragBefore;
+  _ImageAnnotation? _draggingImage;
+  bool _imageDragChanged = false;
   final GlobalKey _viewerKey = GlobalKey();
 
   // أبعاد الصفحات الأصلية بنقاط PDF + التحويل الحالي للصفحة المعروضة.
@@ -95,41 +177,36 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   int _currentPage = 1;
   double _zoomLevel = 1.0;
 
-  // ------- تراجع/إعادة (Undo/Redo) لتعليقات النص المضافة -------
-  final List<List<_TextAnnotation>> _undoStack = [];
-  final List<List<_TextAnnotation>> _redoStack = [];
+  // ------- تراجع/إعادة موحّد وقابل للتوسعة لكل عناصر المحرر -------
+  final _EditorHistory _history = _EditorHistory(limit: 20);
+
+  _EditorSnapshot _captureEditorState() => _EditorSnapshot.capture(_annotations, _imageAnnotations);
+
+  void _restoreEditorState(_EditorSnapshot snapshot) {
+    _annotations
+      ..clear()
+      ..addAll(snapshot.textAnnotations.map((a) => a.copy()));
+    _imageAnnotations
+      ..clear()
+      ..addAll(snapshot.imageAnnotations.map((a) => a.copy()));
+  }
 
   void _pushUndoState() {
-    _undoStack.add(_annotations.map((a) => a.copy()).toList());
-    _redoStack.clear();
-    if (_undoStack.length > 20) _undoStack.removeAt(0); // حد أقصى لتفادي استهلاك ذاكرة زائد
-    _hasUnsavedChanges = true;
-    // نحدّث الواجهة هون مباشرة (مثلًا لتفعيل زري تراجع/إعادة فورًا)
-    // بدل الاعتماد على استدعاء خارجي قد يُنسى مستقبلًا عند إضافة مسار جديد.
+    _history.record(_captureEditorState());
     if (mounted) setState(() {});
   }
 
   void _undo() {
-    if (_undoStack.isEmpty) return;
-    _redoStack.add(_annotations.map((a) => a.copy()).toList());
-    final prev = _undoStack.removeLast();
-    setState(() {
-      _annotations
-        ..clear()
-        ..addAll(prev);
-    });
+    final previous = _history.undo(_captureEditorState());
+    if (previous == null) return;
+    setState(() => _restoreEditorState(previous));
     _scheduleAutoSave();
   }
 
   void _redo() {
-    if (_redoStack.isEmpty) return;
-    _undoStack.add(_annotations.map((a) => a.copy()).toList());
-    final next = _redoStack.removeLast();
-    setState(() {
-      _annotations
-        ..clear()
-        ..addAll(next);
-    });
+    final next = _history.redo(_captureEditorState());
+    if (next == null) return;
+    setState(() => _restoreEditorState(next));
     _scheduleAutoSave();
   }
 
@@ -150,6 +227,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   // ------- تتبّع التعديلات غير المحفوظة -------
   bool _hasUnsavedChanges = false;
+  int _documentRevision = 0;
+  int _savedRevision = 0;
+
+  void _markDocumentChanged() {
+    _documentRevision++;
+    _hasUnsavedChanges = _documentRevision != _savedRevision;
+  }
   // ------- تحريك النص بالسحب المباشر -------
   _TextAnnotation? _movingAnnotation;
   _TextAnnotation? _moveSnapshot;
@@ -210,7 +294,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _handlePdfTap(PdfGestureDetails details) async {
-    if (!_addTextMode) return;
+    if (!_addTextMode && !_addImageMode) return;
 
     // دقة تحديد الموضع (شاشة ↔ نقاط PDF) مضمونة فقط عند التكبير الافتراضي
     // 100% — أي تكبير/تصغير يُدخل انحرافًا حقيقيًا بين ما يظهر على
@@ -244,22 +328,50 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       viewerPoint: details.position,
     );
 
+    if (_addImageMode && _pendingImageBytes != null) {
+      final pageSize = _pdfPageSizes[pageNumber];
+      if (pageSize == null) return;
+      const defaultWidth = 140.0;
+      const defaultHeight = 100.0;
+      _pushUndoState();
+      setState(() {
+        _imageAnnotations.add(_ImageAnnotation(
+          pageNumber: pageNumber,
+          dx: pagePoint.dx.clamp(0.0, (pageSize.width - defaultWidth).clamp(0.0, pageSize.width)).toDouble(),
+          dy: pagePoint.dy.clamp(0.0, (pageSize.height - defaultHeight).clamp(0.0, pageSize.height)).toDouble(),
+          width: defaultWidth, height: defaultHeight, bytes: Uint8List.fromList(_pendingImageBytes!),
+        ));
+        _pendingImageBytes = null;
+        _addImageMode = false;
+      });
+      _scheduleAutoSave();
+      return;
+    }
+
     final result = await _showTextDialog();
     if (result == null || result.text.trim().isEmpty) return;
 
     _pushUndoState();
     setState(() {
       _annotations.add(_TextAnnotation(
-        pageNumber: pageNumber,
-        dx: pagePoint.dx,
-        dy: pagePoint.dy,
-        text: result.text,
-        fontSize: result.fontSize,
-        color: result.color,
-        alignment: result.alignment,
+        pageNumber: pageNumber, dx: pagePoint.dx, dy: pagePoint.dy, text: result.text,
+        fontSize: result.fontSize, color: result.color, alignment: result.alignment,
       ));
     });
     _scheduleAutoSave();
+  }
+
+  Future<void> _pickImageForPdf() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 95);
+    if (picked == null) return;
+    final bytes = await File(picked.path).readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _pendingImageBytes = bytes;
+      _addImageMode = true;
+      _addTextMode = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اضغط على المكان المطلوب داخل الصفحة لإضافة الصورة')));
   }
 
   Future<_TextDialogResult?> _showTextDialog({
@@ -428,7 +540,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// طازجًا عبر طابور الحفظ نفسه أولًا لضمان قراءة أحدث حالة فعليًا —
   /// وليس مجرد التحقق من وجود نسخة محفوظة قد تكون قديمة.
   Future<String> _currentBestFilePath() async {
-    if (_annotations.isNotEmpty || _hasFormFields) {
+    if ((_annotations.isNotEmpty || _imageAnnotations.isNotEmpty) || _hasFormFields) {
       try {
         return await _runQueuedSave(showResult: false).then((_) => _lastExportedPath ?? widget.filePath);
       } catch (_) {
@@ -609,6 +721,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // فلو المستخدم أضاف/عدّل نصًا بالمنتصف، تعديل _annotations الحيّة
     // أثناء المرور عليها ممكن يرمي ConcurrentModificationError.
     final annotationsSnapshot = _annotations.map((a) => a.copy()).toList(growable: false);
+    final imagesSnapshot = _imageAnnotations.map((a) => a.copy()).toList(growable: false);
 
     try {
       for (final ann in annotationsSnapshot) {
@@ -657,6 +770,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         );
       }
 
+      for (final ann in imagesSnapshot) {
+        final pageIndex = ann.pageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+        final page = document.pages[pageIndex];
+        final pageSize = page.getClientSize();
+        final safeW = ann.width.clamp(20.0, pageSize.width).toDouble();
+        final safeH = ann.height.clamp(20.0, pageSize.height).toDouble();
+        final safeX = ann.dx.clamp(0.0, (pageSize.width - safeW).clamp(0.0, pageSize.width)).toDouble();
+        final safeY = ann.dy.clamp(0.0, (pageSize.height - safeH).clamp(0.0, pageSize.height)).toDouble();
+        final image = sf.PdfBitmap(ann.bytes);
+        page.graphics.drawImage(image, Rect.fromLTWH(safeX, safeY, safeW, safeH));
+      }
+
       savedBytes = await document.save();
     } finally {
       // نضمن تحرير موارد المستند (Native) حتى لو فشل الرسم أو الحفظ —
@@ -700,12 +826,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// يجدول حفظًا تلقائيًا بعد فترة قصيرة من التوقف عن التعديل (بدل تصدير
   /// الملف كاملًا فورًا مع كل تعديل) — مهم للأداء مع الملفات الكبيرة،
   /// خصوصًا لو المستخدم عدّل/نقل نفس النص عدة مرات متتالية بسرعة.
-  void _scheduleAutoSave() {
+  bool get _hasActiveCustomGesture =>
+      _draggingImage != null || (_movingAnnotation != null && _moveGestureArmed);
+
+  void _scheduleAutoSave({bool markChanged = true}) {
     if (_disposed) return;
-    _hasUnsavedChanges = true;
+    if (markChanged) _markDocumentChanged();
     _autoSaveDebounce?.cancel();
     _autoSaveDebounce = Timer(const Duration(milliseconds: 1200), () {
-      if (!_disposed) unawaited(_runQueuedSave(showResult: false));
+      if (_disposed) return;
+
+      // لا نصدّر المستند بينما المستخدم في منتصف سحب صورة/توقيع أو نص.
+      // التصدير أثناء gesture قد يلتقط موضعًا وسيطًا ثم يكتب ملفًا لا يطابق
+      // الحالة التي ثبّتها المستخدم بعد رفع إصبعه. نؤجل نفس Revision فقط،
+      // من دون زيادته، إلى أن تنتهي الحركة ثم يحفظ الموضع النهائي.
+      if (_hasActiveCustomGesture) {
+        _scheduleAutoSave(markChanged: false);
+        return;
+      }
+      unawaited(_runQueuedSave(showResult: false));
     });
   }
 
@@ -728,10 +867,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     String? outPath;
     Object? error;
+    final revisionBeingSaved = _documentRevision;
     try {
       outPath = await _exportToFile();
       _lastExportedPath = outPath;
-      if (!_disposed) _hasUnsavedChanges = false;
+      if (!_disposed) {
+        _savedRevision = revisionBeingSaved;
+        _hasUnsavedChanges = _documentRevision != _savedRevision;
+        // لو حصل تعديل أثناء التصدير، لا نعتبره محفوظًا ونجدول نسخة لاحقة.
+        if (_hasUnsavedChanges) _scheduleAutoSave(markChanged: false);
+      }
     } catch (e, stack) {
       error = e;
       if (kDebugMode) {
@@ -799,6 +944,73 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   Future<void> _saveDocument() => _runQueuedSave(showResult: true);
 
+  /// يثبت أحدث Revision فعليًا قبل أي عملية بنيوية على الصفحات.
+  /// لا يكفي انتظار حفظ كان موجودًا بالطابور، لأن المستخدم قد يعدّل المستند
+  /// أثناء ذلك الحفظ. لذلك نعيد الحفظ حتى تتطابق النسخة المحفوظة مع الحالية.
+  Future<bool> _flushLatestRevisionForStructuralOperation() async {
+    if (_disposed) return false;
+
+    _autoSaveDebounce?.cancel();
+    await (_saveQueue ?? Future.value()).catchError((_) {});
+    if (_disposed || !mounted) return false;
+
+    final needsExport = _hasUnsavedChanges ||
+        _annotations.isNotEmpty ||
+        _imageAnnotations.isNotEmpty ||
+        _hasFormFields;
+    if (!needsExport) return true;
+
+    // حد أمان يمنع حلقة لا نهائية لو فشل التصدير أو استمرت تعديلات جديدة
+    // بالتزامن مع محاولة فتح مدير الصفحات.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final revisionBeforeSave = _documentRevision;
+      await _runQueuedSave(showResult: false);
+      if (_disposed || !mounted) return false;
+
+      if (_savedRevision == _documentRevision &&
+          _savedRevision == revisionBeforeSave &&
+          _lastExportedPath != null) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _openPageManager() async {
+    final ready = await _flushLatestRevisionForStructuralOperation();
+    if (!mounted || !ready) {
+      if (mounted) {
+        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppText.t('ed_save_error_prefix', lang))),
+        );
+      }
+      return;
+    }
+
+    final sourcePath = _lastExportedPath ?? widget.filePath;
+
+    // مدير الصفحات عملية بنيوية مستقلة. ننتظر نتيجتها بدل ترك المحرر
+    // الحالي حيًا خلف محرر جديد؛ وعند نجاحها نستبدل هذه الشاشة بالملف
+    // الناتج فقط بعد اكتمال العملية بالكامل.
+    final managedPath = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ManagePagesScreen(initialFilePath: sourcePath),
+      ),
+    );
+    if (!mounted || managedPath == null || managedPath.isEmpty) return;
+
+    _autoSaveDebounce?.cancel();
+    await (_saveQueue ?? Future.value()).catchError((_) {});
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: managedPath)),
+    );
+  }
+
   Widget build(BuildContext context) {
     final hasSearchResult = _searchResult.hasResult;
     final settings = context.watch<AppSettingsController>();
@@ -817,17 +1029,50 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               title: Text(tr('unsaved_title')),
               content: Text(tr('unsaved_body')),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('cancel'))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(tr('cancel')),
+                ),
+                TextButton(
                   onPressed: () => Navigator.pop(context, true),
                   child: Text(tr('discard_exit')),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context, null),
+                  icon: const Icon(Icons.save_rounded),
+                  label: Text(tr('save')),
                 ),
               ],
             ),
           );
-          if (shouldDiscard == true && context.mounted) {
+          if (!context.mounted) return;
+
+          if (shouldDiscard == true) {
+            // خروج صريح بدون حفظ.
+            _autoSaveDebounce?.cancel();
+            _hasUnsavedChanges = false;
             Navigator.pop(context);
+            return;
+          }
+
+          if (shouldDiscard == null) {
+            // زر "حفظ": لا نخرج إلا بعد تثبيت أحدث Revision فعليًا.
+            final saved = await _flushLatestRevisionForStructuralOperation();
+            if (!context.mounted) return;
+
+            if (saved && !_hasUnsavedChanges) {
+              Navigator.pop(context);
+            } else {
+              final lang = Provider.of<AppSettingsController>(
+                context,
+                listen: false,
+              ).languageCode;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(AppText.t('ed_save_error_prefix', lang)),
+                ),
+              );
+            }
           }
         },
         child: Scaffold(
@@ -840,12 +1085,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           IconButton(
             icon: const Icon(Icons.undo_rounded),
             tooltip: tr('undo'),
-            onPressed: _undoStack.isEmpty ? null : _undo,
+            onPressed: !_history.canUndo ? null : _undo,
           ),
           IconButton(
             icon: const Icon(Icons.redo_rounded),
             tooltip: tr('redo'),
-            onPressed: _redoStack.isEmpty ? null : _redo,
+            onPressed: !_history.canRedo ? null : _redo,
           ),
           IconButton(
             icon: const Icon(Icons.search_rounded),
@@ -858,9 +1103,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             onPressed: () => _pdfViewerStateKey.currentState?.openBookmarkView(),
           ),
           IconButton(
+            icon: const Icon(Icons.grid_view_rounded),
+            tooltip: 'إدارة الصفحات بالصور المصغرة',
+            onPressed: _saving ? null : _openPageManager,
+          ),
+          IconButton(
             icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
             tooltip: tr('ed_addtext_tooltip'),
-            onPressed: () => setState(() => _addTextMode = !_addTextMode),
+            onPressed: () => setState(() { _addTextMode = !_addTextMode; if (_addTextMode) { _addImageMode = false; _pendingImageBytes = null; } }),
+          ),
+          IconButton(
+            icon: Icon(_addImageMode ? Icons.image_rounded : Icons.add_photo_alternate_outlined),
+            tooltip: 'إضافة صورة إلى PDF',
+            onPressed: _pickImageForPdf,
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.smart_toy_rounded),
@@ -1060,6 +1315,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ..._annotations
                     .where((a) => a.pageNumber == _currentPage)
                     .map((ann) => _buildAnnotationOverlay(ann)),
+                ..._imageAnnotations
+                    .where((a) => a.pageNumber == _currentPage)
+                    .map((ann) => _buildImageOverlay(ann)),
                 // أزرار التكبير/التصغير العائمة
                 Positioned(
                   bottom: 16,
@@ -1179,6 +1437,91 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     );
   }
 
+  Widget _buildImageOverlay(_ImageAnnotation ann) {
+    final transform = _pageTransforms[ann.pageNumber] ?? _fallbackPageTransform(ann.pageNumber);
+    if (transform == null) return const SizedBox.shrink();
+    final point = transform.pdfToViewer(Offset(ann.dx, ann.dy));
+    return Positioned(
+      left: point.dx, top: point.dy, width: ann.width * transform.scale, height: ann.height * transform.scale,
+      child: GestureDetector(
+        onPanStart: (_) {
+          // أوقف أي AutoSave كان على وشك البدء حتى لا يحفظ موضعًا وسيطًا.
+          _autoSaveDebounce?.cancel();
+          _draggingImage = ann;
+          _imageDragBefore = _captureEditorState();
+          _imageDragChanged = false;
+        },
+        onPanUpdate: (d) {
+          final pageSize = _pdfPageSizes[ann.pageNumber];
+          if (pageSize == null || transform.scale <= 0) return;
+          final delta = d.delta / transform.scale;
+          if (delta.distanceSquared <= 0) return;
+
+          final nextX = (ann.dx + delta.dx)
+              .clamp(0.0, (pageSize.width - ann.width).clamp(0.0, pageSize.width))
+              .toDouble();
+          final nextY = (ann.dy + delta.dy)
+              .clamp(0.0, (pageSize.height - ann.height).clamp(0.0, pageSize.height))
+              .toDouble();
+          if ((nextX - ann.dx).abs() < 0.001 && (nextY - ann.dy).abs() < 0.001) return;
+
+          _imageDragChanged = true;
+          setState(() {
+            ann.dx = nextX;
+            ann.dy = nextY;
+          });
+        },
+        onPanEnd: (_) => _finishImageDrag(ann),
+        onPanCancel: () => _finishImageDrag(ann),
+        onTap: () => _showImageActionSheet(ann),
+        child: Container(
+          decoration: BoxDecoration(border: Border.all(color: AppColors.accent, width: 1)),
+          child: Image.memory(ann.bytes, fit: BoxFit.fill, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_rounded)),
+        ),
+      ),
+    );
+  }
+
+  void _finishImageDrag(_ImageAnnotation ann) {
+    if (!identical(_draggingImage, ann)) return;
+    final before = _imageDragBefore;
+    final changed = _imageDragChanged;
+    _draggingImage = null;
+    _imageDragBefore = null;
+    _imageDragChanged = false;
+
+    if (!changed || before == null) return;
+    _history.record(before);
+    if (mounted) setState(() {}); // تفعيل زر Undo فورًا
+    _scheduleAutoSave();
+  }
+
+  void _resizeImage(_ImageAnnotation ann, double factor) {
+    final pageSize = _pdfPageSizes[ann.pageNumber];
+    if (pageSize == null) return;
+    _pushUndoState();
+    setState(() {
+      ann.width = (ann.width * factor).clamp(30.0, pageSize.width).toDouble();
+      ann.height = (ann.height * factor).clamp(30.0, pageSize.height).toDouble();
+      ann.dx = ann.dx.clamp(0.0, (pageSize.width - ann.width).clamp(0.0, pageSize.width)).toDouble();
+      ann.dy = ann.dy.clamp(0.0, (pageSize.height - ann.height).clamp(0.0, pageSize.height)).toDouble();
+    });
+    _scheduleAutoSave();
+  }
+
+  void _showImageActionSheet(_ImageAnnotation ann) {
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) => SafeArea(child: Wrap(children: [
+        ListTile(leading: const Icon(Icons.zoom_in_rounded), title: const Text('تكبير الصورة'), onTap: () { Navigator.pop(sheetContext); _resizeImage(ann, 1.2); }),
+        ListTile(leading: const Icon(Icons.zoom_out_rounded), title: const Text('تصغير الصورة'), onTap: () { Navigator.pop(sheetContext); _resizeImage(ann, 0.8); }),
+        ListTile(leading: const Icon(Icons.delete_outline_rounded, color: Colors.red), title: const Text('حذف الصورة', style: TextStyle(color: Colors.red)), onTap: () {
+          Navigator.pop(sheetContext); _pushUndoState(); setState(() => _imageAnnotations.remove(ann)); _scheduleAutoSave();
+        }),
+      ])),
+    );
+  }
+
   Alignment _alignmentFor(TextAlign alignment) {
     switch (alignment) {
       case TextAlign.left:
@@ -1255,6 +1598,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _moveGestureArmed = false;
     _moveHoldTimer = Timer(_moveHoldDuration, () {
       if (!mounted || _movePointerId != event.pointer) return;
+      _autoSaveDebounce?.cancel();
       setState(() {
         _movingAnnotation = ann;
         _moveSnapshot = ann.copy();
@@ -1337,15 +1681,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     // التثبيت لا يحسب أي موضع جديد إطلاقًا. ann.dx/ann.dy هما بالفعل
     // الموضع النهائي الذي كان ظاهرًا أثناء السحب، لذلك لا توجد "قفزة".
     if (before != null) {
-      _undoStack.add(before);
-      _redoStack.clear();
-      if (_undoStack.length > 20) _undoStack.removeAt(0);
-    }
+  _history.record(_EditorSnapshot(
+    textAnnotations: before.map((a) => a.copy()).toList(growable: false),
+    imageAnnotations:
+        _imageAnnotations.map((a) => a.copy()).toList(growable: false),
+  ));
+}
     setState(() {
       _movingAnnotation = null;
       _moveSnapshot = null;
       _moveUndoSnapshot = null;
-      _hasUnsavedChanges = true;
     });
     _scheduleAutoSave();
   }
@@ -1374,6 +1719,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               title: Text(tr('ed_action_move')),
               onTap: () {
                 Navigator.pop(sheetContext);
+                _autoSaveDebounce?.cancel();
                 setState(() {
                   _movingAnnotation = ann;
                   _moveSnapshot = ann.copy();
