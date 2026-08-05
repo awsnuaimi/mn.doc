@@ -233,6 +233,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   void _markDocumentChanged() {
     _documentRevision++;
     _hasUnsavedChanges = _documentRevision != _savedRevision;
+
+    // بعض التعديلات (خصوصًا تعليقات Syncfusion وحقول النماذج) تصل عبر
+    // callbacks لا يسبقها setState من كودنا. يجب إعادة بناء PopScope فورًا
+    // حتى تتحول canPop إلى false في نفس Revision ولا تبقى قيمة قديمة تسمح
+    // بالخروج قبل أن يبدأ/يكتمل AutoSave.
+    if (mounted) setState(() {});
   }
   // ------- تحريك النص بالسحب المباشر -------
   _TextAnnotation? _movingAnnotation;
