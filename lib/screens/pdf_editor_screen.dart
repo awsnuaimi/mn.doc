@@ -22,128 +22,14 @@ import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
 import 'manage_pages_screen.dart';
 
-/// نص مضاف إلى صفحة PDF.
-///
-/// المصدر الوحيد للحقيقة هو (pageNumber, dx, dy) بإحداثيات صفحة PDF نفسها.
-/// لا نخزّن أي إحداثيات شاشة داخل التعليق؛ موضع المعاينة يُشتق لحظيًا من
-/// تحويل الصفحة الحالية، لذلك الإضافة والنقل والحفظ تستخدم النظام نفسه.
-class _TextAnnotation {
-  int pageNumber; // يبدأ من 1
-  double dx; // X بنقاط PDF
-  double dy; // Y بنقاط PDF
-  String text;
-  double fontSize;
-  Color color;
-  TextAlign alignment;
-
-  _TextAnnotation({
-    required this.pageNumber,
-    required this.dx,
-    required this.dy,
-    required this.text,
-    this.fontSize = 16,
-    this.color = Colors.black,
-    this.alignment = TextAlign.right,
-  });
-
-  _TextAnnotation copy() => _TextAnnotation(
-        pageNumber: pageNumber,
-        dx: dx,
-        dy: dy,
-        text: text,
-        fontSize: fontSize,
-        color: color,
-        alignment: alignment,
-      );
-}
+part 'pdf_editor/models/text_annotation.dart';
+part 'pdf_editor/models/image_annotation.dart';
+part 'pdf_editor/models/shape_annotation.dart';
+part 'pdf_editor/models/drawing_stroke.dart';
+part 'pdf_editor/models/editor_snapshot.dart';
 
 
-enum _ShapeKind { line, arrow, rectangle, ellipse }
-enum _ShapeLineStyle { solid, dashed, dotted }
-enum _ArrowHeadStyle { open, closed }
 
-class _ShapeAnnotation {
-  int pageNumber;
-  Offset start;
-  Offset end;
-  _ShapeKind kind;
-  Color color;
-  double thickness;
-  Color? fillColor;
-  double fillOpacity;
-  _ShapeLineStyle lineStyle;
-  _ArrowHeadStyle arrowHeadStyle;
-
-  _ShapeAnnotation({
-    required this.pageNumber,
-    required this.start,
-    required this.end,
-    required this.kind,
-    required this.color,
-    required this.thickness,
-    this.fillColor,
-    this.fillOpacity = 0.25,
-    this.lineStyle = _ShapeLineStyle.solid,
-    this.arrowHeadStyle = _ArrowHeadStyle.open,
-  });
-
-  _ShapeAnnotation copy() => _ShapeAnnotation(
-        pageNumber: pageNumber,
-        start: start,
-        end: end,
-        kind: kind,
-        color: color,
-        thickness: thickness,
-        fillColor: fillColor,
-        fillOpacity: fillOpacity,
-        lineStyle: lineStyle,
-        arrowHeadStyle: arrowHeadStyle,
-      );
-}
-
-class _DrawingStroke {
-  int pageNumber;
-  final List<Offset> points; // PDF points
-  Color color;
-  double thickness; // PDF points
-
-  _DrawingStroke({
-    required this.pageNumber,
-    required this.points,
-    required this.color,
-    required this.thickness,
-  });
-
-  _DrawingStroke copy() => _DrawingStroke(
-        pageNumber: pageNumber,
-        points: List<Offset>.from(points),
-        color: color,
-        thickness: thickness,
-      );
-}
-
-class _ImageAnnotation {
-  int pageNumber;
-  double dx;
-  double dy;
-  double width;
-  double height;
-  final Uint8List bytes;
-
-  _ImageAnnotation({required this.pageNumber, required this.dx, required this.dy, required this.width, required this.height, required this.bytes});
-
-  // بيانات الصورة نفسها لا تتغير بعد إنشاء التعليق، لذلك نسخ حالة المحرر
-  // يشارك نفس Uint8List بدل استنساخ عدة ميغابايت مع كل Undo/Redo.
-  // الموضع والحجم يبقيان مستقلين لأنهما قيم scalar داخل كائن جديد.
-  _ImageAnnotation copy() => _ImageAnnotation(
-    pageNumber: pageNumber,
-    dx: dx,
-    dy: dy,
-    width: width,
-    height: height,
-    bytes: bytes,
-  );
-}
 
 /// تحويل هندسي من إحداثيات صفحة PDF (points) إلى إحداثيات الـViewer (pixels).
 /// يُعاد حسابه/معايرته من ضغطة Syncfusion الحقيقية، ولا يدخل في بيانات النص.
@@ -157,35 +43,6 @@ class _PdfPageTransform {
   Offset viewerToPdf(Offset viewerPoint) => (viewerPoint - origin) / scale;
 }
 
-/// لقطة قابلة للتوسّع لحالة المحرر. تحتوي النصوص والصور المخصّصة.
-/// نسخ الصور هنا خفيف: _ImageAnnotation.copy() ينسخ هندسة التعليق فقط
-/// ويشارك bytes الصورة غير المعدّلة بين اللقطات، لمنع تضخم ذاكرة Undo/Redo.
-class _EditorSnapshot {
-  final List<_TextAnnotation> textAnnotations;
-  final List<_ImageAnnotation> imageAnnotations;
-  final List<_DrawingStroke> drawingStrokes;
-  final List<_ShapeAnnotation> shapeAnnotations;
-
-  _EditorSnapshot({
-    required this.textAnnotations,
-    required this.imageAnnotations,
-    required this.drawingStrokes,
-    required this.shapeAnnotations,
-  });
-
-  factory _EditorSnapshot.capture(
-    List<_TextAnnotation> annotations,
-    List<_ImageAnnotation> images,
-    List<_DrawingStroke> strokes,
-    List<_ShapeAnnotation> shapes,
-  ) =>
-      _EditorSnapshot(
-        textAnnotations: annotations.map((a) => a.copy()).toList(growable: false),
-        imageAnnotations: images.map((a) => a.copy()).toList(growable: false),
-        drawingStrokes: strokes.map((s) => s.copy()).toList(growable: false),
-        shapeAnnotations: shapes.map((s) => s.copy()).toList(growable: false),
-      );
-}
 
 class _EditorHistory {
   final int limit;
