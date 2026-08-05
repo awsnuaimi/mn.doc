@@ -238,6 +238,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   _ShapeKind? _shapeMode;
   bool _shapeEditMode = false;
   _ShapeAnnotation? _selectedShape;
+  _ShapeAnnotation? _shapeClipboard;
   String? _shapeDragPart; // body | start | end
   Offset? _shapeDragLastPdf;
   bool _shapeEditGestureChanged = false;
@@ -960,6 +961,121 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       shape.fillOpacity = fillOpacity;
       shape.lineStyle = lineStyle;
       shape.arrowHeadStyle = arrowHeadStyle;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _copySelectedShape() {
+    final shape = _selectedShape;
+    if (shape == null) return;
+    _shapeClipboard = shape.copy();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم نسخ الشكل'), duration: Duration(milliseconds: 900)),
+      );
+    }
+  }
+
+  Offset _shapePasteOffset(_ShapeAnnotation source) {
+    final pageSize = _pdfPageSizes[source.pageNumber];
+    const step = 14.0;
+    if (pageSize == null) return const Offset(step, step);
+    final minX = source.start.dx < source.end.dx ? source.start.dx : source.end.dx;
+    final maxX = source.start.dx > source.end.dx ? source.start.dx : source.end.dx;
+    final minY = source.start.dy < source.end.dy ? source.start.dy : source.end.dy;
+    final maxY = source.start.dy > source.end.dy ? source.start.dy : source.end.dy;
+    var dx = step, dy = step;
+    if (maxX + dx > pageSize.width) dx = -step;
+    if (maxY + dy > pageSize.height) dy = -step;
+    if (minX + dx < 0) dx = 0;
+    if (minY + dy < 0) dy = 0;
+    return Offset(dx, dy);
+  }
+
+  void _pasteShape() {
+    final source = _shapeClipboard;
+    if (source == null) return;
+    final pasted = source.copy();
+    final targetPage = _currentPage;
+    final sourceSize = _pdfPageSizes[source.pageNumber];
+    final targetSize = _pdfPageSizes[targetPage];
+    if (source.pageNumber != targetPage && sourceSize != null && targetSize != null &&
+        sourceSize.width > 0 && sourceSize.height > 0) {
+      final sx = targetSize.width / sourceSize.width;
+      final sy = targetSize.height / sourceSize.height;
+      pasted.start = Offset(source.start.dx * sx, source.start.dy * sy);
+      pasted.end = Offset(source.end.dx * sx, source.end.dy * sy);
+    }
+    pasted.pageNumber = targetPage;
+    final offset = _shapePasteOffset(pasted);
+    pasted.start += offset;
+    pasted.end += offset;
+    _pushUndoState();
+    setState(() {
+      _shapeAnnotations.add(pasted);
+      _selectedShape = pasted;
+      _shapeEditMode = true;
+      _shapeMode = null;
+      _drawMode = false;
+      _eraserMode = false;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _duplicateSelectedShape() {
+    final shape = _selectedShape;
+    if (shape == null) return;
+    final duplicate = shape.copy();
+    final offset = _shapePasteOffset(duplicate);
+    duplicate.start += offset;
+    duplicate.end += offset;
+    _pushUndoState();
+    setState(() {
+      final index = _shapeAnnotations.indexOf(shape);
+      if (index >= 0 && index < _shapeAnnotations.length - 1) {
+        _shapeAnnotations.insert(index + 1, duplicate);
+      } else {
+        _shapeAnnotations.add(duplicate);
+      }
+      _selectedShape = duplicate;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _bringSelectedShapeForward() {
+    final shape = _selectedShape;
+    if (shape == null) return;
+    final index = _shapeAnnotations.indexOf(shape);
+    if (index < 0) return;
+    var next = -1;
+    for (var i = index + 1; i < _shapeAnnotations.length; i++) {
+      if (_shapeAnnotations[i].pageNumber == shape.pageNumber) { next = i; break; }
+    }
+    if (next < 0) return;
+    _pushUndoState();
+    setState(() {
+      final other = _shapeAnnotations[next];
+      _shapeAnnotations[next] = shape;
+      _shapeAnnotations[index] = other;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _sendSelectedShapeBackward() {
+    final shape = _selectedShape;
+    if (shape == null) return;
+    final index = _shapeAnnotations.indexOf(shape);
+    if (index < 0) return;
+    var previous = -1;
+    for (var i = index - 1; i >= 0; i--) {
+      if (_shapeAnnotations[i].pageNumber == shape.pageNumber) { previous = i; break; }
+    }
+    if (previous < 0) return;
+    _pushUndoState();
+    setState(() {
+      final other = _shapeAnnotations[previous];
+      _shapeAnnotations[previous] = shape;
+      _shapeAnnotations[index] = other;
     });
     _scheduleAutoSave();
   }
@@ -2376,17 +2492,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       onSelected: (_) => _toggleShapeEditMode(),
                     ),
                   ),
+                  if (_shapeEditMode && _shapeClipboard != null)
+                    IconButton(
+                      icon: const Icon(Icons.content_paste_rounded),
+                      tooltip: 'لصق الشكل',
+                      onPressed: _pasteShape,
+                    ),
                   if (_shapeEditMode && _selectedShape != null) ...[
-                    IconButton(
-                      icon: const Icon(Icons.palette_outlined),
-                      tooltip: 'خصائص الشكل',
-                      onPressed: _editSelectedShapeProperties,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      tooltip: 'حذف الشكل المحدد',
-                      onPressed: _deleteSelectedShape,
-                    ),
+                    IconButton(icon: const Icon(Icons.copy_rounded), tooltip: 'نسخ الشكل', onPressed: _copySelectedShape),
+                    IconButton(icon: const Icon(Icons.control_point_duplicate_rounded), tooltip: 'تكرار الشكل', onPressed: _duplicateSelectedShape),
+                    IconButton(icon: const Icon(Icons.flip_to_front_rounded), tooltip: 'إحضار للأمام', onPressed: _bringSelectedShapeForward),
+                    IconButton(icon: const Icon(Icons.flip_to_back_rounded), tooltip: 'إرسال للخلف', onPressed: _sendSelectedShapeBackward),
+                    IconButton(icon: const Icon(Icons.palette_outlined), tooltip: 'خصائص الشكل', onPressed: _editSelectedShapeProperties),
+                    IconButton(icon: const Icon(Icons.delete_outline_rounded), tooltip: 'حذف الشكل المحدد', onPressed: _deleteSelectedShape),
                   ],
                   _shapeToolChip(
                     icon: Icons.horizontal_rule_rounded,
