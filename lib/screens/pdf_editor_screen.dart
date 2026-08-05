@@ -170,6 +170,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   bool _saving = false;
   Timer? _autoSaveDebounce; // يجمّع عدة تعديلات متتالية سريعة بعملية تصدير واحدة بدل تصدير كامل لكل تعديل
   Future<void>? _saveQueue; // طابور تسلسلي واحد لكل عمليات الحفظ (يدوي + تلقائي) لمنع تعارضهم على نفس الملف
+  int _autoSaveRetryCount = 0;
+  static const int _maxAutoSaveRetries = 2;
   bool _disposed = false; // نمنع أي حفظ أو setState بعد التخلص من الشاشة
   String? _lastExportedPath; // آخر مسار تصدير ناجح — تستخدمه ميزات الذكاء الاصطناعي لقراءة أحدث نسخة
   bool _flattenFormsOnSave = false;
@@ -858,7 +860,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _scheduleAutoSave({bool markChanged = true}) {
     if (_disposed) return;
-    if (markChanged) _markDocumentChanged();
+    if (markChanged) {
+      _markDocumentChanged();
+      _autoSaveRetryCount = 0;
+    }
     _autoSaveDebounce?.cancel();
     _autoSaveDebounce = Timer(const Duration(milliseconds: 1200), () {
       if (_disposed) return;
@@ -901,11 +906,32 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       if (!_disposed) {
         _savedRevision = revisionBeingSaved;
         _hasUnsavedChanges = _documentRevision != _savedRevision;
+        _autoSaveRetryCount = 0;
         // لو حصل تعديل أثناء التصدير، لا نعتبره محفوظًا ونجدول نسخة لاحقة.
         if (_hasUnsavedChanges) _scheduleAutoSave(markChanged: false);
       }
     } catch (e, stack) {
       error = e;
+
+      // فشل AutoSave لا يغيّر savedRevision، لذلك يبقى المستند Dirty.
+      // نعيد المحاولة تلقائيًا بعد مهلة قصيرة، لكن بعدد محدود حتى لا ندخل
+      // في حلقة تصدير لا نهائية عند خطأ دائم (مساحة تخزين/صلاحيات/ملف تالف).
+      if (!showResult &&
+          !_disposed &&
+          _hasUnsavedChanges &&
+          _autoSaveRetryCount < _maxAutoSaveRetries) {
+        _autoSaveRetryCount++;
+        _autoSaveDebounce?.cancel();
+        _autoSaveDebounce = Timer(
+          Duration(seconds: 2 * _autoSaveRetryCount),
+          () {
+            if (!_disposed && _hasUnsavedChanges) {
+              unawaited(_runQueuedSave(showResult: false));
+            }
+          },
+        );
+      }
+
       if (kDebugMode) {
         debugPrint('فشل الحفظ: $e');
         debugPrintStack(stackTrace: stack);
