@@ -59,6 +59,8 @@ class _TextAnnotation {
 
 
 enum _ShapeKind { line, arrow, rectangle, ellipse }
+enum _ShapeLineStyle { solid, dashed, dotted }
+enum _ArrowHeadStyle { open, closed }
 
 class _ShapeAnnotation {
   int pageNumber;
@@ -69,6 +71,8 @@ class _ShapeAnnotation {
   double thickness;
   Color? fillColor;
   double fillOpacity;
+  _ShapeLineStyle lineStyle;
+  _ArrowHeadStyle arrowHeadStyle;
 
   _ShapeAnnotation({
     required this.pageNumber,
@@ -79,6 +83,8 @@ class _ShapeAnnotation {
     required this.thickness,
     this.fillColor,
     this.fillOpacity = 0.25,
+    this.lineStyle = _ShapeLineStyle.solid,
+    this.arrowHeadStyle = _ArrowHeadStyle.open,
   });
 
   _ShapeAnnotation copy() => _ShapeAnnotation(
@@ -90,6 +96,8 @@ class _ShapeAnnotation {
         thickness: thickness,
         fillColor: fillColor,
         fillOpacity: fillOpacity,
+        lineStyle: lineStyle,
+        arrowHeadStyle: arrowHeadStyle,
       );
 }
 
@@ -755,6 +763,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     double thickness = shape.thickness;
     Color? fillColor = shape.fillColor;
     double fillOpacity = shape.fillOpacity;
+    _ShapeLineStyle lineStyle = shape.lineStyle;
+    _ArrowHeadStyle arrowHeadStyle = shape.arrowHeadStyle;
+    final isLinear =
+        shape.kind == _ShapeKind.line || shape.kind == _ShapeKind.arrow;
     final canFill =
         shape.kind == _ShapeKind.rectangle || shape.kind == _ShapeKind.ellipse;
 
@@ -833,6 +845,61 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       ),
                     ],
                   ),
+                  if (isLinear) ...[
+                    const Divider(height: 28),
+                    const Text('نمط الخط'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('متصل'),
+                          selected: lineStyle == _ShapeLineStyle.solid,
+                          onSelected: (_) => setSheetState(
+                            () => lineStyle = _ShapeLineStyle.solid,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('متقطع'),
+                          selected: lineStyle == _ShapeLineStyle.dashed,
+                          onSelected: (_) => setSheetState(
+                            () => lineStyle = _ShapeLineStyle.dashed,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('منقّط'),
+                          selected: lineStyle == _ShapeLineStyle.dotted,
+                          onSelected: (_) => setSheetState(
+                            () => lineStyle = _ShapeLineStyle.dotted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (shape.kind == _ShapeKind.arrow) ...[
+                      const SizedBox(height: 16),
+                      const Text('رأس السهم'),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('مفتوح'),
+                            selected: arrowHeadStyle == _ArrowHeadStyle.open,
+                            onSelected: (_) => setSheetState(
+                              () => arrowHeadStyle = _ArrowHeadStyle.open,
+                            ),
+                          ),
+                          ChoiceChip(
+                            label: const Text('مغلق'),
+                            selected: arrowHeadStyle == _ArrowHeadStyle.closed,
+                            onSelected: (_) => setSheetState(
+                              () => arrowHeadStyle = _ArrowHeadStyle.closed,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                   if (canFill) ...[
                     const Divider(height: 28),
                     SwitchListTile(
@@ -916,7 +983,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final changed = shape.color != borderColor ||
         shape.thickness != thickness ||
         shape.fillColor != fillColor ||
-        shape.fillOpacity != fillOpacity;
+        shape.fillOpacity != fillOpacity ||
+        shape.lineStyle != lineStyle ||
+        shape.arrowHeadStyle != arrowHeadStyle;
     if (!changed) return;
 
     _pushUndoState();
@@ -925,6 +994,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       shape.thickness = thickness;
       shape.fillColor = canFill ? fillColor : null;
       shape.fillOpacity = fillOpacity;
+      shape.lineStyle = lineStyle;
+      shape.arrowHeadStyle = arrowHeadStyle;
     });
     _scheduleAutoSave();
   }
@@ -1510,6 +1581,33 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   /// المنطق الأساسي لتصدير المستند (يُستخدم من الحفظ اليدوي والحفظ التلقائي
   /// معًا) — يعيد مسار الملف الناتج، أو يرمي استثناء عند الفشل.
+  List<List<Offset>> _styledLineSegments(
+    Offset start,
+    Offset end,
+    _ShapeLineStyle style,
+  ) {
+    if (style == _ShapeLineStyle.solid) {
+      return <List<Offset>>[<Offset>[start, end]];
+    }
+    final delta = end - start;
+    final length = delta.distance;
+    if (length <= 0.01) return const <List<Offset>>[];
+    final unit = delta / length;
+    final dash = style == _ShapeLineStyle.dashed ? 10.0 : 2.0;
+    final gap = style == _ShapeLineStyle.dashed ? 6.0 : 5.0;
+    final result = <List<Offset>>[];
+    var cursor = 0.0;
+    while (cursor < length) {
+      final segEnd = (cursor + dash).clamp(0.0, length).toDouble();
+      result.add(<Offset>[
+        start + unit * cursor,
+        start + unit * segEnd,
+      ]);
+      cursor += dash + gap;
+    }
+    return result;
+  }
+
   Future<String> _exportToFile() async {
     // الخطوة 1: احفظ نسخة تتضمن تعليقات العارض المدمجة
     // (تظليل/تسطير/شطب/ملاحظات لاصقة) وبيانات حقول النموذج التي عبّأها المستخدم.
@@ -1631,7 +1729,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         );
 
         if (shape.kind == _ShapeKind.line || shape.kind == _ShapeKind.arrow) {
-          page.graphics.drawLine(pen, start, end);
+          for (final segment
+              in _styledLineSegments(start, end, shape.lineStyle)) {
+            page.graphics.drawLine(pen, segment[0], segment[1]);
+          }
           if (shape.kind == _ShapeKind.arrow) {
             final delta = end - start;
             final length = delta.distance;
@@ -1642,8 +1743,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   (10.0 + shape.thickness * 2).clamp(10.0, 24.0).toDouble();
               final wing = head * 0.45;
               final base = end - unit * head;
-              page.graphics.drawLine(pen, end, base + perp * wing);
-              page.graphics.drawLine(pen, end, base - perp * wing);
+              final p1 = base + perp * wing;
+              final p2 = base - perp * wing;
+              page.graphics.drawLine(pen, end, p1);
+              page.graphics.drawLine(pen, end, p2);
+              if (shape.arrowHeadStyle == _ArrowHeadStyle.closed) {
+                page.graphics.drawLine(pen, p1, p2);
+              }
             }
           }
         } else {
@@ -3091,7 +3197,7 @@ class _PdfShapePainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     if (shape.kind == _ShapeKind.line || shape.kind == _ShapeKind.arrow) {
-      canvas.drawLine(start, end, paint);
+      _paintStyledLine(canvas, start, end, paint, shape.lineStyle);
       if (shape.kind == _ShapeKind.arrow) {
         final delta = end - start;
         final length = delta.distance;
@@ -3104,8 +3210,13 @@ class _PdfShapePainter extends CustomPainter {
               transform.scale;
           final wing = head * 0.45;
           final base = end - unit * head;
-          canvas.drawLine(end, base + perp * wing, paint);
-          canvas.drawLine(end, base - perp * wing, paint);
+          final p1 = base + perp * wing;
+          final p2 = base - perp * wing;
+          canvas.drawLine(end, p1, paint);
+          canvas.drawLine(end, p2, paint);
+          if (shape.arrowHeadStyle == _ArrowHeadStyle.closed) {
+            canvas.drawLine(p1, p2, paint);
+          }
         }
       }
       if (selected) _paintSelection(canvas, start, end);
@@ -3131,6 +3242,33 @@ class _PdfShapePainter extends CustomPainter {
     }
 
     if (selected) _paintSelection(canvas, start, end);
+  }
+
+  void _paintStyledLine(
+    Canvas canvas,
+    Offset start,
+    Offset end,
+    Paint paint,
+    _ShapeLineStyle style,
+  ) {
+    if (style == _ShapeLineStyle.solid) {
+      canvas.drawLine(start, end, paint);
+      return;
+    }
+    final delta = end - start;
+    final length = delta.distance;
+    if (length <= 0.01) return;
+    final unit = delta / length;
+    final dash =
+        (style == _ShapeLineStyle.dashed ? 10.0 : 2.0) * transform.scale;
+    final gap =
+        (style == _ShapeLineStyle.dashed ? 6.0 : 5.0) * transform.scale;
+    var cursor = 0.0;
+    while (cursor < length) {
+      final segEnd = (cursor + dash).clamp(0.0, length).toDouble();
+      canvas.drawLine(start + unit * cursor, start + unit * segEnd, paint);
+      cursor += dash + gap;
+    }
   }
 
   void _paintSelection(Canvas canvas, Offset start, Offset end) {
