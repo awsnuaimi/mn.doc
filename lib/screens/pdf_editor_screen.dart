@@ -413,18 +413,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   void _handlePdfTap(PdfGestureDetails details) async {
     if (!_addTextMode && !_addImageMode) return;
 
-    // دقة تحديد الموضع (شاشة ↔ نقاط PDF) مضمونة فقط عند التكبير الافتراضي
-    // 100% — أي تكبير/تصغير يُدخل انحرافًا حقيقيًا بين ما يظهر على
-    // الشاشة والمكان الفعلي بالملف. نطلب من المستخدم إعادة الزووم لـ100%
-    // أول لضمان دقة الإضافة.
-    if ((_zoomLevel - 1.0).abs() > 0.01) {
-      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
-      );
-      return;
-    }
-
     // pagePosition: الموضع الحقيقي بنقاط PDF (دقيق، يُستخدم للحفظ).
     // position: الموضع بكسلات عنصر العرض (تقريبي، للمعاينة الحيّة فقط).
     final pagePoint = details.pagePosition;
@@ -479,14 +467,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _toggleDrawMode() {
-    if ((_zoomLevel - 1.0).abs() > 0.01 && !_drawMode) {
-      final lang =
-          Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
-      );
-      return;
-    }
     setState(() {
       _drawMode = !_drawMode;
       _eraserMode = false;
@@ -501,14 +481,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _toggleEraserMode() {
-    if ((_zoomLevel - 1.0).abs() > 0.01 && !_eraserMode) {
-      final lang =
-          Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
-      );
-      return;
-    }
     setState(() {
       _eraserMode = !_eraserMode;
       _drawMode = false;
@@ -537,7 +509,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   bool _strokeHitTest(_DrawingStroke stroke, Offset pdfPoint) {
     if (stroke.points.isEmpty) return false;
-    final tolerance = 10.0 + stroke.thickness / 2;
+    final tolerance = 10.0 / _zoomLevel + stroke.thickness / 2;
     if (stroke.points.length == 1) {
       return (stroke.points.first - pdfPoint).distance <= tolerance;
     }
@@ -614,14 +586,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _toggleShapeEditMode() {
-    if ((_zoomLevel - 1.0).abs() > 0.01 && !_shapeEditMode) {
-      final lang =
-          Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
-      );
-      return;
-    }
     setState(() {
       _shapeEditMode = !_shapeEditMode;
       _selectedShape = null;
@@ -664,7 +628,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   _ShapeAnnotation? _hitShape(Offset pdfPoint) {
     _ShapeAnnotation? best;
-    var bestDistance = 12.0;
+    var bestDistance = 12.0 / _zoomLevel;
     for (final shape in _shapeAnnotations.reversed) {
       if (shape.pageNumber != _currentPage) continue;
       final d = _shapeDistance(shape, pdfPoint);
@@ -682,7 +646,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     final selected = _selectedShape;
     if (selected != null) {
-      const handleRadius = 14.0;
+      final handleRadius = 14.0 / _zoomLevel;
       if ((pdf - selected.start).distance <= handleRadius) {
         _pushUndoState();
         _shapeDragPart = 'start';
@@ -1012,14 +976,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _toggleShapeMode(_ShapeKind kind) {
-    if ((_zoomLevel - 1.0).abs() > 0.01 && _shapeMode != kind) {
-      final lang =
-          Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
-      );
-      return;
-    }
     setState(() {
       _shapeMode = _shapeMode == kind ? null : kind;
       _shapeEditMode = false;
@@ -1074,7 +1030,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _onDrawPointerDown(PointerDownEvent event) {
-    if (!_drawMode || (_zoomLevel - 1.0).abs() > 0.01) return;
+    if (!_drawMode) return;
     final transform =
         _pageTransforms[_currentPage] ?? _fallbackPageTransform(_currentPage);
     final pageSize = _pdfPageSizes[_currentPage];
@@ -1521,13 +1477,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final viewport = box.size;
     if (viewport.width <= 0 || viewport.height <= 0) return;
 
-    // في pageLayoutMode.single وعند zoom=1 يعرض العارض الصفحة ضمن المساحة
-    // المتاحة مع الحفاظ على نسبة أبعادها. هذا هو المقياس الأساسي. لا نعتمد
+    // في pageLayoutMode.single نحسب مقياس fit الأساسي ثم نضربه بمستوى
+    // التكبير الحالي. لا نعتمد
     // على هوامش مفترضة: الـorigin يُستخرج من النقطة الفعلية التي أعادها
     // Syncfusion، لذلك أي padding داخلي يدخل في المعايرة تلقائيًا.
     final scaleX = viewport.width / pageSize.width;
     final scaleY = viewport.height / pageSize.height;
-    final scale = scaleX < scaleY ? scaleX : scaleY;
+    final baseScale = scaleX < scaleY ? scaleX : scaleY;
+    final scale = baseScale * _zoomLevel;
     final origin = viewerPoint - pdfPoint * scale;
 
     _pageTransforms[pageNumber] = _PdfPageTransform(scale: scale, origin: origin);
@@ -1543,13 +1500,24 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     if (viewport.width <= 0 || viewport.height <= 0) return null;
     final scaleX = viewport.width / pageSize.width;
     final scaleY = viewport.height / pageSize.height;
-    final scale = scaleX < scaleY ? scaleX : scaleY;
+    final baseScale = scaleX < scaleY ? scaleX : scaleY;
+    final scale = baseScale * _zoomLevel;
     final rendered = Size(pageSize.width * scale, pageSize.height * scale);
+    final scroll = _controller.scrollOffset;
+
+    // عند التكبير، Syncfusion يحرك الصفحة داخل viewport بواسطة scrollOffset.
+    // نعيد بناء نفس التحويل: تمركز المحور إن بقيت الصفحة أصغر من viewport،
+    // وإلا يبدأ من حافة المحتوى ثم نطرح إزاحة التمرير الحالية.
+    final centeredX =
+        rendered.width < viewport.width ? (viewport.width - rendered.width) / 2 : 0.0;
+    final centeredY =
+        rendered.height < viewport.height ? (viewport.height - rendered.height) / 2 : 0.0;
+
     return _PdfPageTransform(
       scale: scale,
       origin: Offset(
-        (viewport.width - rendered.width) / 2,
-        (viewport.height - rendered.height) / 2,
+        centeredX - scroll.dx,
+        centeredY - scroll.dy,
       ),
     );
   }
@@ -2606,8 +2574,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     if (!mounted) return;
                     setState(() {
                       _zoomLevel = details.newZoomLevel;
-                      // أي تغيير zoom يغيّر إسقاط الصفحة على الشاشة. بما أن
-                      // Tt يعمل بدقة عند 100% فقط، نمسح التحويلات القديمة.
+                      // أي تغيير Zoom يغيّر إسقاط الصفحة على الشاشة، لذلك
+                      // نبطل أي معايرة قديمة. fallback يعيد حساب Scale/Origin
+                      // من zoomLevel + scrollOffset حتى أثناء التكبير.
                       _pageTransforms.clear();
                     });
                   },
