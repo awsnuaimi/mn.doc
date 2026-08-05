@@ -978,16 +978,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   Future<void> _openPageManager() async {
-    String sourcePath = widget.filePath;
-    try {
-      if (_hasUnsavedChanges || _annotations.isNotEmpty || _hasFormFields) {
-        await _runQueuedSave(showResult: false);
-        sourcePath = _lastExportedPath ?? widget.filePath;
-      }
-    } catch (_) {
-      sourcePath = _lastExportedPath ?? widget.filePath;
-    }
+    // قبل أي عملية بنيوية نثبت أحدث Revision، بما فيه النصوص والصور
+    // والتواقيع/الأختام وحقول النماذج وتعليقات Syncfusion. الاعتماد على
+    // _runQueuedSave مرة واحدة فقط كان يترك نافذة سباق إذا حدث تعديل أثناء
+    // الحفظ، كما أن الشرط القديم لم يكن يشمل _imageAnnotations.
+    final ready = await _flushLatestRevisionForStructuralOperation();
     if (!mounted) return;
+
+    if (!ready) {
+      final lang = Provider.of<AppSettingsController>(
+        context,
+        listen: false,
+      ).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.t('ed_save_error_prefix', lang))),
+      );
+      return;
+    }
+
+    final sourcePath = _lastExportedPath ?? widget.filePath;
 
     final managedPath = await Navigator.push<String>(
       context,
@@ -998,9 +1007,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     if (!mounted || managedPath == null || managedPath == sourcePath) return;
 
-    // أي عملية بنيوية ناجحة (حذف/تدوير/ترتيب/استيراد صفحات) تنتج Revision
-    // جديدًا. نعيد فتح المحرر على هذا الملف تحديدًا حتى تصبح كل العمليات
-    // اللاحقة — AutoSave وAI والمشاركة والتعديل — مبنية على أحدث نسخة.
+    // العملية البنيوية أنشأت Revision جديدًا. إعادة إنشاء الشاشة على هذا
+    // المسار تجعل widget.filePath نفسه يشير إلى أحدث نسخة، لذلك أي AutoSave
+    // أو AI أو مشاركة أو تعديل لاحق يبدأ من الـRevision الصحيح.
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
