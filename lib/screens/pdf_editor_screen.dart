@@ -549,7 +549,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
     final dir = await getApplicationDocumentsDirectory();
     final rawName = widget.filePath.split('/').last;
-    final originalName = rawName.toLowerCase().endsWith('.pdf') ? rawName.substring(0, rawName.length - 4) : rawName;
+    var originalName = rawName.toLowerCase().endsWith('.pdf')
+        ? rawName.substring(0, rawName.length - 4)
+        : rawName;
+    const revisionSuffix = '_MN-Doc';
+    while (originalName.toLowerCase().endsWith(revisionSuffix.toLowerCase())) {
+      originalName =
+          originalName.substring(0, originalName.length - revisionSuffix.length);
+    }
+    if (originalName.trim().isEmpty) originalName = 'document';
     final savedPath = '${dir.path}/${originalName}_MN-Doc.pdf';
     if (await File(savedPath).exists()) return savedPath;
     return widget.filePath;
@@ -792,7 +800,20 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     final dir = await getApplicationDocumentsDirectory();
     final rawName = widget.filePath.split('/').last;
-    final originalName = rawName.toLowerCase().endsWith('.pdf') ? rawName.substring(0, rawName.length - 4) : rawName;
+    var originalName = rawName.toLowerCase().endsWith('.pdf')
+        ? rawName.substring(0, rawName.length - 4)
+        : rawName;
+
+    // عند إعادة فتح نسخة محفوظة ثم تعديلها مرة أخرى لا نراكم لاحقة
+    // _MN-Doc في اسم الملف (مثل file_MN-Doc_MN-Doc.pdf). نستخدم اسمًا
+    // مستقرًا لنفس سلسلة الـRevision، مع إزالة أي لواحق قديمة متكررة.
+    const revisionSuffix = '_MN-Doc';
+    while (originalName.toLowerCase().endsWith(revisionSuffix.toLowerCase())) {
+      originalName =
+          originalName.substring(0, originalName.length - revisionSuffix.length);
+    }
+    if (originalName.trim().isEmpty) originalName = 'document';
+
     final outPath = '${dir.path}/${originalName}_MN-Doc.pdf';
 
     // حفظ آمن (Atomic Save): نكتب أولًا لملف مؤقت، ثم نستبدل الملف
