@@ -67,6 +67,8 @@ class _ShapeAnnotation {
   _ShapeKind kind;
   Color color;
   double thickness;
+  Color? fillColor;
+  double fillOpacity;
 
   _ShapeAnnotation({
     required this.pageNumber,
@@ -75,6 +77,8 @@ class _ShapeAnnotation {
     required this.kind,
     required this.color,
     required this.thickness,
+    this.fillColor,
+    this.fillOpacity = 0.25,
   });
 
   _ShapeAnnotation copy() => _ShapeAnnotation(
@@ -84,6 +88,8 @@ class _ShapeAnnotation {
         kind: kind,
         color: color,
         thickness: thickness,
+        fillColor: fillColor,
+        fillOpacity: fillOpacity,
       );
 }
 
@@ -739,6 +745,188 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _shapeDragPart = null;
     _shapeDragLastPdf = null;
     _shapeEditGestureChanged = false;
+  }
+
+  Future<void> _editSelectedShapeProperties() async {
+    final shape = _selectedShape;
+    if (shape == null) return;
+
+    Color borderColor = shape.color;
+    double thickness = shape.thickness;
+    Color? fillColor = shape.fillColor;
+    double fillOpacity = shape.fillOpacity;
+    final canFill =
+        shape.kind == _ShapeKind.rectangle || shape.kind == _ShapeKind.ellipse;
+
+    const palette = <Color>[
+      Colors.black,
+      Colors.red,
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+    ];
+
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'خصائص الشكل',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text('لون الحدود'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    children: palette
+                        .map(
+                          (c) => GestureDetector(
+                            onTap: () => setSheetState(() => borderColor = c),
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: c,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: borderColor == c
+                                      ? AppColors.accent
+                                      : Colors.transparent,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Text('سماكة الخط'),
+                      Expanded(
+                        child: Slider(
+                          value: thickness.clamp(1.0, 10.0),
+                          min: 1,
+                          max: 10,
+                          divisions: 18,
+                          label: thickness.toStringAsFixed(1),
+                          onChanged: (v) =>
+                              setSheetState(() => thickness = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (canFill) ...[
+                    const Divider(height: 28),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('تعبئة الشكل'),
+                      value: fillColor != null,
+                      onChanged: (enabled) => setSheetState(
+                        () => fillColor = enabled
+                            ? (fillColor ?? borderColor)
+                            : null,
+                      ),
+                    ),
+                    if (fillColor != null) ...[
+                      const Text('لون التعبئة'),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        children: palette
+                            .map(
+                              (c) => GestureDetector(
+                                onTap: () =>
+                                    setSheetState(() => fillColor = c),
+                                child: Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: fillColor == c
+                                          ? AppColors.accent
+                                          : Colors.transparent,
+                                      width: 3,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          const Text('الشفافية'),
+                          Expanded(
+                            child: Slider(
+                              value: fillOpacity,
+                              min: 0.05,
+                              max: 1.0,
+                              divisions: 19,
+                              label: '${(fillOpacity * 100).round()}%',
+                              onChanged: (v) =>
+                                  setSheetState(() => fillOpacity = v),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                      child: const Text('تطبيق'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (applied != true || !mounted || !_shapeAnnotations.contains(shape)) {
+      return;
+    }
+
+    final changed = shape.color != borderColor ||
+        shape.thickness != thickness ||
+        shape.fillColor != fillColor ||
+        shape.fillOpacity != fillOpacity;
+    if (!changed) return;
+
+    _pushUndoState();
+    setState(() {
+      shape.color = borderColor;
+      shape.thickness = thickness;
+      shape.fillColor = canFill ? fillColor : null;
+      shape.fillOpacity = fillOpacity;
+    });
+    _scheduleAutoSave();
   }
 
   void _deleteSelectedShape() {
@@ -1460,10 +1648,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           }
         } else {
           final rect = Rect.fromPoints(start, end);
+          sf.PdfBrush? brush;
+          final fill = shape.fillColor;
+          if (fill != null) {
+            final alpha =
+                (shape.fillOpacity.clamp(0.0, 1.0) * 255).round();
+            brush = sf.PdfSolidBrush(
+              sf.PdfColor(fill.red, fill.green, fill.blue, alpha),
+            );
+          }
           if (shape.kind == _ShapeKind.rectangle) {
-            page.graphics.drawRectangle(bounds: rect, pen: pen);
+            page.graphics.drawRectangle(bounds: rect, pen: pen, brush: brush);
           } else {
-            page.graphics.drawEllipse(rect, pen: pen);
+            page.graphics.drawEllipse(rect, pen: pen, brush: brush);
           }
         }
       }
@@ -2105,12 +2302,18 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       onSelected: (_) => _toggleShapeEditMode(),
                     ),
                   ),
-                  if (_shapeEditMode && _selectedShape != null)
+                  if (_shapeEditMode && _selectedShape != null) ...[
+                    IconButton(
+                      icon: const Icon(Icons.palette_outlined),
+                      tooltip: 'خصائص الشكل',
+                      onPressed: _editSelectedShapeProperties,
+                    ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline_rounded),
                       tooltip: 'حذف الشكل المحدد',
                       onPressed: _deleteSelectedShape,
                     ),
+                  ],
                   _shapeToolChip(
                     icon: Icons.horizontal_rule_rounded,
                     label: 'خط',
@@ -2910,6 +3113,17 @@ class _PdfShapePainter extends CustomPainter {
     }
 
     final rect = Rect.fromPoints(start, end);
+    final fill = shape.fillColor;
+    if (fill != null) {
+      final fillPaint = Paint()
+        ..color = fill.withOpacity(shape.fillOpacity.clamp(0.0, 1.0))
+        ..style = PaintingStyle.fill;
+      if (shape.kind == _ShapeKind.rectangle) {
+        canvas.drawRect(rect, fillPaint);
+      } else {
+        canvas.drawOval(rect, fillPaint);
+      }
+    }
     if (shape.kind == _ShapeKind.rectangle) {
       canvas.drawRect(rect, paint);
     } else {
