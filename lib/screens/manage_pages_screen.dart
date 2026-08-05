@@ -58,6 +58,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   bool _loadingThumbnails = false;
   bool _hasUnsavedStructuralChanges = false;
   String? _lastSavedStructuralPath;
+  String _savedStructuralFingerprint = '';
 
   // Undo/Redo مستقل للعمليات البنيوية داخل مدير الصفحات.
   // اللقطات خفيفة لأنها تحفظ ترتيب الصفحات ودورانها فقط، ولا تنسخ PDF أو الصور المصغرة.
@@ -67,6 +68,18 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
 
   List<_ManagedPage> _capturePages() =>
       _pages.map((p) => p.copy()).toList(growable: false);
+
+  String _structuralFingerprint([Iterable<_ManagedPage>? pages]) {
+    final source = pages ?? _pages;
+    return source
+        .map((p) => '${p.id}:${p.sourceId}:${p.originalIndex}:${p.rotation}')
+        .join('|');
+  }
+
+  void _refreshStructuralDirtyState() {
+    _hasUnsavedStructuralChanges =
+        _structuralFingerprint() != _savedStructuralFingerprint;
+  }
 
   void _recordStructuralState() {
     _structuralUndo.add(_capturePages());
@@ -81,7 +94,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       ..clear()
       ..addAll(snapshot.map((p) => p.copy()));
     _selectedPageIds.clear();
-    _hasUnsavedStructuralChanges = true;
+    _refreshStructuralDirtyState();
   }
 
   void _undoStructural() {
@@ -174,6 +187,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _thumbnails.clear();
         _hasUnsavedStructuralChanges = false;
         _lastSavedStructuralPath = null;
+        _savedStructuralFingerprint = _structuralFingerprint();
         _structuralUndo.clear();
         _structuralRedo.clear();
       });
@@ -434,6 +448,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       if (!mounted) return;
       setState(() {
         _processing = false;
+        _savedStructuralFingerprint = _structuralFingerprint();
         _hasUnsavedStructuralChanges = false;
         _lastSavedStructuralPath = outPath;
       });
