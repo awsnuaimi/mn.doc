@@ -239,6 +239,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   bool _shapeEditMode = false;
   _ShapeAnnotation? _selectedShape;
   _ShapeAnnotation? _shapeClipboard;
+  final List<_ShapeAnnotation> _selectedShapes = [];
+  List<_ShapeAnnotation> _shapeClipboardGroup = [];
+  bool _multiSelectMode = false;
   String? _shapeDragPart; // body | start | end
   Offset? _shapeDragLastPdf;
   bool _shapeEditGestureChanged = false;
@@ -301,6 +304,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _activeDrawingStroke = null;
     _activeShape = null;
     _selectedShape = null;
+    _selectedShapes.clear();
   }
 
   void _pushUndoState() {
@@ -590,6 +594,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     setState(() {
       _shapeEditMode = !_shapeEditMode;
       _selectedShape = null;
+      _selectedShapes.clear();
+      _multiSelectMode = false;
       _shapeDragPart = null;
       _shapeDragLastPdf = null;
       _shapeMode = null;
@@ -665,6 +671,30 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
 
     final hit = _hitShape(pdf);
+    if (_multiSelectMode) {
+      if (hit == null) {
+        setState(() {
+          _selectedShapes.clear();
+          _selectedShape = null;
+        });
+        _shapeDragPart = null;
+        _shapeDragLastPdf = null;
+        return;
+      }
+      if (!_selectedShapes.contains(hit)) {
+        _toggleShapeInMultiSelection(hit);
+        _shapeDragPart = null;
+        _shapeDragLastPdf = null;
+        return;
+      }
+      _selectedShape = hit;
+      _pushUndoState();
+      _shapeDragPart = 'group';
+      _shapeDragLastPdf = pdf;
+      _shapeEditGestureChanged = false;
+      return;
+    }
+
     setState(() => _selectedShape = hit);
     if (hit != null) {
       _pushUndoState();
@@ -686,7 +716,30 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     if (pdf == null) return;
 
     setState(() {
-      if (part == 'start') {
+      if (part == 'group' && _selectedShapes.isNotEmpty) {
+        final delta = pdf - last;
+        final pageSize = _pdfPageSizes[shape.pageNumber];
+        if (pageSize == null) return;
+        final bounds = _selectedShapesBounds();
+        if (bounds == null) return;
+        var corrected = delta;
+        if (bounds.left + corrected.dx < 0) {
+          corrected += Offset(-(bounds.left + corrected.dx), 0);
+        }
+        if (bounds.right + corrected.dx > pageSize.width) {
+          corrected += Offset(pageSize.width - (bounds.right + corrected.dx), 0);
+        }
+        if (bounds.top + corrected.dy < 0) {
+          corrected += Offset(0, -(bounds.top + corrected.dy));
+        }
+        if (bounds.bottom + corrected.dy > pageSize.height) {
+          corrected += Offset(0, pageSize.height - (bounds.bottom + corrected.dy));
+        }
+        for (final item in _selectedShapes) {
+          item.start += corrected;
+          item.end += corrected;
+        }
+      } else if (part == 'start') {
         shape.start = pdf;
       } else if (part == 'end') {
         shape.end = pdf;
@@ -961,6 +1014,123 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       shape.fillOpacity = fillOpacity;
       shape.lineStyle = lineStyle;
       shape.arrowHeadStyle = arrowHeadStyle;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _toggleMultiSelectMode() {
+    setState(() {
+      _multiSelectMode = !_multiSelectMode;
+      _selectedShapes.clear();
+      if (_multiSelectMode && _selectedShape != null) {
+        _selectedShapes.add(_selectedShape!);
+      }
+    });
+  }
+
+  void _toggleShapeInMultiSelection(_ShapeAnnotation shape) {
+    setState(() {
+      if (_selectedShapes.contains(shape)) {
+        _selectedShapes.remove(shape);
+      } else {
+        _selectedShapes.add(shape);
+      }
+      _selectedShape =
+          _selectedShapes.isEmpty ? null : _selectedShapes.last;
+    });
+  }
+
+  Rect? _selectedShapesBounds() {
+    if (_selectedShapes.isEmpty) return null;
+    double? left, top, right, bottom;
+    for (final shape in _selectedShapes) {
+      final l = shape.start.dx < shape.end.dx ? shape.start.dx : shape.end.dx;
+      final r = shape.start.dx > shape.end.dx ? shape.start.dx : shape.end.dx;
+      final tt = shape.start.dy < shape.end.dy ? shape.start.dy : shape.end.dy;
+      final b = shape.start.dy > shape.end.dy ? shape.start.dy : shape.end.dy;
+      left = left == null || l < left ? l : left;
+      right = right == null || r > right ? r : right;
+      top = top == null || tt < top ? tt : top;
+      bottom = bottom == null || b > bottom ? b : bottom;
+    }
+    return Rect.fromLTRB(left!, top!, right!, bottom!);
+  }
+
+  void _deleteSelectedShapes() {
+    if (_selectedShapes.isEmpty) return;
+    _pushUndoState();
+    setState(() {
+      _shapeAnnotations.removeWhere(_selectedShapes.contains);
+      _selectedShapes.clear();
+      _selectedShape = null;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _copySelectedShapes() {
+    if (_selectedShapes.isEmpty) return;
+    _shapeClipboardGroup =
+        _selectedShapes.map((shape) => shape.copy()).toList(growable: false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم نسخ ${_shapeClipboardGroup.length} أشكال'),
+          duration: const Duration(milliseconds: 900),
+        ),
+      );
+    }
+  }
+
+  void _pasteShapeGroup() {
+    if (_shapeClipboardGroup.isEmpty) return;
+    final pasted = <_ShapeAnnotation>[];
+    for (final source in _shapeClipboardGroup) {
+      final item = source.copy();
+      final sourceSize = _pdfPageSizes[source.pageNumber];
+      final targetSize = _pdfPageSizes[_currentPage];
+      if (source.pageNumber != _currentPage &&
+          sourceSize != null &&
+          targetSize != null &&
+          sourceSize.width > 0 &&
+          sourceSize.height > 0) {
+        final sx = targetSize.width / sourceSize.width;
+        final sy = targetSize.height / sourceSize.height;
+        item.start = Offset(source.start.dx * sx, source.start.dy * sy);
+        item.end = Offset(source.end.dx * sx, source.end.dy * sy);
+      }
+      item.pageNumber = _currentPage;
+      item.start += const Offset(14, 14);
+      item.end += const Offset(14, 14);
+      pasted.add(item);
+    }
+    _pushUndoState();
+    setState(() {
+      _shapeAnnotations.addAll(pasted);
+      _selectedShapes
+        ..clear()
+        ..addAll(pasted);
+      _selectedShape = pasted.isEmpty ? null : pasted.last;
+      _multiSelectMode = true;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _duplicateSelectedShapes() {
+    if (_selectedShapes.isEmpty) return;
+    final duplicates = _selectedShapes.map((shape) {
+      final item = shape.copy();
+      final offset = _shapePasteOffset(item);
+      item.start += offset;
+      item.end += offset;
+      return item;
+    }).toList(growable: false);
+    _pushUndoState();
+    setState(() {
+      _shapeAnnotations.addAll(duplicates);
+      _selectedShapes
+        ..clear()
+        ..addAll(duplicates);
+      _selectedShape = duplicates.isEmpty ? null : duplicates.last;
     });
     _scheduleAutoSave();
   }
@@ -2492,19 +2662,59 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       onSelected: (_) => _toggleShapeEditMode(),
                     ),
                   ),
-                  if (_shapeEditMode && _shapeClipboard != null)
+                  if (_shapeEditMode && !_multiSelectMode && _shapeClipboard != null)
                     IconButton(
                       icon: const Icon(Icons.content_paste_rounded),
                       tooltip: 'لصق الشكل',
                       onPressed: _pasteShape,
                     ),
-                  if (_shapeEditMode && _selectedShape != null) ...[
+                  if (_shapeEditMode && !_multiSelectMode && _selectedShape != null) ...[
                     IconButton(icon: const Icon(Icons.copy_rounded), tooltip: 'نسخ الشكل', onPressed: _copySelectedShape),
                     IconButton(icon: const Icon(Icons.control_point_duplicate_rounded), tooltip: 'تكرار الشكل', onPressed: _duplicateSelectedShape),
                     IconButton(icon: const Icon(Icons.flip_to_front_rounded), tooltip: 'إحضار للأمام', onPressed: _bringSelectedShapeForward),
                     IconButton(icon: const Icon(Icons.flip_to_back_rounded), tooltip: 'إرسال للخلف', onPressed: _sendSelectedShapeBackward),
                     IconButton(icon: const Icon(Icons.palette_outlined), tooltip: 'خصائص الشكل', onPressed: _editSelectedShapeProperties),
                     IconButton(icon: const Icon(Icons.delete_outline_rounded), tooltip: 'حذف الشكل المحدد', onPressed: _deleteSelectedShape),
+                  ],
+                  if (_shapeEditMode)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ChoiceChip(
+                        avatar: Icon(
+                          Icons.select_all_rounded,
+                          size: 18,
+                          color: _multiSelectMode
+                              ? Colors.white
+                              : AppColors.primaryDark,
+                        ),
+                        label: const Text('متعدد'),
+                        selected: _multiSelectMode,
+                        selectedColor: AppColors.primaryDark,
+                        onSelected: (_) => _toggleMultiSelectMode(),
+                      ),
+                    ),
+                  if (_shapeEditMode && _multiSelectMode && _shapeClipboardGroup.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.content_paste_rounded),
+                      tooltip: 'لصق المجموعة',
+                      onPressed: _pasteShapeGroup,
+                    ),
+                  if (_shapeEditMode && _multiSelectMode && _selectedShapes.isNotEmpty) ...[
+                    IconButton(
+                      icon: const Icon(Icons.copy_all_rounded),
+                      tooltip: 'نسخ المجموعة',
+                      onPressed: _copySelectedShapes,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.control_point_duplicate_rounded),
+                      tooltip: 'تكرار المجموعة',
+                      onPressed: _duplicateSelectedShapes,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_sweep_outlined),
+                      tooltip: 'حذف المجموعة',
+                      onPressed: _deleteSelectedShapes,
+                    ),
                   ],
                   _shapeToolChip(
                     icon: Icons.horizontal_rule_rounded,
@@ -2727,7 +2937,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         painter: _PdfShapePainter(
                           shape: shape,
                           transform: transform,
-                          selected: identical(shape, _selectedShape),
+                          selected: identical(shape, _selectedShape) || _selectedShapes.contains(shape),
                         ),
                       ),
                     ),
