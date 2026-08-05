@@ -963,7 +963,95 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
-  Future<void> _saveDocument() => _runQueuedSave(showResult: true);
+  Future<void> _saveDocument() async {
+    if (_disposed || _saving) return;
+
+    // الحفظ اليدوي يجب أن يعني "احفظ أحدث Revision"، لا مجرد Revision كان
+    // موجودًا لحظة الضغط على الزر. قد يعدّل المستخدم المستند أثناء عملية
+    // التصدير الأولى، لذلك نثبّت أحدث حالة أولًا ثم نعرض نتيجة الحفظ.
+    setState(() => _saving = true);
+    _autoSaveDebounce?.cancel();
+
+    Object? error;
+    String? outPath;
+
+    try {
+      // انتظر أي AutoSave سابق قبل بدء دورة الحفظ اليدوي.
+      await (_saveQueue ?? Future.value()).catchError((_) {});
+
+      // نكرر عند الضرورة فقط إذا حدث تعديل جديد أثناء التصدير.
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final revisionBeforeSave = _documentRevision;
+        await _runQueuedSave(showResult: false);
+
+        if (_savedRevision == _documentRevision &&
+            _savedRevision == revisionBeforeSave &&
+            _lastExportedPath != null) {
+          outPath = _lastExportedPath;
+          break;
+        }
+      }
+
+      if (outPath == null || _hasUnsavedChanges) {
+        throw StateError('تعذر تثبيت أحدث نسخة من المستند.');
+      }
+    } catch (e, stack) {
+      error = e;
+      if (kDebugMode) {
+        debugPrint('فشل الحفظ اليدوي: $e');
+        debugPrintStack(stackTrace: stack);
+      }
+    }
+
+    if (_disposed || !mounted) return;
+    setState(() => _saving = false);
+
+    final lang =
+        Provider.of<AppSettingsController>(context, listen: false).languageCode;
+    String tr(String key) => AppText.t(key, lang);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tr('ed_save_error_prefix')} $error')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(tr('ed_saved_title')),
+        content: Text('${tr('ed_saved_path_prefix')}\n$outPath'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Share.shareXFiles(
+                [XFile(outPath!)],
+                text: '${tr('file_from_app_prefix')} MN-Doc',
+              );
+            },
+            child: Text(tr('ed_share')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PdfEditorScreen(filePath: outPath!),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryDark,
+            ),
+            child: Text(tr('ed_open_saved_file')),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// يثبت أحدث Revision فعليًا قبل أي عملية بنيوية على الصفحات.
   /// لا يكفي انتظار حفظ كان موجودًا بالطابور، لأن المستخدم قد يعدّل المستند
