@@ -978,36 +978,34 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   Future<void> _openPageManager() async {
-    final ready = await _flushLatestRevisionForStructuralOperation();
-    if (!mounted || !ready) {
-      if (mounted) {
-        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppText.t('ed_save_error_prefix', lang))),
-        );
+    String sourcePath = widget.filePath;
+    try {
+      if (_hasUnsavedChanges || _annotations.isNotEmpty || _hasFormFields) {
+        await _runQueuedSave(showResult: false);
+        sourcePath = _lastExportedPath ?? widget.filePath;
       }
-      return;
+    } catch (_) {
+      sourcePath = _lastExportedPath ?? widget.filePath;
     }
+    if (!mounted) return;
 
-    final sourcePath = _lastExportedPath ?? widget.filePath;
-
-    // مدير الصفحات عملية بنيوية مستقلة. ننتظر نتيجتها بدل ترك المحرر
-    // الحالي حيًا خلف محرر جديد؛ وعند نجاحها نستبدل هذه الشاشة بالملف
-    // الناتج فقط بعد اكتمال العملية بالكامل.
     final managedPath = await Navigator.push<String>(
       context,
       MaterialPageRoute(
         builder: (_) => ManagePagesScreen(initialFilePath: sourcePath),
       ),
     );
-    if (!mounted || managedPath == null || managedPath.isEmpty) return;
 
-    _autoSaveDebounce?.cancel();
-    await (_saveQueue ?? Future.value()).catchError((_) {});
-    if (!mounted) return;
+    if (!mounted || managedPath == null || managedPath == sourcePath) return;
+
+    // أي عملية بنيوية ناجحة (حذف/تدوير/ترتيب/استيراد صفحات) تنتج Revision
+    // جديدًا. نعيد فتح المحرر على هذا الملف تحديدًا حتى تصبح كل العمليات
+    // اللاحقة — AutoSave وAI والمشاركة والتعديل — مبنية على أحدث نسخة.
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => PdfEditorScreen(filePath: managedPath)),
+      MaterialPageRoute(
+        builder: (_) => PdfEditorScreen(filePath: managedPath),
+      ),
     );
   }
 
