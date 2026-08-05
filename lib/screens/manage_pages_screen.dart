@@ -14,13 +14,24 @@ import '../services/pdf_page_ops.dart';
 import '../theme/app_theme.dart';
 
 class _ManagedPage {
+  final int id;
+  final int sourceId;
   final int originalIndex;
   int rotation;
 
-  _ManagedPage({required this.originalIndex, this.rotation = 0});
+  _ManagedPage({
+    required this.id,
+    required this.sourceId,
+    required this.originalIndex,
+    this.rotation = 0,
+  });
 
-  _ManagedPage copy() =>
-      _ManagedPage(originalIndex: originalIndex, rotation: rotation);
+  _ManagedPage copy() => _ManagedPage(
+        id: id,
+        sourceId: sourceId,
+        originalIndex: originalIndex,
+        rotation: rotation,
+      );
 }
 
 /// مدير صفحات مرئي: صور مصغرة + تحديد متعدد + إعادة ترتيب بالسحب.
@@ -37,8 +48,12 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   String? _fileName;
   Uint8List? _bytes;
   final List<_ManagedPage> _pages = [];
-  final Map<int, Uint8List> _thumbnails = {};
-  final Set<int> _selectedOriginalIndexes = {};
+  final Map<int, Uint8List> _sourceBytes = <int, Uint8List>{};
+  final Map<int, String> _sourceNames = <int, String>{};
+  final Map<String, Uint8List> _thumbnails = <String, Uint8List>{};
+  final Set<int> _selectedPageIds = <int>{};
+  int _nextSourceId = 1;
+  int _nextPageId = 1;
   bool _processing = false;
   bool _loadingThumbnails = false;
   bool _hasUnsavedStructuralChanges = false;
@@ -64,7 +79,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     _pages
       ..clear()
       ..addAll(snapshot.map((p) => p.copy()));
-    _selectedOriginalIndexes.clear();
+    _selectedPageIds.clear();
     _hasUnsavedStructuralChanges = true;
   }
 
@@ -139,14 +154,28 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _bytes = bytes;
         _pages
           ..clear()
-          ..addAll(List.generate(count, (i) => _ManagedPage(originalIndex: i)));
-        _selectedOriginalIndexes.clear();
+          ..addAll(List.generate(
+            count,
+            (i) => _ManagedPage(
+              id: _nextPageId++,
+              sourceId: 0,
+              originalIndex: i,
+            ),
+          ));
+        _sourceBytes
+          ..clear()
+          ..[0] = bytes;
+        _sourceNames
+          ..clear()
+          ..[0] = name;
+        _nextSourceId = 1;
+        _selectedPageIds.clear();
         _thumbnails.clear();
         _hasUnsavedStructuralChanges = false;
         _structuralUndo.clear();
         _structuralRedo.clear();
       });
-      await _generateThumbnails(bytes, count);
+      await _generateThumbnails(bytes, count, sourceId: 0);
     } catch (e) {
       if (!mounted) return;
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
@@ -156,7 +185,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     }
   }
 
-  Future<void> _generateThumbnails(Uint8List bytes, int count) async {
+  Future<void> _generateThumbnails(Uint8List bytes, int count, {required int sourceId}) async {
     setState(() => _loadingThumbnails = true);
     try {
       var i = 0;
@@ -167,7 +196,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       )) {
         final png = await raster.toPng();
         if (!mounted) return;
-        setState(() => _thumbnails[i++] = png);
+        setState(() => _thumbnails['$sourceId:${i++}'] = png);
       }
     } catch (_) {
       // فشل المعاينة لا يمنع إدارة الصفحات؛ تبقى بطاقات الصفحات متاحة.
@@ -178,29 +207,29 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
 
   void _toggleSelection(_ManagedPage page) {
     setState(() {
-      if (!_selectedOriginalIndexes.add(page.originalIndex)) {
-        _selectedOriginalIndexes.remove(page.originalIndex);
+      if (!_selectedPageIds.add(page.id)) {
+        _selectedPageIds.remove(page.id);
       }
     });
   }
 
   void _selectAll() {
     setState(() {
-      if (_selectedOriginalIndexes.length == _pages.length) {
-        _selectedOriginalIndexes.clear();
+      if (_selectedPageIds.length == _pages.length) {
+        _selectedPageIds.clear();
       } else {
-        _selectedOriginalIndexes
+        _selectedPageIds
           ..clear()
-          ..addAll(_pages.map((p) => p.originalIndex));
+          ..addAll(_pages.map((p) => p.id));
       }
     });
   }
 
   Iterable<_ManagedPage> get _selectedPages =>
-      _pages.where((p) => _selectedOriginalIndexes.contains(p.originalIndex));
+      _pages.where((p) => _selectedPageIds.contains(p.id));
 
   void _rotateSelected(int delta) {
-    if (_selectedOriginalIndexes.isEmpty || _processing) return;
+    if (_selectedPageIds.isEmpty || _processing) return;
     _recordStructuralState();
     setState(() {
       _hasUnsavedStructuralChanges = true;
@@ -212,22 +241,30 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   }
 
   void _duplicateSelected() {
-    if (_selectedOriginalIndexes.isEmpty || _processing) return;
+    if (_selectedPageIds.isEmpty || _processing) return;
     _recordStructuralState();
     setState(() {
       _hasUnsavedStructuralChanges = true;
       final selected = _selectedPages.toList();
       for (final source in selected.reversed) {
         final index = _pages.indexOf(source);
-        _pages.insert(index + 1, source.copy());
+        _pages.insert(
+          index + 1,
+          _ManagedPage(
+            id: _nextPageId++,
+            sourceId: source.sourceId,
+            originalIndex: source.originalIndex,
+            rotation: source.rotation,
+          ),
+        );
       }
-      _selectedOriginalIndexes.clear();
+      _selectedPageIds.clear();
     });
   }
 
   Future<void> _deleteSelected() async {
-    if (_selectedOriginalIndexes.isEmpty) return;
-    if (_selectedOriginalIndexes.length >= _pages.length) {
+    if (_selectedPageIds.isEmpty) return;
+    if (_selectedPageIds.length >= _pages.length) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('لا يمكن حذف جميع صفحات المستند.')),
       );
@@ -237,7 +274,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('حذف الصفحات'),
-        content: Text('حذف ${_selectedOriginalIndexes.length} صفحة من النسخة الجديدة؟'),
+        content: Text('حذف ${_selectedPageIds.length} صفحة من النسخة الجديدة؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           ElevatedButton(
@@ -252,17 +289,16 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     _recordStructuralState();
     setState(() {
       _hasUnsavedStructuralChanges = true;
-      _pages.removeWhere((p) => _selectedOriginalIndexes.contains(p.originalIndex));
-      _selectedOriginalIndexes.clear();
+      _pages.removeWhere((p) => _selectedPageIds.contains(p.id));
+      _selectedPageIds.clear();
     });
   }
 
   List<PageRef> _refsFor(Iterable<_ManagedPage> pages) {
-    final bytes = _bytes!;
     return pages
         .map((p) => PageRef(
-              sourceLabel: _fileName ?? '',
-              sourceBytes: bytes,
+              sourceLabel: _sourceNames[p.sourceId] ?? _fileName ?? '',
+              sourceBytes: _sourceBytes[p.sourceId]!,
               pageIndex: p.originalIndex,
               rotation: p.rotation,
             ))
@@ -302,8 +338,67 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     }
   }
 
+  Future<void> _importPagesFromPdf() async {
+    if (_processing || _bytes == null) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      withData: true,
+    );
+    if (result == null) return;
+
+    final picked = result.files.single;
+    Uint8List? bytes = picked.bytes;
+    if (bytes == null && picked.path != null) {
+      bytes = await File(picked.path!).readAsBytes();
+    }
+    if (bytes == null) return;
+
+    setState(() => _processing = true);
+    try {
+      final count = PdfPageOps.countPages(bytes);
+      if (count <= 0) {
+        throw StateError('ملف PDF لا يحتوي على صفحات.');
+      }
+
+      final sourceId = _nextSourceId++;
+      _recordStructuralState();
+      if (!mounted) return;
+      setState(() {
+        _sourceBytes[sourceId] = bytes!;
+        _sourceNames[sourceId] = picked.name;
+        _pages.addAll(List.generate(
+          count,
+          (i) => _ManagedPage(
+            id: _nextPageId++,
+            sourceId: sourceId,
+            originalIndex: i,
+          ),
+        ));
+        _selectedPageIds.clear();
+        _hasUnsavedStructuralChanges = true;
+      });
+
+      await _generateThumbnails(bytes, count, sourceId: sourceId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم استيراد $count صفحة من ${picked.name}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر استيراد صفحات PDF: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
   Future<void> _extractSelected() async {
-    if (_bytes == null || _selectedOriginalIndexes.isEmpty || _processing) return;
+    if (_bytes == null || _selectedPageIds.isEmpty || _processing) return;
     setState(() => _processing = true);
     try {
       final outPath = await _writeRefs(_refsFor(_selectedPages), 'extracted');
@@ -359,10 +454,10 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   }
 
   Widget _thumbnail(_ManagedPage page, int visibleIndex) {
-    final selected = _selectedOriginalIndexes.contains(page.originalIndex);
-    final image = _thumbnails[page.originalIndex];
+    final selected = _selectedPageIds.contains(page.id);
+    final image = _thumbnails['${page.sourceId}:${page.originalIndex}'];
     return Card(
-      key: ValueKey('managed_${page.originalIndex}_${identityHashCode(page)}'),
+      key: ValueKey('managed_${page.id}'),
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       elevation: selected ? 4 : 1,
       shape: RoundedRectangleBorder(
@@ -421,7 +516,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                   children: [
                     Text('الصفحة ${visibleIndex + 1}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 5),
-                    Text('الأصلية: ${page.originalIndex + 1}', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                    Text('${_sourceNames[page.sourceId] ?? ''} • الأصلية: ${page.originalIndex + 1}', style: TextStyle(fontSize: 12, color: AppColors.textMuted), overflow: TextOverflow.ellipsis),
                     if (page.rotation != 0) ...[
                       const SizedBox(height: 5),
                       Text('تدوير ${page.rotation}°', style: const TextStyle(fontSize: 12)),
@@ -486,7 +581,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     final settings = context.watch<AppSettingsController>();
     final lang = settings.languageCode;
     String tr(String key) => AppText.t(key, lang);
-    final hasSelection = _selectedOriginalIndexes.isNotEmpty;
+    final hasSelection = _selectedPageIds.isNotEmpty;
 
     return Directionality(
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
@@ -498,7 +593,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         },
         child: Scaffold(
         appBar: AppBar(
-          title: Text(hasSelection ? 'محدد: ${_selectedOriginalIndexes.length}' : tr('tool_pages_t')),
+          title: Text(hasSelection ? 'محدد: ${_selectedPageIds.length}' : tr('tool_pages_t')),
           actions: _bytes == null
               ? null
               : [
@@ -513,6 +608,11 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                     tooltip: 'إعادة عملية الصفحات',
                   ),
                   IconButton(onPressed: _selectAll, icon: const Icon(Icons.select_all_rounded), tooltip: 'تحديد الكل'),
+                  IconButton(
+                    onPressed: _processing ? null : _importPagesFromPdf,
+                    icon: const Icon(Icons.playlist_add_rounded),
+                    tooltip: 'استيراد صفحات من PDF',
+                  ),
                   IconButton(onPressed: _pickFile, icon: const Icon(Icons.folder_open_rounded), tooltip: 'فتح PDF آخر'),
                 ],
         ),
@@ -557,7 +657,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
                         setState(() {
                           final item = _pages.removeAt(oldIndex);
                           _pages.insert(newIndex, item);
-                          _selectedOriginalIndexes.clear();
+                          _selectedPageIds.clear();
                           _hasUnsavedStructuralChanges = true;
                         });
                       },
