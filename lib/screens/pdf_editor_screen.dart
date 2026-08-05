@@ -186,6 +186,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final List<_DrawingStroke> _drawingStrokes = [];
   _DrawingStroke? _activeDrawingStroke;
   bool _drawMode = false;
+  bool _eraserMode = false;
+  bool _eraserGestureChanged = false;
   Color _drawColor = Colors.red;
   double _drawThickness = 2.5;
   Uint8List? _pendingImageBytes;
@@ -422,11 +424,122 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
     setState(() {
       _drawMode = !_drawMode;
+      _eraserMode = false;
       _addTextMode = false;
       _addImageMode = false;
       _pendingImageBytes = null;
       _controller.annotationMode = PdfAnnotationMode.none;
     });
+  }
+
+  void _toggleEraserMode() {
+    if ((_zoomLevel - 1.0).abs() > 0.01 && !_eraserMode) {
+      final lang =
+          Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
+      );
+      return;
+    }
+    setState(() {
+      _eraserMode = !_eraserMode;
+      _drawMode = false;
+      _activeDrawingStroke = null;
+      _addTextMode = false;
+      _addImageMode = false;
+      _pendingImageBytes = null;
+      _controller.annotationMode = PdfAnnotationMode.none;
+    });
+  }
+
+  double _distanceToSegment(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final lengthSquared = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (lengthSquared <= 0.0001) return (p - a).distance;
+    final ap = p - a;
+    final t = ((ap.dx * ab.dx + ap.dy * ab.dy) / lengthSquared)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final closest = a + ab * t;
+    return (p - closest).distance;
+  }
+
+  bool _strokeHitTest(_DrawingStroke stroke, Offset pdfPoint) {
+    if (stroke.points.isEmpty) return false;
+    final tolerance = 10.0 + stroke.thickness / 2;
+    if (stroke.points.length == 1) {
+      return (stroke.points.first - pdfPoint).distance <= tolerance;
+    }
+    for (var i = 1; i < stroke.points.length; i++) {
+      if (_distanceToSegment(
+            pdfPoint,
+            stroke.points[i - 1],
+            stroke.points[i],
+          ) <=
+          tolerance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Offset? _eventToPdfPoint(PointerEvent event, int pageNumber) {
+    final transform =
+        _pageTransforms[pageNumber] ?? _fallbackPageTransform(pageNumber);
+    final pageSize = _pdfPageSizes[pageNumber];
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (transform == null ||
+        pageSize == null ||
+        box == null ||
+        transform.scale <= 0) {
+      return null;
+    }
+    final local = box.globalToLocal(event.position);
+    final pdf = transform.viewerToPdf(local);
+    if (pdf.dx < 0 ||
+        pdf.dy < 0 ||
+        pdf.dx > pageSize.width ||
+        pdf.dy > pageSize.height) {
+      return null;
+    }
+    return pdf;
+  }
+
+  void _eraseAt(PointerEvent event) {
+    if (!_eraserMode) return;
+    final pdfPoint = _eventToPdfPoint(event, _currentPage);
+    if (pdfPoint == null) return;
+
+    final hits = _drawingStrokes
+        .where(
+          (stroke) =>
+              stroke.pageNumber == _currentPage &&
+              _strokeHitTest(stroke, pdfPoint),
+        )
+        .toList(growable: false);
+    if (hits.isEmpty) return;
+
+    if (!_eraserGestureChanged) {
+      _pushUndoState();
+      _eraserGestureChanged = true;
+    }
+    setState(() => _drawingStrokes.removeWhere(hits.contains));
+  }
+
+  void _onEraserPointerDown(PointerDownEvent event) {
+    _eraserGestureChanged = false;
+    _eraseAt(event);
+  }
+
+  void _onEraserPointerMove(PointerMoveEvent event) {
+    _eraseAt(event);
+  }
+
+  void _finishEraserGesture() {
+    if (_eraserGestureChanged) {
+      _scheduleAutoSave();
+    }
+    _eraserGestureChanged = false;
   }
 
   void _onDrawPointerDown(PointerDownEvent event) {
@@ -1625,6 +1738,30 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       onSelected: (_) => _toggleDrawMode(),
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      avatar: Icon(
+                        Icons.auto_fix_off_rounded,
+                        size: 18,
+                        color: _eraserMode
+                            ? Colors.white
+                            : AppColors.primaryDark,
+                      ),
+                      label: const Text('ممحاة'),
+                      selected: _eraserMode,
+                      selectedColor: AppColors.primaryDark,
+                      labelStyle: TextStyle(
+                        color: _eraserMode
+                            ? Colors.white
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white70
+                                : AppColors.textDark),
+                        fontSize: 12,
+                      ),
+                      onSelected: (_) => _toggleEraserMode(),
+                    ),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.tune_rounded),
                     tooltip: 'إعدادات القلم',
@@ -1650,6 +1787,25 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   Switch(
                     value: _flattenFormsOnSave,
                     onChanged: (v) => setState(() => _flattenFormsOnSave = v),
+                  ),
+                ],
+              ),
+            ),
+          if (_eraserMode)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.withOpacity(0.10),
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+              child: const Row(
+                children: [
+                  Icon(Icons.auto_fix_off_rounded,
+                      size: 18, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'وضع الممحاة — مرّر إصبعك فوق أي خط لحذفه',
+                      style: TextStyle(fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -1771,14 +1927,38 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     ),
                   );
                 }),
-                if (_drawMode)
+                if (_drawMode || _eraserMode)
                   Positioned.fill(
                     child: Listener(
                       behavior: HitTestBehavior.opaque,
-                      onPointerDown: _onDrawPointerDown,
-                      onPointerMove: _onDrawPointerMove,
-                      onPointerUp: (_) => _finishDrawingStroke(),
-                      onPointerCancel: (_) => _finishDrawingStroke(),
+                      onPointerDown: (event) {
+                        if (_drawMode) {
+                          _onDrawPointerDown(event);
+                        } else {
+                          _onEraserPointerDown(event);
+                        }
+                      },
+                      onPointerMove: (event) {
+                        if (_drawMode) {
+                          _onDrawPointerMove(event);
+                        } else {
+                          _onEraserPointerMove(event);
+                        }
+                      },
+                      onPointerUp: (_) {
+                        if (_drawMode) {
+                          _finishDrawingStroke();
+                        } else {
+                          _finishEraserGesture();
+                        }
+                      },
+                      onPointerCancel: (_) {
+                        if (_drawMode) {
+                          _finishDrawingStroke();
+                        } else {
+                          _finishEraserGesture();
+                        }
+                      },
                       child: const SizedBox.expand(),
                     ),
                   ),
