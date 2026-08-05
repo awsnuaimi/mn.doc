@@ -1016,17 +1016,50 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               title: Text(tr('unsaved_title')),
               content: Text(tr('unsaved_body')),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('cancel'))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(tr('cancel')),
+                ),
+                TextButton(
                   onPressed: () => Navigator.pop(context, true),
                   child: Text(tr('discard_exit')),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context, null),
+                  icon: const Icon(Icons.save_rounded),
+                  label: Text(tr('save')),
                 ),
               ],
             ),
           );
-          if (shouldDiscard == true && context.mounted) {
+          if (!context.mounted) return;
+
+          if (shouldDiscard == true) {
+            // خروج صريح بدون حفظ.
+            _autoSaveDebounce?.cancel();
+            _hasUnsavedChanges = false;
             Navigator.pop(context);
+            return;
+          }
+
+          if (shouldDiscard == null) {
+            // زر "حفظ": لا نخرج إلا بعد تثبيت أحدث Revision فعليًا.
+            final saved = await _flushLatestRevisionForStructuralOperation();
+            if (!context.mounted) return;
+
+            if (saved && !_hasUnsavedChanges) {
+              Navigator.pop(context);
+            } else {
+              final lang = Provider.of<AppSettingsController>(
+                context,
+                listen: false,
+              ).languageCode;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(AppText.t('ed_save_error_prefix', lang)),
+                ),
+              );
+            }
           }
         },
         child: Scaffold(
