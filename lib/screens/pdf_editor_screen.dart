@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
@@ -221,6 +222,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   _DrawingStroke? _activeDrawingStroke;
   _ShapeAnnotation? _activeShape;
   _ShapeKind? _shapeMode;
+  bool _shapeEditMode = false;
+  _ShapeAnnotation? _selectedShape;
+  String? _shapeDragPart; // body | start | end
+  Offset? _shapeDragLastPdf;
+  bool _shapeEditGestureChanged = false;
   bool _drawMode = false;
   bool _eraserMode = false;
   bool _eraserGestureChanged = false;
@@ -279,6 +285,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       ..addAll(snapshot.shapeAnnotations.map((s) => s.copy()));
     _activeDrawingStroke = null;
     _activeShape = null;
+    _selectedShape = null;
   }
 
   void _pushUndoState() {
@@ -470,6 +477,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       _drawMode = !_drawMode;
       _eraserMode = false;
       _shapeMode = null;
+      _shapeEditMode = false;
+      _selectedShape = null;
       _addTextMode = false;
       _addImageMode = false;
       _pendingImageBytes = null;
@@ -490,6 +499,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       _eraserMode = !_eraserMode;
       _drawMode = false;
       _shapeMode = null;
+      _shapeEditMode = false;
+      _selectedShape = null;
       _activeDrawingStroke = null;
       _addTextMode = false;
       _addImageMode = false;
@@ -588,6 +599,159 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _eraserGestureChanged = false;
   }
 
+  void _toggleShapeEditMode() {
+    if ((_zoomLevel - 1.0).abs() > 0.01 && !_shapeEditMode) {
+      final lang =
+          Provider.of<AppSettingsController>(context, listen: false).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.t('ed_zoom_reset_needed', lang))),
+      );
+      return;
+    }
+    setState(() {
+      _shapeEditMode = !_shapeEditMode;
+      _selectedShape = null;
+      _shapeDragPart = null;
+      _shapeDragLastPdf = null;
+      _shapeMode = null;
+      _drawMode = false;
+      _eraserMode = false;
+      _activeDrawingStroke = null;
+      _activeShape = null;
+      _addTextMode = false;
+      _addImageMode = false;
+      _pendingImageBytes = null;
+      _controller.annotationMode = PdfAnnotationMode.none;
+    });
+  }
+
+  double _shapeDistance(_ShapeAnnotation shape, Offset p) {
+    if (shape.kind == _ShapeKind.line || shape.kind == _ShapeKind.arrow) {
+      return _distanceToSegment(p, shape.start, shape.end);
+    }
+    final rect = Rect.fromPoints(shape.start, shape.end);
+    final expanded = rect.inflate(8);
+    if (!expanded.contains(p)) return double.infinity;
+    final dLeft = (p.dx - rect.left).abs();
+    final dRight = (p.dx - rect.right).abs();
+    final dTop = (p.dy - rect.top).abs();
+    final dBottom = (p.dy - rect.bottom).abs();
+    if (shape.kind == _ShapeKind.rectangle) {
+      return [dLeft, dRight, dTop, dBottom].reduce((a, b) => a < b ? a : b);
+    }
+    final center = rect.center;
+    final rx = rect.width / 2;
+    final ry = rect.height / 2;
+    if (rx < 0.1 || ry < 0.1) return (p - center).distance;
+    final nx = (p.dx - center.dx) / rx;
+    final ny = (p.dy - center.dy) / ry;
+    return ((math.sqrt(nx * nx + ny * ny)) - 1).abs() * ((rx + ry) / 2);
+  }
+
+  _ShapeAnnotation? _hitShape(Offset pdfPoint) {
+    _ShapeAnnotation? best;
+    var bestDistance = 12.0;
+    for (final shape in _shapeAnnotations.reversed) {
+      if (shape.pageNumber != _currentPage) continue;
+      final d = _shapeDistance(shape, pdfPoint);
+      if (d <= bestDistance) {
+        bestDistance = d;
+        best = shape;
+      }
+    }
+    return best;
+  }
+
+  void _onShapeEditPointerDown(PointerDownEvent event) {
+    final pdf = _eventToPdfPoint(event, _currentPage);
+    if (pdf == null) return;
+
+    final selected = _selectedShape;
+    if (selected != null) {
+      const handleRadius = 14.0;
+      if ((pdf - selected.start).distance <= handleRadius) {
+        _pushUndoState();
+        _shapeDragPart = 'start';
+        _shapeDragLastPdf = pdf;
+        _shapeEditGestureChanged = false;
+        return;
+      }
+      if ((pdf - selected.end).distance <= handleRadius) {
+        _pushUndoState();
+        _shapeDragPart = 'end';
+        _shapeDragLastPdf = pdf;
+        _shapeEditGestureChanged = false;
+        return;
+      }
+    }
+
+    final hit = _hitShape(pdf);
+    setState(() => _selectedShape = hit);
+    if (hit != null) {
+      _pushUndoState();
+      _shapeDragPart = 'body';
+      _shapeDragLastPdf = pdf;
+      _shapeEditGestureChanged = false;
+    } else {
+      _shapeDragPart = null;
+      _shapeDragLastPdf = null;
+    }
+  }
+
+  void _onShapeEditPointerMove(PointerMoveEvent event) {
+    final shape = _selectedShape;
+    final part = _shapeDragPart;
+    final last = _shapeDragLastPdf;
+    if (shape == null || part == null || last == null) return;
+    final pdf = _eventToPdfPoint(event, shape.pageNumber);
+    if (pdf == null) return;
+
+    setState(() {
+      if (part == 'start') {
+        shape.start = pdf;
+      } else if (part == 'end') {
+        shape.end = pdf;
+      } else {
+        final delta = pdf - last;
+        final pageSize = _pdfPageSizes[shape.pageNumber];
+        if (pageSize == null) return;
+        final newStart = shape.start + delta;
+        final newEnd = shape.end + delta;
+        final minX = newStart.dx < newEnd.dx ? newStart.dx : newEnd.dx;
+        final maxX = newStart.dx > newEnd.dx ? newStart.dx : newEnd.dx;
+        final minY = newStart.dy < newEnd.dy ? newStart.dy : newEnd.dy;
+        final maxY = newStart.dy > newEnd.dy ? newStart.dy : newEnd.dy;
+        var corrected = delta;
+        if (minX < 0) corrected += Offset(-minX, 0);
+        if (maxX > pageSize.width) corrected += Offset(pageSize.width - maxX, 0);
+        if (minY < 0) corrected += Offset(0, -minY);
+        if (maxY > pageSize.height) corrected += Offset(0, pageSize.height - maxY);
+        shape.start += corrected;
+        shape.end += corrected;
+      }
+      _shapeDragLastPdf = pdf;
+      _shapeEditGestureChanged = true;
+    });
+  }
+
+  void _finishShapeEditGesture() {
+    if (_shapeEditGestureChanged) _scheduleAutoSave();
+    _shapeDragPart = null;
+    _shapeDragLastPdf = null;
+    _shapeEditGestureChanged = false;
+  }
+
+  void _deleteSelectedShape() {
+    final shape = _selectedShape;
+    if (shape == null) return;
+    _pushUndoState();
+    setState(() {
+      _shapeAnnotations.remove(shape);
+      _selectedShape = null;
+    });
+    _scheduleAutoSave();
+  }
+
   void _toggleShapeMode(_ShapeKind kind) {
     if ((_zoomLevel - 1.0).abs() > 0.01 && _shapeMode != kind) {
       final lang =
@@ -599,6 +763,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
     setState(() {
       _shapeMode = _shapeMode == kind ? null : kind;
+      _shapeEditMode = false;
+      _selectedShape = null;
       _drawMode = false;
       _eraserMode = false;
       _activeDrawingStroke = null;
@@ -1915,6 +2081,36 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       onSelected: (_) => _toggleEraserMode(),
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      avatar: Icon(
+                        Icons.open_with_rounded,
+                        size: 18,
+                        color: _shapeEditMode
+                            ? Colors.white
+                            : AppColors.primaryDark,
+                      ),
+                      label: const Text('تعديل'),
+                      selected: _shapeEditMode,
+                      selectedColor: AppColors.primaryDark,
+                      labelStyle: TextStyle(
+                        color: _shapeEditMode
+                            ? Colors.white
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white70
+                                : AppColors.textDark),
+                        fontSize: 12,
+                      ),
+                      onSelected: (_) => _toggleShapeEditMode(),
+                    ),
+                  ),
+                  if (_shapeEditMode && _selectedShape != null)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      tooltip: 'حذف الشكل المحدد',
+                      onPressed: _deleteSelectedShape,
+                    ),
                   _shapeToolChip(
                     icon: Icons.horizontal_rule_rounded,
                     label: 'خط',
@@ -1960,6 +2156,24 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   Switch(
                     value: _flattenFormsOnSave,
                     onChanged: (v) => setState(() => _flattenFormsOnSave = v),
+                  ),
+                ],
+              ),
+            ),
+          if (_shapeEditMode)
+            Container(
+              width: double.infinity,
+              color: Colors.blue.withOpacity(0.08),
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+              child: const Row(
+                children: [
+                  Icon(Icons.open_with_rounded, size: 18, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'تعديل الأشكال — اضغط لتحديد، اسحب للتحريك، واسحب المقابض لتغيير الحجم',
+                      style: TextStyle(fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -2117,6 +2331,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         painter: _PdfShapePainter(
                           shape: shape,
                           transform: transform,
+                          selected: identical(shape, _selectedShape),
                         ),
                       ),
                     ),
@@ -2139,12 +2354,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     ),
                   );
                 }),
-                if (_drawMode || _eraserMode || _shapeMode != null)
+                if (_drawMode || _eraserMode || _shapeMode != null || _shapeEditMode)
                   Positioned.fill(
                     child: Listener(
                       behavior: HitTestBehavior.opaque,
                       onPointerDown: (event) {
-                        if (_shapeMode != null) {
+                        if (_shapeEditMode) {
+                          _onShapeEditPointerDown(event);
+                        } else if (_shapeMode != null) {
                           _onShapePointerDown(event);
                         } else if (_drawMode) {
                           _onDrawPointerDown(event);
@@ -2153,7 +2370,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         }
                       },
                       onPointerMove: (event) {
-                        if (_shapeMode != null) {
+                        if (_shapeEditMode) {
+                          _onShapeEditPointerMove(event);
+                        } else if (_shapeMode != null) {
                           _onShapePointerMove(event);
                         } else if (_drawMode) {
                           _onDrawPointerMove(event);
@@ -2162,7 +2381,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         }
                       },
                       onPointerUp: (_) {
-                        if (_shapeMode != null) {
+                        if (_shapeEditMode) {
+                          _finishShapeEditGesture();
+                        } else if (_shapeMode != null) {
                           _finishShapeGesture();
                         } else if (_drawMode) {
                           _finishDrawingStroke();
@@ -2171,7 +2392,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         }
                       },
                       onPointerCancel: (_) {
-                        if (_shapeMode != null) {
+                        if (_shapeEditMode) {
+                          _finishShapeEditGesture();
+                        } else if (_shapeMode != null) {
                           _finishShapeGesture();
                         } else if (_drawMode) {
                           _finishDrawingStroke();
@@ -2645,10 +2868,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 class _PdfShapePainter extends CustomPainter {
   final _ShapeAnnotation shape;
   final _PdfPageTransform transform;
+  final bool selected;
 
   const _PdfShapePainter({
     required this.shape,
     required this.transform,
+    this.selected = false,
   });
 
   @override
@@ -2680,6 +2905,7 @@ class _PdfShapePainter extends CustomPainter {
           canvas.drawLine(end, base - perp * wing, paint);
         }
       }
+      if (selected) _paintSelection(canvas, start, end);
       return;
     }
 
@@ -2688,6 +2914,29 @@ class _PdfShapePainter extends CustomPainter {
       canvas.drawRect(rect, paint);
     } else {
       canvas.drawOval(rect, paint);
+    }
+
+    if (selected) _paintSelection(canvas, start, end);
+  }
+
+  void _paintSelection(Canvas canvas, Offset start, Offset end) {
+    final selectionPaint = Paint()
+      ..color = Colors.blue
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final handlePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    final handleBorder = Paint()
+      ..color = Colors.blue
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final bounds = Rect.fromPoints(start, end).inflate(6);
+    canvas.drawRect(bounds, selectionPaint);
+    for (final p in [start, end]) {
+      canvas.drawCircle(p, 7, handlePaint);
+      canvas.drawCircle(p, 7, handleBorder);
     }
   }
 
