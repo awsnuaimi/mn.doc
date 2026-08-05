@@ -270,11 +270,36 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   }
 
   Future<String> _writeRefs(List<PageRef> refs, String tag) async {
+    if (refs.isEmpty) {
+      throw StateError('لا توجد صفحات لإنشاء ملف PDF.');
+    }
+
     final outBytes = await PdfPageOps.buildFromPages(refs);
+    if (outBytes.isEmpty) {
+      throw StateError('فشل إنشاء بيانات PDF.');
+    }
+
     final dir = await getApplicationDocumentsDirectory();
     final outPath = '${dir.path}/MN-Doc_${tag}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-    await File(outPath).writeAsBytes(outBytes, flush: true);
-    return outPath;
+
+    // حفظ ذري للعمليات البنيوية: نكتب الملف كاملًا إلى مسار مؤقت أولًا،
+    // ثم ننقله إلى الاسم النهائي فقط بعد نجاح الكتابة. بهذا لا يظهر ملف
+    // نهائي ناقص لو انقطع التطبيق أو فشلت الكتابة أثناء حذف/تدوير/ترتيب الصفحات.
+    final tmpFile = File('$outPath.tmp');
+    try {
+      await tmpFile.writeAsBytes(outBytes, flush: true);
+      final finalFile = File(outPath);
+      if (await finalFile.exists()) {
+        await finalFile.delete();
+      }
+      await tmpFile.rename(outPath);
+      return outPath;
+    } catch (_) {
+      if (await tmpFile.exists()) {
+        await tmpFile.delete();
+      }
+      rethrow;
+    }
   }
 
   Future<void> _extractSelected() async {
