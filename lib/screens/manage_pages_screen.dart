@@ -34,22 +34,6 @@ class _ManagedPage {
       );
 }
 
-class _StructuralSnapshot {
-  final List<_ManagedPage> pages;
-  final Map<int, Uint8List> sourceBytes;
-  final Map<int, String> sourceNames;
-  final int nextPageId;
-  final int nextSourceId;
-
-  const _StructuralSnapshot({
-    required this.pages,
-    required this.sourceBytes,
-    required this.sourceNames,
-    required this.nextPageId,
-    required this.nextSourceId,
-  });
-}
-
 /// مدير صفحات مرئي: صور مصغرة + تحديد متعدد + إعادة ترتيب بالسحب.
 class ManagePagesScreen extends StatefulWidget {
   final String? initialFilePath;
@@ -73,63 +57,50 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
   bool _processing = false;
   bool _loadingThumbnails = false;
   bool _hasUnsavedStructuralChanges = false;
+  String? _lastSavedStructuralPath;
 
-  // Undo/Redo كامل للعمليات البنيوية. اللقطة لا تنسخ بايتات PDF نفسها؛
-  // Map.from يحتفظ بالمراجع immutable للبايتات، لكنه يعيد حالة المصادر
-  // والعدادات مع الصفحات. هذا مهم خصوصًا لاستيراد PDF ثم Undo/Redo.
-  final List<_StructuralSnapshot> _structuralUndo = <_StructuralSnapshot>[];
-  final List<_StructuralSnapshot> _structuralRedo = <_StructuralSnapshot>[];
+  // Undo/Redo مستقل للعمليات البنيوية داخل مدير الصفحات.
+  // اللقطات خفيفة لأنها تحفظ ترتيب الصفحات ودورانها فقط، ولا تنسخ PDF أو الصور المصغرة.
+  final List<List<_ManagedPage>> _structuralUndo = <List<_ManagedPage>>[];
+  final List<List<_ManagedPage>> _structuralRedo = <List<_ManagedPage>>[];
   static const int _structuralHistoryLimit = 30;
 
-  _StructuralSnapshot _captureStructuralState() => _StructuralSnapshot(
-        pages: _pages.map((p) => p.copy()).toList(growable: false),
-        sourceBytes: Map<int, Uint8List>.from(_sourceBytes),
-        sourceNames: Map<int, String>.from(_sourceNames),
-        nextPageId: _nextPageId,
-        nextSourceId: _nextSourceId,
-      );
+  List<_ManagedPage> _capturePages() =>
+      _pages.map((p) => p.copy()).toList(growable: false);
 
   void _recordStructuralState() {
-    _structuralUndo.add(_captureStructuralState());
+    _structuralUndo.add(_capturePages());
     _structuralRedo.clear();
     if (_structuralUndo.length > _structuralHistoryLimit) {
       _structuralUndo.removeAt(0);
     }
   }
 
-  void _restoreStructuralState(_StructuralSnapshot snapshot) {
+  void _restorePages(List<_ManagedPage> snapshot) {
     _pages
       ..clear()
-      ..addAll(snapshot.pages.map((p) => p.copy()));
-    _sourceBytes
-      ..clear()
-      ..addAll(snapshot.sourceBytes);
-    _sourceNames
-      ..clear()
-      ..addAll(snapshot.sourceNames);
-    _nextPageId = snapshot.nextPageId;
-    _nextSourceId = snapshot.nextSourceId;
+      ..addAll(snapshot.map((p) => p.copy()));
     _selectedPageIds.clear();
     _hasUnsavedStructuralChanges = true;
   }
 
   void _undoStructural() {
     if (_structuralUndo.isEmpty || _processing) return;
-    final current = _captureStructuralState();
+    final current = _capturePages();
     final previous = _structuralUndo.removeLast();
     _structuralRedo.add(current);
-    setState(() => _restoreStructuralState(previous));
+    setState(() => _restorePages(previous));
   }
 
   void _redoStructural() {
     if (_structuralRedo.isEmpty || _processing) return;
-    final current = _captureStructuralState();
+    final current = _capturePages();
     final next = _structuralRedo.removeLast();
     _structuralUndo.add(current);
     if (_structuralUndo.length > _structuralHistoryLimit) {
       _structuralUndo.removeAt(0);
     }
-    setState(() => _restoreStructuralState(next));
+    setState(() => _restorePages(next));
   }
 
   @override
@@ -182,7 +153,6 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       setState(() {
         _fileName = name;
         _bytes = bytes;
-        _nextPageId = 1;
         _pages
           ..clear()
           ..addAll(List.generate(
@@ -203,6 +173,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         _selectedPageIds.clear();
         _thumbnails.clear();
         _hasUnsavedStructuralChanges = false;
+        _lastSavedStructuralPath = null;
         _structuralUndo.clear();
         _structuralRedo.clear();
       });
@@ -403,8 +374,8 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
         throw StateError('ملف PDF المستورد لا يحتوي على صفحات.');
       }
 
-      _recordStructuralState();
       final sourceId = _nextSourceId++;
+      _recordStructuralState();
 
       if (!mounted) return;
       setState(() {
@@ -464,6 +435,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
       setState(() {
         _processing = false;
         _hasUnsavedStructuralChanges = false;
+        _lastSavedStructuralPath = outPath;
       });
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       String tr(String key) => AppText.t(key, lang);
@@ -615,13 +587,14 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
 
   Future<void> _handleManagerBack() async {
     if (!_hasUnsavedStructuralChanges) {
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context, _lastSavedStructuralPath);
       return;
     }
+
     final discard = await _confirmDiscardStructuralChanges();
     if (discard == true && mounted) {
       _hasUnsavedStructuralChanges = false;
-      Navigator.pop(context);
+      Navigator.pop(context, _lastSavedStructuralPath);
     }
   }
 
@@ -635,7 +608,7 @@ class _ManagePagesScreenState extends State<ManagePagesScreen> {
     return Directionality(
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: PopScope(
-        canPop: !_hasUnsavedStructuralChanges,
+        canPop: false,
         onPopInvoked: (didPop) async {
           if (didPop) return;
           await _handleManagerBack();
