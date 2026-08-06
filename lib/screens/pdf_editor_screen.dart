@@ -29,6 +29,7 @@ part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
 part 'pdf_editor/controllers/editor_history.dart';
 part 'pdf_editor/geometry/pdf_page_transform.dart';
+part 'pdf_editor/geometry/shape_geometry.dart';
 part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
 part 'pdf_editor/painters/drawing_painter.dart';
@@ -552,7 +553,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
     for (final other in _shapeAnnotations) {
       if (other.pageNumber != pageNumber || moving.contains(other)) continue;
-      final b = _shapeBounds(other);
+      final b = _ShapeGeometry.bounds(other);
       xTargets.addAll([b.left, b.center.dx, b.right]);
       yTargets.addAll([b.top, b.center.dy, b.bottom]);
     }
@@ -598,7 +599,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final delta = pdf - last;
         final pageSize = _pdfPageSizes[shape.pageNumber];
         if (pageSize == null) return;
-        final bounds = _selectedShapesBounds();
+        final bounds = _ShapeGeometry.selectionBounds(_selectedShapes);
         if (bounds == null) return;
         var corrected = _snapDeltaForBounds(
           bounds,
@@ -631,7 +632,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         final pageSize = _pdfPageSizes[shape.pageNumber];
         if (pageSize == null) return;
         delta = _snapDeltaForBounds(
-          _shapeBounds(shape),
+          _ShapeGeometry.bounds(shape),
           delta,
           shape.pageNumber,
           {shape},
@@ -972,38 +973,20 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     });
   }
 
-  Rect? _selectedShapesBounds() {
-    if (_selectedShapes.isEmpty) return null;
-    double? left, top, right, bottom;
-    for (final shape in _selectedShapes) {
-      final l = shape.start.dx < shape.end.dx ? shape.start.dx : shape.end.dx;
-      final r = shape.start.dx > shape.end.dx ? shape.start.dx : shape.end.dx;
-      final tt = shape.start.dy < shape.end.dy ? shape.start.dy : shape.end.dy;
-      final b = shape.start.dy > shape.end.dy ? shape.start.dy : shape.end.dy;
-      left = left == null || l < left ? l : left;
-      right = right == null || r > right ? r : right;
-      top = top == null || tt < top ? tt : top;
-      bottom = bottom == null || b > bottom ? b : bottom;
-    }
-    return Rect.fromLTRB(left!, top!, right!, bottom!);
-  }
 
-  Rect _shapeBounds(_ShapeAnnotation shape) =>
-      Rect.fromPoints(shape.start, shape.end);
 
-  void _translateShape(_ShapeAnnotation shape, Offset delta) {
-    shape.start += delta;
-    shape.end += delta;
-  }
+
+
+
 
   void _alignSelectedShapes(String mode) {
     if (_selectedShapes.length < 2) return;
-    final bounds = _selectedShapesBounds();
+    final bounds = _ShapeGeometry.selectionBounds(_selectedShapes);
     if (bounds == null) return;
     _pushUndoState();
     setState(() {
       for (final shape in _selectedShapes) {
-        final b = _shapeBounds(shape);
+        final b = _ShapeGeometry.bounds(shape);
         Offset delta = Offset.zero;
         switch (mode) {
           case 'left':
@@ -1025,7 +1008,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             delta = Offset(0, bounds.center.dy - b.center.dy);
             break;
         }
-        _translateShape(shape, delta);
+        _ShapeGeometry.translate(shape, delta);
       }
     });
     _scheduleAutoSave();
@@ -1035,21 +1018,21 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     if (_selectedShapes.length < 3) return;
     final items = List<_ShapeAnnotation>.from(_selectedShapes);
     items.sort((a, b) => horizontal
-        ? _shapeBounds(a).center.dx.compareTo(_shapeBounds(b).center.dx)
-        : _shapeBounds(a).center.dy.compareTo(_shapeBounds(b).center.dy));
-    final first = _shapeBounds(items.first).center;
-    final last = _shapeBounds(items.last).center;
+        ? _ShapeGeometry.bounds(a).center.dx.compareTo(_ShapeGeometry.bounds(b).center.dx)
+        : _ShapeGeometry.bounds(a).center.dy.compareTo(_ShapeGeometry.bounds(b).center.dy));
+    final first = _ShapeGeometry.bounds(items.first).center;
+    final last = _ShapeGeometry.bounds(items.last).center;
     final step = horizontal
         ? (last.dx - first.dx) / (items.length - 1)
         : (last.dy - first.dy) / (items.length - 1);
     _pushUndoState();
     setState(() {
       for (var i = 1; i < items.length - 1; i++) {
-        final b = _shapeBounds(items[i]);
+        final b = _ShapeGeometry.bounds(items[i]);
         final target = horizontal
             ? first.dx + step * i
             : first.dy + step * i;
-        _translateShape(
+        _ShapeGeometry.translate(
           items[i],
           horizontal
               ? Offset(target - b.center.dx, 0)
@@ -1195,6 +1178,108 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             current.pageNumber == previous.pageNumber) {
           _shapeAnnotations[i] = previous;
           _shapeAnnotations[i - 1] = current;
+        }
+      }
+    });
+    _scheduleAutoSave();
+  }
+
+  void _bringSelectedShapesToFront() {
+    if (_selectedShapes.isEmpty) return;
+    final selected = _selectedShapes.toSet();
+    final pages = _selectedShapes.map((shape) => shape.pageNumber).toSet();
+    var changed = false;
+
+    for (final page in pages) {
+      final pageItems =
+          _shapeAnnotations.where((shape) => shape.pageNumber == page).toList();
+      final selectedOnPage =
+          pageItems.where(selected.contains).toList(growable: false);
+      if (selectedOnPage.isEmpty) continue;
+      final reordered = <_ShapeAnnotation>[
+        ...pageItems.where((shape) => !selected.contains(shape)),
+        ...selectedOnPage,
+      ];
+      for (var i = 0; i < pageItems.length; i++) {
+        if (!identical(pageItems[i], reordered[i])) {
+          changed = true;
+          break;
+        }
+      }
+      if (changed) break;
+    }
+    if (!changed) return;
+
+    _pushUndoState();
+    setState(() {
+      for (final page in pages) {
+        final indexes = <int>[];
+        final pageItems = <_ShapeAnnotation>[];
+        for (var i = 0; i < _shapeAnnotations.length; i++) {
+          if (_shapeAnnotations[i].pageNumber == page) {
+            indexes.add(i);
+            pageItems.add(_shapeAnnotations[i]);
+          }
+        }
+        final selectedOnPage =
+            pageItems.where(selected.contains).toList(growable: false);
+        final reordered = <_ShapeAnnotation>[
+          ...pageItems.where((shape) => !selected.contains(shape)),
+          ...selectedOnPage,
+        ];
+        for (var i = 0; i < indexes.length; i++) {
+          _shapeAnnotations[indexes[i]] = reordered[i];
+        }
+      }
+    });
+    _scheduleAutoSave();
+  }
+
+  void _sendSelectedShapesToBack() {
+    if (_selectedShapes.isEmpty) return;
+    final selected = _selectedShapes.toSet();
+    final pages = _selectedShapes.map((shape) => shape.pageNumber).toSet();
+    var changed = false;
+
+    for (final page in pages) {
+      final pageItems =
+          _shapeAnnotations.where((shape) => shape.pageNumber == page).toList();
+      final selectedOnPage =
+          pageItems.where(selected.contains).toList(growable: false);
+      if (selectedOnPage.isEmpty) continue;
+      final reordered = <_ShapeAnnotation>[
+        ...selectedOnPage,
+        ...pageItems.where((shape) => !selected.contains(shape)),
+      ];
+      for (var i = 0; i < pageItems.length; i++) {
+        if (!identical(pageItems[i], reordered[i])) {
+          changed = true;
+          break;
+        }
+      }
+      if (changed) break;
+    }
+    if (!changed) return;
+
+    _pushUndoState();
+    setState(() {
+      for (final page in pages) {
+        final indexes = <int>[];
+        final pageItems = <_ShapeAnnotation>[];
+        for (var i = 0; i < _shapeAnnotations.length; i++) {
+          if (_shapeAnnotations[i].pageNumber == page) {
+            indexes.add(i);
+            pageItems.add(_shapeAnnotations[i]);
+          }
+        }
+        final selectedOnPage =
+            pageItems.where(selected.contains).toList(growable: false);
+        final reordered = <_ShapeAnnotation>[
+          ...selectedOnPage,
+          ...pageItems.where((shape) => !selected.contains(shape)),
+        ];
+        for (var i = 0; i < indexes.length; i++) {
+          _shapeAnnotations[indexes[i]] = reordered[i];
         }
       }
     });
@@ -2803,6 +2888,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       icon: const Icon(Icons.flip_to_back_rounded),
                       tooltip: 'إرسال المجموعة للخلف',
                       onPressed: _sendSelectedShapesBackward,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.vertical_align_top_rounded),
+                      tooltip: 'إحضار المجموعة إلى المقدمة',
+                      onPressed: _bringSelectedShapesToFront,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.vertical_align_bottom_rounded),
+                      tooltip: 'إرسال المجموعة إلى الخلف تمامًا',
+                      onPressed: _sendSelectedShapesToBack,
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_sweep_outlined),
