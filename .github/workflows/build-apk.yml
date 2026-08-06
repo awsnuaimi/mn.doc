@@ -1,15 +1,19 @@
-name: Build APK & AAB
+name: Build Android
 
 on:
   push:
     branches: [ main ]
     tags: [ 'v*' ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      build_aab:
+        description: 'Build AAB for Google Play'
+        required: false
+        default: true
+        type: boolean
 
-# If a newer commit is pushed while an older build is still queued/running,
-# cancel the obsolete build instead of wasting a hosted runner.
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: android-build-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -40,8 +44,6 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
-      # Do not run `flutter clean` on every CI build:
-      # the GitHub runner starts clean, and removing caches makes builds slower.
       - name: Install dependencies
         run: flutter pub get
 
@@ -56,6 +58,7 @@ jobs:
             echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           fi
 
+      # Development path: every normal push builds APK only.
       - name: Build release APK
         run: flutter build apk --release
         env:
@@ -64,7 +67,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
+      # Release path:
+      # - automatically for version tags such as v1.0.0
+      # - optionally from Run workflow -> build_aab = true
       - name: Build release AAB for Google Play
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.build_aab)
         run: flutter build appbundle --release
         env:
           KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
@@ -81,6 +88,7 @@ jobs:
           retention-days: 14
 
       - name: Upload AAB artifact
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.build_aab)
         uses: actions/upload-artifact@v4
         with:
           name: MN-Doc-release-aab
@@ -88,10 +96,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish GitHub Release APK for version tags
+      - name: Publish GitHub Release APK and AAB
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
