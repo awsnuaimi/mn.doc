@@ -31,6 +31,7 @@ part 'pdf_editor/controllers/editor_history.dart';
 part 'pdf_editor/geometry/pdf_page_transform.dart';
 part 'pdf_editor/geometry/shape_geometry.dart';
 part 'pdf_editor/geometry/shape_snap_geometry.dart';
+part 'pdf_editor/geometry/shape_layout_geometry.dart';
 part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
 part 'pdf_editor/painters/drawing_painter.dart';
@@ -972,34 +973,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _alignSelectedShapes(String mode) {
     if (_selectedShapes.length < 2) return;
-    final bounds = _ShapeGeometry.selectionBounds(_selectedShapes);
-    if (bounds == null) return;
+    final translations = _ShapeLayoutGeometry.alignmentTranslations(
+      _selectedShapes,
+      mode: mode,
+    );
+    if (translations.isEmpty) return;
     _pushUndoState();
     setState(() {
-      for (final shape in _selectedShapes) {
-        final b = _ShapeGeometry.bounds(shape);
-        Offset delta = Offset.zero;
-        switch (mode) {
-          case 'left':
-            delta = Offset(bounds.left - b.left, 0);
-            break;
-          case 'right':
-            delta = Offset(bounds.right - b.right, 0);
-            break;
-          case 'top':
-            delta = Offset(0, bounds.top - b.top);
-            break;
-          case 'bottom':
-            delta = Offset(0, bounds.bottom - b.bottom);
-            break;
-          case 'centerH':
-            delta = Offset(bounds.center.dx - b.center.dx, 0);
-            break;
-          case 'centerV':
-            delta = Offset(0, bounds.center.dy - b.center.dy);
-            break;
-        }
-        _ShapeGeometry.translate(shape, delta);
+      for (final entry in translations.entries) {
+        _ShapeGeometry.translate(entry.key, entry.value);
       }
     });
     _scheduleAutoSave();
@@ -1007,28 +989,32 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _distributeSelectedShapes(bool horizontal) {
     if (_selectedShapes.length < 3) return;
-    final items = List<_ShapeAnnotation>.from(_selectedShapes);
-    items.sort((a, b) => horizontal
-        ? _ShapeGeometry.bounds(a).center.dx.compareTo(_ShapeGeometry.bounds(b).center.dx)
-        : _ShapeGeometry.bounds(a).center.dy.compareTo(_ShapeGeometry.bounds(b).center.dy));
-    final first = _ShapeGeometry.bounds(items.first).center;
-    final last = _ShapeGeometry.bounds(items.last).center;
-    final step = horizontal
-        ? (last.dx - first.dx) / (items.length - 1)
-        : (last.dy - first.dy) / (items.length - 1);
+    final translations = _ShapeLayoutGeometry.centerDistributionTranslations(
+      _selectedShapes,
+      horizontal: horizontal,
+    );
+    if (translations.isEmpty) return;
     _pushUndoState();
     setState(() {
-      for (var i = 1; i < items.length - 1; i++) {
-        final b = _ShapeGeometry.bounds(items[i]);
-        final target = horizontal
-            ? first.dx + step * i
-            : first.dy + step * i;
-        _ShapeGeometry.translate(
-          items[i],
-          horizontal
-              ? Offset(target - b.center.dx, 0)
-              : Offset(0, target - b.center.dy),
-        );
+      for (final entry in translations.entries) {
+        _ShapeGeometry.translate(entry.key, entry.value);
+      }
+    });
+    _scheduleAutoSave();
+  }
+
+  void _distributeSelectedShapesByGap(bool horizontal) {
+    if (_selectedShapes.length < 3) return;
+    final translations = _ShapeLayoutGeometry.equalGapTranslations(
+      _selectedShapes,
+      horizontal: horizontal,
+    );
+    if (translations.isEmpty) return;
+
+    _pushUndoState();
+    setState(() {
+      for (final entry in translations.entries) {
+        _ShapeGeometry.translate(entry.key, entry.value);
       }
     });
     _scheduleAutoSave();
@@ -2916,6 +2902,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     if (_selectedShapes.length >= 3) ...[
                       IconButton(icon: const Icon(Icons.space_bar_rounded), tooltip: 'توزيع أفقي', onPressed: () => _distributeSelectedShapes(true)),
                       IconButton(icon: const Icon(Icons.vertical_distribute_rounded), tooltip: 'توزيع عمودي', onPressed: () => _distributeSelectedShapes(false)),
+                      IconButton(icon: const Icon(Icons.format_align_justify_rounded), tooltip: 'مسافات أفقية متساوية', onPressed: () => _distributeSelectedShapesByGap(true)),
+                      IconButton(icon: const Icon(Icons.density_medium_rounded), tooltip: 'مسافات عمودية متساوية', onPressed: () => _distributeSelectedShapesByGap(false)),
                     ],
                   ],
                   _shapeToolChip(
