@@ -30,6 +30,7 @@ part 'pdf_editor/models/editor_snapshot.dart';
 part 'pdf_editor/controllers/editor_history.dart';
 part 'pdf_editor/geometry/pdf_page_transform.dart';
 part 'pdf_editor/geometry/shape_geometry.dart';
+part 'pdf_editor/geometry/shape_snap_geometry.dart';
 part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
 part 'pdf_editor/painters/drawing_painter.dart';
@@ -540,50 +541,18 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     int pageNumber,
     Set<_ShapeAnnotation> moving,
   ) {
-    final moved = movingBounds.shift(proposed);
-    final threshold = 6.0 / _zoomLevel;
-    double? bestDx, bestDy, guideX, guideY;
-
-    final pageSize = _pdfPageSizes[pageNumber];
-    final xTargets = <double>[];
-    final yTargets = <double>[];
-    if (pageSize != null) {
-      xTargets.addAll([0, pageSize.width / 2, pageSize.width]);
-      yTargets.addAll([0, pageSize.height / 2, pageSize.height]);
-    }
-    for (final other in _shapeAnnotations) {
-      if (other.pageNumber != pageNumber || moving.contains(other)) continue;
-      final b = _ShapeGeometry.bounds(other);
-      xTargets.addAll([b.left, b.center.dx, b.right]);
-      yTargets.addAll([b.top, b.center.dy, b.bottom]);
-    }
-
-    final movingXs = [moved.left, moved.center.dx, moved.right];
-    final movingYs = [moved.top, moved.center.dy, moved.bottom];
-
-    for (final mx in movingXs) {
-      for (final tx in xTargets) {
-        final d = tx - mx;
-        if (d.abs() <= threshold &&
-            (bestDx == null || d.abs() < bestDx.abs())) {
-          bestDx = d;
-          guideX = tx;
-        }
-      }
-    }
-    for (final my in movingYs) {
-      for (final ty in yTargets) {
-        final d = ty - my;
-        if (d.abs() <= threshold &&
-            (bestDy == null || d.abs() < bestDy.abs())) {
-          bestDy = d;
-          guideY = ty;
-        }
-      }
-    }
-    _snapGuideX = guideX;
-    _snapGuideY = guideY;
-    return proposed + Offset(bestDx ?? 0, bestDy ?? 0);
+    final result = _ShapeSnapGeometry.calculate(
+      movingBounds: movingBounds,
+      proposed: proposed,
+      pageNumber: pageNumber,
+      moving: moving,
+      pageSize: _pdfPageSizes[pageNumber],
+      shapes: _shapeAnnotations,
+      zoomLevel: _zoomLevel,
+    );
+    _snapGuideX = result.guideX;
+    _snapGuideY = result.guideY;
+    return result.delta;
   }
 
   void _onShapeEditPointerMove(PointerMoveEvent event) {
@@ -978,6 +947,28 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
 
 
+
+  void _centerSelectedShapesOnPage({required bool horizontal}) {
+    if (_selectedShapes.isEmpty) return;
+    final pageNumber = _selectedShapes.first.pageNumber;
+    if (_selectedShapes.any((shape) => shape.pageNumber != pageNumber)) return;
+    final pageSize = _pdfPageSizes[pageNumber];
+    final bounds = _ShapeGeometry.selectionBounds(_selectedShapes);
+    if (pageSize == null || bounds == null) return;
+
+    final delta = horizontal
+        ? Offset(pageSize.width / 2 - bounds.center.dx, 0)
+        : Offset(0, pageSize.height / 2 - bounds.center.dy);
+    if (delta.distanceSquared == 0) return;
+
+    _pushUndoState();
+    setState(() {
+      for (final shape in _selectedShapes) {
+        _ShapeGeometry.translate(shape, delta);
+      }
+    });
+    _scheduleAutoSave();
+  }
 
   void _alignSelectedShapes(String mode) {
     if (_selectedShapes.length < 2) return;
@@ -2904,7 +2895,17 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       tooltip: 'حذف المجموعة',
                       onPressed: _deleteSelectedShapes,
                     ),
-                                     if (_selectedShapes.length >= 2) ...[
+                    IconButton(
+                      icon: const Icon(Icons.vertical_align_center_rounded),
+                      tooltip: 'توسيط المجموعة أفقيًا في الصفحة',
+                      onPressed: () => _centerSelectedShapesOnPage(horizontal: true),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.horizontal_rule_rounded),
+                      tooltip: 'توسيط المجموعة عموديًا في الصفحة',
+                      onPressed: () => _centerSelectedShapesOnPage(horizontal: false),
+                    ),
+                    if (_selectedShapes.length >= 2) ...[
                       IconButton(icon: const Icon(Icons.align_horizontal_left_rounded), tooltip: 'محاذاة لليسار', onPressed: () => _alignSelectedShapes('left')),
                       IconButton(icon: const Icon(Icons.align_horizontal_center_rounded), tooltip: 'توسيط أفقي', onPressed: () => _alignSelectedShapes('centerH')),
                       IconButton(icon: const Icon(Icons.align_horizontal_right_rounded), tooltip: 'محاذاة لليمين', onPressed: () => _alignSelectedShapes('right')),
