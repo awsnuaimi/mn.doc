@@ -28,6 +28,7 @@ part 'pdf_editor/models/shape_annotation.dart';
 part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
 part 'pdf_editor/controllers/editor_history.dart';
+part 'pdf_editor/controllers/selection_controller.dart';
 part 'pdf_editor/geometry/pdf_page_transform.dart';
 part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
@@ -923,70 +924,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     });
   }
 
-  void _selectAllShapesOnCurrentPage() {
-    final pageShapes = _shapeAnnotations
-        .where((shape) => shape.pageNumber == _currentPage)
-        .toList(growable: false);
-    setState(() {
-      _selectedShapes
-        ..clear()
-        ..addAll(pageShapes);
-      _selectedShape = pageShapes.isEmpty ? null : pageShapes.last;
-    });
-  }
 
-  void _invertShapeSelectionOnCurrentPage() {
-    final pageShapes = _shapeAnnotations
-        .where((shape) => shape.pageNumber == _currentPage)
-        .toList(growable: false);
-    final previouslySelected = _selectedShapes.toSet();
 
-    setState(() {
-      _selectedShapes
-        ..clear()
-        ..addAll(
-          pageShapes.where((shape) => !previouslySelected.contains(shape)),
-        );
-      _selectedShape =
-          _selectedShapes.isEmpty ? null : _selectedShapes.last;
-    });
-  }
 
-  void _clearShapeMultiSelection() {
-    if (_selectedShapes.isEmpty && _selectedShape == null) return;
-    setState(() {
-      _selectedShapes.clear();
-      _selectedShape = null;
-    });
-  }
 
-  void _toggleShapeInMultiSelection(_ShapeAnnotation shape) {
-    setState(() {
-      if (_selectedShapes.contains(shape)) {
-        _selectedShapes.remove(shape);
-      } else {
-        _selectedShapes.add(shape);
-      }
-      _selectedShape =
-          _selectedShapes.isEmpty ? null : _selectedShapes.last;
-    });
-  }
 
-  Rect? _selectedShapesBounds() {
-    if (_selectedShapes.isEmpty) return null;
-    double? left, top, right, bottom;
-    for (final shape in _selectedShapes) {
-      final l = shape.start.dx < shape.end.dx ? shape.start.dx : shape.end.dx;
-      final r = shape.start.dx > shape.end.dx ? shape.start.dx : shape.end.dx;
-      final tt = shape.start.dy < shape.end.dy ? shape.start.dy : shape.end.dy;
-      final b = shape.start.dy > shape.end.dy ? shape.start.dy : shape.end.dy;
-      left = left == null || l < left ? l : left;
-      right = right == null || r > right ? r : right;
-      top = top == null || tt < top ? tt : top;
-      bottom = bottom == null || b > bottom ? b : bottom;
-    }
-    return Rect.fromLTRB(left!, top!, right!, bottom!);
-  }
+
+
+
+
 
   Rect _shapeBounds(_ShapeAnnotation shape) =>
       Rect.fromPoints(shape.start, shape.end);
@@ -1135,6 +1081,68 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ..clear()
         ..addAll(duplicates);
       _selectedShape = duplicates.isEmpty ? null : duplicates.last;
+    });
+    _scheduleAutoSave();
+  }
+
+  void _bringSelectedShapesForward() {
+    if (_selectedShapes.isEmpty) return;
+    final selected = _selectedShapes.toSet();
+    var canMove = false;
+    for (var i = _shapeAnnotations.length - 2; i >= 0; i--) {
+      final current = _shapeAnnotations[i];
+      final next = _shapeAnnotations[i + 1];
+      if (selected.contains(current) &&
+          !selected.contains(next) &&
+          current.pageNumber == next.pageNumber) {
+        canMove = true;
+        break;
+      }
+    }
+    if (!canMove) return;
+    _pushUndoState();
+    setState(() {
+      for (var i = _shapeAnnotations.length - 2; i >= 0; i--) {
+        final current = _shapeAnnotations[i];
+        final next = _shapeAnnotations[i + 1];
+        if (selected.contains(current) &&
+            !selected.contains(next) &&
+            current.pageNumber == next.pageNumber) {
+          _shapeAnnotations[i] = next;
+          _shapeAnnotations[i + 1] = current;
+        }
+      }
+    });
+    _scheduleAutoSave();
+  }
+
+  void _sendSelectedShapesBackward() {
+    if (_selectedShapes.isEmpty) return;
+    final selected = _selectedShapes.toSet();
+    var canMove = false;
+    for (var i = 1; i < _shapeAnnotations.length; i++) {
+      final current = _shapeAnnotations[i];
+      final previous = _shapeAnnotations[i - 1];
+      if (selected.contains(current) &&
+          !selected.contains(previous) &&
+          current.pageNumber == previous.pageNumber) {
+        canMove = true;
+        break;
+      }
+    }
+    if (!canMove) return;
+    _pushUndoState();
+    setState(() {
+      for (var i = 1; i < _shapeAnnotations.length; i++) {
+        final current = _shapeAnnotations[i];
+        final previous = _shapeAnnotations[i - 1];
+        if (selected.contains(current) &&
+            !selected.contains(previous) &&
+            current.pageNumber == previous.pageNumber) {
+          _shapeAnnotations[i] = previous;
+          _shapeAnnotations[i - 1] = current;
+        }
+      }
     });
     _scheduleAutoSave();
   }
@@ -2731,6 +2739,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       icon: const Icon(Icons.control_point_duplicate_rounded),
                       tooltip: 'تكرار المجموعة',
                       onPressed: _duplicateSelectedShapes,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.flip_to_front_rounded),
+                      tooltip: 'إحضار المجموعة للأمام',
+                      onPressed: _bringSelectedShapesForward,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.flip_to_back_rounded),
+                      tooltip: 'إرسال المجموعة للخلف',
+                      onPressed: _sendSelectedShapesBackward,
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_sweep_outlined),
