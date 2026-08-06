@@ -27,7 +27,9 @@ part 'pdf_editor/models/image_annotation.dart';
 part 'pdf_editor/models/shape_annotation.dart';
 part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
-part 'pdf_editor/painters/pdf_editor_painters.dart';
+part 'pdf_editor/painters/snap_guide_painter.dart';
+part 'pdf_editor/painters/shape_painter.dart';
+part 'pdf_editor/painters/drawing_painter.dart';
 
 
 
@@ -3492,8 +3494,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 setState(() => _annotations.remove(ann));
                 _scheduleAutoSave();
               },
-         ovariant _PdfDrawingPainter oldDelegate) => true;
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+
+
+
+
+
 
 class _TextDialogResult {
   final String text;
