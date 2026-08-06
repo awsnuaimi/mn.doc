@@ -27,6 +27,7 @@ part 'pdf_editor/models/image_annotation.dart';
 part 'pdf_editor/models/shape_annotation.dart';
 part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
+part 'pdf_editor/geometry/pdf_page_transform.dart';
 part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
 part 'pdf_editor/painters/drawing_painter.dart';
@@ -34,17 +35,7 @@ part 'pdf_editor/painters/drawing_painter.dart';
 
 
 
-/// تحويل هندسي من إحداثيات صفحة PDF (points) إلى إحداثيات الـViewer (pixels).
-/// يُعاد حسابه/معايرته من ضغطة Syncfusion الحقيقية، ولا يدخل في بيانات النص.
-class _PdfPageTransform {
-  final double scale;
-  final Offset origin;
 
-  const _PdfPageTransform({required this.scale, required this.origin});
-
-  Offset pdfToViewer(Offset pdfPoint) => origin + pdfPoint * scale;
-  Offset viewerToPdf(Offset viewerPoint) => (viewerPoint - origin) / scale;
-}
 
 
 class _EditorHistory {
@@ -956,6 +947,26 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       if (_multiSelectMode && _selectedShape != null) {
         _selectedShapes.add(_selectedShape!);
       }
+    });
+  }
+
+  void _selectAllShapesOnCurrentPage() {
+    final pageShapes = _shapeAnnotations
+        .where((shape) => shape.pageNumber == _currentPage)
+        .toList(growable: false);
+    setState(() {
+      _selectedShapes
+        ..clear()
+        ..addAll(pageShapes);
+      _selectedShape = pageShapes.isEmpty ? null : pageShapes.last;
+    });
+  }
+
+  void _clearShapeMultiSelection() {
+    if (_selectedShapes.isEmpty && _selectedShape == null) return;
+    setState(() {
+      _selectedShapes.clear();
+      _selectedShape = null;
     });
   }
 
@@ -2696,6 +2707,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         onSelected: (_) => _toggleMultiSelectMode(),
                       ),
                     ),
+                  if (_shapeEditMode && _multiSelectMode) ...[
+                    IconButton(
+                      icon: const Icon(Icons.done_all_rounded),
+                      tooltip: 'تحديد كل أشكال الصفحة',
+                      onPressed: _selectAllShapesOnCurrentPage,
+                    ),
+                    if (_selectedShapes.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.deselect_rounded),
+                        tooltip: 'إلغاء التحديد',
+                        onPressed: _clearShapeMultiSelection,
+                      ),
+                  ],
                   if (_shapeEditMode && _multiSelectMode && _shapeClipboardGroup.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.content_paste_rounded),
