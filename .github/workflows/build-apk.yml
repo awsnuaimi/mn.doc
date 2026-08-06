@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK & AAB
 
 on:
   push:
@@ -6,41 +6,57 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch: {}
 
+# If a newer commit is pushed while an older build is still queued/running,
+# cancel the obsolete build instead of wasting a hosted runner.
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 45
 
-      - uses: actions/setup-java@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: 'gradle'
 
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
-      - name: تنظيف الملفات المؤقتة القديمة
-        run: flutter clean
+      - name: Flutter version
+        run: flutter --version
 
-      - name: تثبيت الاعتماديات
+      # Do not run `flutter clean` on every CI build:
+      # the GitHub runner starts clean, and removing caches makes builds slower.
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: توليد أيقونة التطبيق
-        run: flutter pub run flutter_launcher_icons
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
 
-      - name: فك تشفير مفتاح التوقيع (إن وُجد)
+      - name: Decode signing key (if configured)
+        shell: bash
         run: |
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/release.jks
-            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           fi
 
-      - name: بناء ملف APK
+      - name: Build release APK
         run: flutter build apk --release
         env:
           KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
@@ -48,7 +64,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: بناء ملف AAB (مطلوب لرفعه على Google Play)
+      - name: Build release AAB for Google Play
         run: flutter build appbundle --release
         env:
           KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
@@ -56,21 +72,23 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: رفع APK كملف تنزيل (Artifact)
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: MN-Doc-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: رفع AAB كملف تنزيل (Artifact) — هذا الملف تحديدًا يُرفع على Google Play
+      - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
           name: MN-Doc-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
 
-      # عند دفع "تاغ" إصدار مثل v1.0.1، ينشر APK كإصدار عام (Release) على GitHub
-      # يستطيع أي شخص تنزيله مباشرة — وهذا ما تستخدمه ميزة "التحقق من التحديثات".
-      - name: نشر إصدار عام (فقط عند دفع تاغ إصدار)
+      - name: Publish GitHub Release APK for version tags
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
