@@ -27,6 +27,7 @@ part 'pdf_editor/models/image_annotation.dart';
 part 'pdf_editor/models/shape_annotation.dart';
 part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
+part 'pdf_editor/controllers/editor_history.dart';
 part 'pdf_editor/geometry/pdf_page_transform.dart';
 part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
@@ -38,35 +39,7 @@ part 'pdf_editor/painters/drawing_painter.dart';
 
 
 
-class _EditorHistory {
-  final int limit;
-  final List<_EditorSnapshot> _undo = <_EditorSnapshot>[];
-  final List<_EditorSnapshot> _redo = <_EditorSnapshot>[];
 
-  _EditorHistory({this.limit = 20});
-
-  bool get canUndo => _undo.isNotEmpty;
-  bool get canRedo => _redo.isNotEmpty;
-
-  void record(_EditorSnapshot before) {
-    _undo.add(before);
-    _redo.clear();
-    if (_undo.length > limit) _undo.removeAt(0);
-  }
-
-  _EditorSnapshot? undo(_EditorSnapshot current) {
-    if (_undo.isEmpty) return null;
-    _redo.add(current);
-    return _undo.removeLast();
-  }
-
-  _EditorSnapshot? redo(_EditorSnapshot current) {
-    if (_redo.isEmpty) return null;
-    _undo.add(current);
-    if (_undo.length > limit) _undo.removeAt(0);
-    return _redo.removeLast();
-  }
-}
 
 
 class PdfEditorScreen extends StatefulWidget {
@@ -959,6 +932,23 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ..clear()
         ..addAll(pageShapes);
       _selectedShape = pageShapes.isEmpty ? null : pageShapes.last;
+    });
+  }
+
+  void _invertShapeSelectionOnCurrentPage() {
+    final pageShapes = _shapeAnnotations
+        .where((shape) => shape.pageNumber == _currentPage)
+        .toList(growable: false);
+    final previouslySelected = _selectedShapes.toSet();
+
+    setState(() {
+      _selectedShapes
+        ..clear()
+        ..addAll(
+          pageShapes.where((shape) => !previouslySelected.contains(shape)),
+        );
+      _selectedShape =
+          _selectedShapes.isEmpty ? null : _selectedShapes.last;
     });
   }
 
@@ -2712,6 +2702,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       icon: const Icon(Icons.done_all_rounded),
                       tooltip: 'تحديد كل أشكال الصفحة',
                       onPressed: _selectAllShapesOnCurrentPage,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.swap_horiz_rounded),
+                      tooltip: 'عكس تحديد أشكال الصفحة',
+                      onPressed: _invertShapeSelectionOnCurrentPage,
                     ),
                     if (_selectedShapes.isNotEmpty)
                       IconButton(
