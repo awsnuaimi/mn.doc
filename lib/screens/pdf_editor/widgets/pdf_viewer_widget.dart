@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
 class PdfViewerWidget extends StatelessWidget {
-  final Widget child;
+  final List<Widget> children;
 
   const PdfViewerWidget({
     super.key,
-    required this.child,
+    required this.children,
   });
 
   @override
   Widget build(BuildContext context) {
-    return child;
+    return Stack(
+      children: children,
+    );
   }
 }
