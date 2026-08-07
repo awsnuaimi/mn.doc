@@ -1,4 +1,3 @@
-import 'pdf_editor/widgets/annotation_toolbar.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:math' as math;
@@ -106,6 +105,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   int _autoSaveRetryCount = 0;
   static const int _maxAutoSaveRetries = 2;
   bool _disposed = false; // نمنع أي حفظ أو setState بعد التخلص من الشاشة
+  late final bool _fileExists; // يُفحص مرة واحدة عند فتح الشاشة — يحمي من انهيار البناء لو الملف المُختار (خصوصًا من مدير ملفات خارجي) غير موجود فعليًا على القرص
   String? _lastExportedPath; // آخر مسار تصدير ناجح — تستخدمه ميزات الذكاء الاصطناعي لقراءة أحدث نسخة
   bool _flattenFormsOnSave = false;
   bool _hasFormFields = false;
@@ -117,6 +117,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   void initState() {
     super.initState();
     editorState = EditorState();
+    // نتحقق من قابلية القراءة الفعلية وليس فقط من وجود الملف: بعض المسارات
+    // القادمة من مدير ملفات خارجي (عبر Storage Access Framework) قد تكون
+    // "موجودة" حسب stat لكن ترمي استثناء لحظة القراءة الفعلية (نسخ غير
+    // مكتمل، صلاحيات، أو مسار افتراضي لا يدعمه dart:io File).
+    try {
+      final file = File(widget.filePath);
+      _fileExists = file.existsSync() && file.lengthSync() > 0;
+    } catch (_) {
+      _fileExists = false;
+    }
   }
 
   _EditorSnapshot _captureEditorState() => _EditorSnapshot.capture(
@@ -2540,6 +2550,50 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final settings = context.watch<AppSettingsController>();
     final lang = settings.languageCode;
     String tr(String key) => AppText.t(key, lang);
+
+    // الملف اختير من مدير ملفات خارجي وقد يكون المسار المُعاد غير موجود
+    // فعليًا (مسار مؤقت لم يكتمل نسخه، أو رابط لا يدعمه dart:io File).
+    // بدون هذا الفحص، بناء SfPdfViewer.file على ملف غير موجود يرمي
+    // استثناءً أثناء الـ build فيلتقطه ErrorWidget.builder ويعرض شاشة
+    // "حدث خطأ غير متوقع" العامة بدل رسالة واضحة للمستخدم.
+    if (!_fileExists) {
+      return Directionality(
+        textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(widget.filePath.split('/').last, overflow: TextOverflow.ellipsis),
+          ),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded, size: 56, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    tr('ed_file_not_found'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    tr('ed_file_not_found_hint'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(tr('cancel')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Directionality(
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,

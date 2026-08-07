@@ -34,7 +34,7 @@ void main() {
       color: Colors.white,
       child: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -47,6 +47,40 @@ void main() {
                   'نعتذر عن الإزعاج. جرّب إعادة فتح التطبيق.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                // مخفي افتراضيًا حتى لا يخيف المستخدم العادي، لكنه يسمح
+                // بمعرفة الاستثناء الحقيقي (ونسخه) بدون الحاجة لبناء Debug
+                // أو أدوات مطورين، عند الحاجة لتشخيص خطأ متكرر.
+                // نستخدم Builder لأن ErrorWidget.builder لا يمرّر BuildContext
+                // مباشرة، وExpansionTile/Theme.of يحتاجانه.
+                Builder(
+                  builder: (context) => Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      title: const Text(
+                        'تفاصيل تقنية',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: SelectableText(
+                            '${details.exceptionAsString()}\n\n${details.stack}',
+                            textDirection: TextDirection.ltr,
+                            style: const TextStyle(fontSize: 11, color: Colors.black87),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

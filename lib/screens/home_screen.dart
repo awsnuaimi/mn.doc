@@ -76,6 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result == null || result.files.single.path == null) return;
 
     final file = File(result.files.single.path!);
+    if (!await file.exists()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذّر الوصول إلى الملف المحدد. جرّب اختياره مرة أخرى.')),
+      );
+      return;
+    }
     final item = await DocumentItem.fromFile(file);
 
     setState(() {
@@ -98,6 +105,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result == null || result.files.single.path == null) return;
 
     final file = File(result.files.single.path!);
+    if (!await file.exists()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذّر الوصول إلى الملف المحدد. جرّب اختياره مرة أخرى.')),
+      );
+      return;
+    }
     final item = await DocumentItem.fromFile(file);
 
     setState(() {

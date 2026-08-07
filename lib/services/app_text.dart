@@ -550,6 +550,18 @@ class AppText {
       'ar': 'حدث خطأ أثناء الحفظ:', 'en': 'An error occurred while saving:', 'de': 'Beim Speichern ist ein Fehler aufgetreten:',
       'fr': "Une erreur s'est produite lors de l'enregistrement :", 'tr': 'Kaydedilirken bir hata oluştu:', 'pl': 'Wystąpił błąd podczas zapisywania:',
     },
+    'ed_file_not_found': {
+      'ar': 'تعذّر العثور على الملف', 'en': 'File not found', 'de': 'Datei nicht gefunden',
+      'fr': 'Fichier introuvable', 'tr': 'Dosya bulunamadı', 'pl': 'Nie znaleziono pliku',
+    },
+    'ed_file_not_found_hint': {
+      'ar': 'قد يكون الملف قد نُقل أو حُذف، أو أن مدير الملفات لم يمنح التطبيق وصولًا صحيحًا إليه. جرّب اختياره مرة أخرى.',
+      'en': 'The file may have been moved or deleted, or the file manager did not grant proper access to it. Try selecting it again.',
+      'de': 'Die Datei wurde möglicherweise verschoben oder gelöscht, oder der Dateimanager hat keinen ordnungsgemäßen Zugriff gewährt. Versuchen Sie es erneut.',
+      'fr': "Le fichier a peut-être été déplacé ou supprimé, ou le gestionnaire de fichiers n'a pas accordé un accès correct. Réessayez de le sélectionner.",
+      'tr': 'Dosya taşınmış veya silinmiş olabilir ya da dosya yöneticisi ona düzgün erişim vermemiş olabilir. Yeniden seçmeyi deneyin.',
+      'pl': 'Plik mógł zostać przeniesiony lub usunięty, albo menedżer plików nie udzielił mu prawidłowego dostępu. Spróbuj wybrać go ponownie.',
+    },
 
     // ---------------- عناصر مشتركة ----------------
     'camera': {
