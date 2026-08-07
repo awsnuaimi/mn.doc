@@ -205,7 +205,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   static const Duration _moveHoldDuration = Duration(seconds: 3);
 
   // ------- البحث داخل PDF (مع Debounce) -------
-  bool _searchVisible = false;
   final TextEditingController _searchController = TextEditingController();
   PdfTextSearchResult _searchResult = PdfTextSearchResult();
   Timer? _searchDebounce;
@@ -248,8 +247,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _searchDebounce?.cancel();
     _searchResult.removeListener(_onSearchResultChanged);
     _searchResult.clear();
+    editorState.searchVisible = false;
+    editorState.notifyListeners();
+
     setState(() {
-      _searchVisible = false;
       _searchController.clear();
     });
   }
@@ -2526,6 +2527,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   Widget build(BuildContext context) {
+    final editor = context.watch<EditorState>();
+
     final hasSearchResult = _searchResult.hasResult;
     final settings = context.watch<AppSettingsController>();
     final lang = settings.languageCode;
@@ -2609,7 +2612,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           IconButton(
             icon: const Icon(Icons.search_rounded),
             tooltip: tr('ed_search_tooltip'),
-            onPressed: () => setState(() => _searchVisible = !_searchVisible),
+            onPressed: editor.toggleSearch,
           ),
           IconButton(
             icon: const Icon(Icons.bookmark_border_rounded),
@@ -2665,7 +2668,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       ),
       body: Column(
         children: [
-          if (_searchVisible)
+          if (editor.searchVisible)
             Container(
               color: AppColors.primaryDark.withOpacity(0.06),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
