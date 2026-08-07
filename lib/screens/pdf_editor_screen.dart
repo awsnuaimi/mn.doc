@@ -25,6 +25,7 @@ import 'pdf_editor/controllers/editor_state.dart';
 import 'pdf_editor/widgets/editor_toolbar.dart';
 import 'pdf_editor/widgets/floating_toolbar.dart';
 import 'pdf_editor/widgets/top_toolbar.dart';
+import 'pdf_editor/widgets/pdf_viewer_widget.dart';
 
 part 'pdf_editor/models/text_annotation.dart';
 part 'pdf_editor/models/image_annotation.dart';
