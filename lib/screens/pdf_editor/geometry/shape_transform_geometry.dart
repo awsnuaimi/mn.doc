@@ -1,6 +1,5 @@
 part of '../../pdf_editor_screen.dart';
 
-import 'dart:math' as math;
 
 abstract final class _ShapeTransformGeometry {
   const _ShapeTransformGeometry._();
