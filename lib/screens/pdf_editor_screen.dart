@@ -32,6 +32,7 @@ part 'pdf_editor/geometry/pdf_page_transform.dart';
 part 'pdf_editor/geometry/shape_geometry.dart';
 part 'pdf_editor/geometry/shape_snap_geometry.dart';
 part 'pdf_editor/geometry/shape_layout_geometry.dart';
+part 'pdf_editor/geometry/shape_transform_geometry.dart';
 part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
 part 'pdf_editor/painters/drawing_painter.dart';
