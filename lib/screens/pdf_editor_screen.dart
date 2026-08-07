@@ -3141,207 +3141,209 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               ),
             ),
           Expanded(
-            child: Stack(
-              key: _viewerKey,
-              children: [
-                SfPdfViewer.file(
-                  File(widget.filePath),
-                  key: _pdfViewerStateKey,
-                  controller: _controller,
-                  // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
-                  pageLayoutMode: PdfPageLayoutMode.single,
-                  onPageChanged: (details) {
-                    if (!mounted) return;
-                    editor.setCurrentPage(details.newPageNumber);
-                  },
-                  onZoomLevelChanged: (details) {
-                    if (!mounted) return;
-                    editor.setZoom(details.newZoomLevel);
-                    setState(() {
-                      // أي تغيير Zoom يغيّر إسقاط الصفحة على الشاشة، لذلك
-                      // نبطل أي معايرة قديمة. fallback يعيد حساب Scale/Origin
-                      // من zoomLevel + scrollOffset حتى أثناء التكبير.
-                      _pageTransforms.clear();
-                    });
-                  },
-                  onDocumentLoaded: _onDocumentLoaded,
-                  onTap: _handlePdfTap,
-                  // تعليقات Syncfusion المدمجة (تظليل/تسطير/شطب/ملاحظة لاصقة)
-                  // وتعبئة حقول النماذج لا تمر بكودنا الخاص إطلاقًا — بدون
-                  // هذه الاستدعاءات، أي تعديل منها ما كان رح يُحفَظ تلقائيًا.
-                  onAnnotationAdded: (_) => _scheduleAutoSave(),
-                  onAnnotationEdited: (_) => _scheduleAutoSave(),
-                  onAnnotationRemoved: (_) => _scheduleAutoSave(),
-                  onFormFieldValueChanged: (_) => _scheduleAutoSave(),
-                ),
-                // طبقة عرض النصوص المضافة على الصفحة الحالية فقط
-                ..._annotations
-                    .where((a) => a.pageNumber == editor.currentPage)
-                    .map((ann) => _buildAnnotationOverlay(ann)),
-                ..._imageAnnotations
-                    .where((a) => a.pageNumber == editor.currentPage)
-                    .map((ann) => _buildImageOverlay(ann)),
-                if ((_snapGuideX != null || _snapGuideY != null) &&
-                    (_pageTransforms[editor.currentPage] ??
-                            _fallbackPageTransform(editor.currentPage)) !=
-                        null)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: CustomPaint(
-                        painter: _PdfSnapGuidePainter(
-                          guideX: _snapGuideX,
-                          guideY: _snapGuideY,
-                          transform: (_pageTransforms[editor.currentPage] ??
-                              _fallbackPageTransform(editor.currentPage))!,
-                        ),
-                      ),
-                    ),
-                  ),
-                ..._shapeAnnotations
-                    .where((s) => s.pageNumber == editor.currentPage)
-                    .map((shape) {
-                  final transform = _pageTransforms[shape.pageNumber] ??
-                      _fallbackPageTransform(shape.pageNumber);
-                  if (transform == null) return const SizedBox.shrink();
-                  return Positioned.fill(
-                    child: IgnorePointer(
-                      child: CustomPaint(
-                        painter: _PdfShapePainter(
-                          shape: shape,
-                          transform: transform,
-                          selected: identical(shape, _selectedShape) || _selectedShapes.contains(shape),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-                ..._drawingStrokes
-                    .where((s) => s.pageNumber == editor.currentPage)
-                    .map((stroke) {
-                  final transform = _pageTransforms[stroke.pageNumber] ??
-                      _fallbackPageTransform(stroke.pageNumber);
-                  if (transform == null) return const SizedBox.shrink();
-                  return Positioned.fill(
-                    child: IgnorePointer(
-                      child: CustomPaint(
-                        painter: _PdfDrawingPainter(
-                          stroke: stroke,
-                          transform: transform,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-                if (editorState.drawMode || editorState.eraserMode || _shapeMode != null || editorState.shapeEditMode)
-                  Positioned.fill(
-                    child: Listener(
-                      behavior: HitTestBehavior.opaque,
-                      onPointerDown: (event) {
-                        if (editorState.shapeEditMode) {
-                          _onShapeEditPointerDown(event);
-                        } else if (_shapeMode != null) {
-                          _onShapePointerDown(event);
-                        } else if (editorState.drawMode) {
-                          _onDrawPointerDown(event);
-                        } else {
-                          _onEraserPointerDown(event);
-                        }
-                      },
-                      onPointerMove: (event) {
-                        if (editorState.shapeEditMode) {
-                          _onShapeEditPointerMove(event);
-                        } else if (_shapeMode != null) {
-                          _onShapePointerMove(event);
-                        } else if (editorState.drawMode) {
-                          _onDrawPointerMove(event);
-                        } else {
-                          _onEraserPointerMove(event);
-                        }
-                      },
-                      onPointerUp: (_) {
-                        if (editorState.shapeEditMode) {
-                          _finishShapeEditGesture();
-                        } else if (_shapeMode != null) {
-                          _finishShapeGesture();
-                        } else if (editorState.drawMode) {
-                          _finishDrawingStroke();
-                        } else {
-                          _finishEraserGesture();
-                        }
-                      },
-                      onPointerCancel: (_) {
-                        if (editorState.shapeEditMode) {
-                          _finishShapeEditGesture();
-                        } else if (_shapeMode != null) {
-                          _finishShapeGesture();
-                        } else if (editorState.drawMode) {
-                          _finishDrawingStroke();
-                        } else {
-                          _finishEraserGesture();
-                        }
-                      },
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
-                if (_showFloatingToolbar && _toolbarPosition != null)
-                  FloatingToolbar(
-                    position: _toolbarPosition!,
-                    onEdit: () {
-                      if (_selectedAnnotation == null) return;
-
-                      setState(() {
-                        _showFloatingToolbar = false;
-                      });
-
-                      _editAnnotation(_selectedAnnotation!);
+            child: PdfViewerWidget(
+              child: Stack(
+                key: _viewerKey,
+                children: [
+                  SfPdfViewer.file(
+                    File(widget.filePath),
+                    key: _pdfViewerStateKey,
+                    controller: _controller,
+                    // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
+                    pageLayoutMode: PdfPageLayoutMode.single,
+                    onPageChanged: (details) {
+                      if (!mounted) return;
+                      editor.setCurrentPage(details.newPageNumber);
                     },
-                    onCopy: () {},
-                    onDelete: () {
-                      if (_selectedAnnotation == null) return;
-
-                      _pushUndoState();
-
+                    onZoomLevelChanged: (details) {
+                      if (!mounted) return;
+                      editor.setZoom(details.newZoomLevel);
                       setState(() {
-                        _annotations.remove(_selectedAnnotation);
-                        _selectedAnnotation = null;
-                        _showFloatingToolbar = false;
+                        // أي تغيير Zoom يغيّر إسقاط الصفحة على الشاشة، لذلك
+                        // نبطل أي معايرة قديمة. fallback يعيد حساب Scale/Origin
+                        // من zoomLevel + scrollOffset حتى أثناء التكبير.
+                        _pageTransforms.clear();
                       });
-
-                      _scheduleAutoSave();
                     },
-                    onColor: () {},
-                    onFont: () {},
+                    onDocumentLoaded: _onDocumentLoaded,
+                    onTap: _handlePdfTap,
+                    // تعليقات Syncfusion المدمجة (تظليل/تسطير/شطب/ملاحظة لاصقة)
+                    // وتعبئة حقول النماذج لا تمر بكودنا الخاص إطلاقًا — بدون
+                    // هذه الاستدعاءات، أي تعديل منها ما كان رح يُحفَظ تلقائيًا.
+                    onAnnotationAdded: (_) => _scheduleAutoSave(),
+                    onAnnotationEdited: (_) => _scheduleAutoSave(),
+                    onAnnotationRemoved: (_) => _scheduleAutoSave(),
+                    onFormFieldValueChanged: (_) => _scheduleAutoSave(),
                   ),
-                // أزرار التكبير/التصغير العائمة
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: Column(
-                    children: [
-                      FloatingActionButton.small(
-                        heroTag: 'zoom_in',
-                        onPressed: _zoomIn,
-                        backgroundColor: AppColors.primaryDark,
-                        child: const Icon(Icons.add_rounded, color: Colors.white),
+                  // طبقة عرض النصوص المضافة على الصفحة الحالية فقط
+                  ..._annotations
+                      .where((a) => a.pageNumber == editor.currentPage)
+                      .map((ann) => _buildAnnotationOverlay(ann)),
+                  ..._imageAnnotations
+                      .where((a) => a.pageNumber == editor.currentPage)
+                      .map((ann) => _buildImageOverlay(ann)),
+                  if ((_snapGuideX != null || _snapGuideY != null) &&
+                      (_pageTransforms[editor.currentPage] ??
+                              _fallbackPageTransform(editor.currentPage)) !=
+                          null)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _PdfSnapGuidePainter(
+                            guideX: _snapGuideX,
+                            guideY: _snapGuideY,
+                            transform: (_pageTransforms[editor.currentPage] ??
+                                _fallbackPageTransform(editor.currentPage))!,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      FloatingActionButton.small(
-                        heroTag: 'zoom_out',
-                        onPressed: _zoomOut,
-                        backgroundColor: AppColors.primaryDark,
-                        child: const Icon(Icons.remove_rounded, color: Colors.white),
+                    ),
+                  ..._shapeAnnotations
+                      .where((s) => s.pageNumber == editor.currentPage)
+                      .map((shape) {
+                    final transform = _pageTransforms[shape.pageNumber] ??
+                        _fallbackPageTransform(shape.pageNumber);
+                    if (transform == null) return const SizedBox.shrink();
+                    return Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _PdfShapePainter(
+                            shape: shape,
+                            transform: transform,
+                            selected: identical(shape, _selectedShape) || _selectedShapes.contains(shape),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      FloatingActionButton.small(
-                        heroTag: 'zoom_reset',
-                        onPressed: _resetZoom,
-                        backgroundColor: AppColors.textMuted,
-                        child: const Icon(Icons.center_focus_strong_rounded, color: Colors.white),
+                    );
+                  }),
+                  ..._drawingStrokes
+                      .where((s) => s.pageNumber == editor.currentPage)
+                      .map((stroke) {
+                    final transform = _pageTransforms[stroke.pageNumber] ??
+                        _fallbackPageTransform(stroke.pageNumber);
+                    if (transform == null) return const SizedBox.shrink();
+                    return Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _PdfDrawingPainter(
+                            stroke: stroke,
+                            transform: transform,
+                          ),
+                        ),
                       ),
-                    ],
+                    );
+                  }),
+                  if (editorState.drawMode || editorState.eraserMode || _shapeMode != null || editorState.shapeEditMode)
+                    Positioned.fill(
+                      child: Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: (event) {
+                          if (editorState.shapeEditMode) {
+                            _onShapeEditPointerDown(event);
+                          } else if (_shapeMode != null) {
+                            _onShapePointerDown(event);
+                          } else if (editorState.drawMode) {
+                            _onDrawPointerDown(event);
+                          } else {
+                            _onEraserPointerDown(event);
+                          }
+                        },
+                        onPointerMove: (event) {
+                          if (editorState.shapeEditMode) {
+                            _onShapeEditPointerMove(event);
+                          } else if (_shapeMode != null) {
+                            _onShapePointerMove(event);
+                          } else if (editorState.drawMode) {
+                            _onDrawPointerMove(event);
+                          } else {
+                            _onEraserPointerMove(event);
+                          }
+                        },
+                        onPointerUp: (_) {
+                          if (editorState.shapeEditMode) {
+                            _finishShapeEditGesture();
+                          } else if (_shapeMode != null) {
+                            _finishShapeGesture();
+                          } else if (editorState.drawMode) {
+                            _finishDrawingStroke();
+                          } else {
+                            _finishEraserGesture();
+                          }
+                        },
+                        onPointerCancel: (_) {
+                          if (editorState.shapeEditMode) {
+                            _finishShapeEditGesture();
+                          } else if (_shapeMode != null) {
+                            _finishShapeGesture();
+                          } else if (editorState.drawMode) {
+                            _finishDrawingStroke();
+                          } else {
+                            _finishEraserGesture();
+                          }
+                        },
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  if (_showFloatingToolbar && _toolbarPosition != null)
+                    FloatingToolbar(
+                      position: _toolbarPosition!,
+                      onEdit: () {
+                        if (_selectedAnnotation == null) return;
+
+                        setState(() {
+                          _showFloatingToolbar = false;
+                        });
+
+                        _editAnnotation(_selectedAnnotation!);
+                      },
+                      onCopy: () {},
+                      onDelete: () {
+                        if (_selectedAnnotation == null) return;
+
+                        _pushUndoState();
+
+                        setState(() {
+                          _annotations.remove(_selectedAnnotation);
+                          _selectedAnnotation = null;
+                          _showFloatingToolbar = false;
+                        });
+
+                        _scheduleAutoSave();
+                      },
+                      onColor: () {},
+                      onFont: () {},
+                    ),
+                  // أزرار التكبير/التصغير العائمة
+                  Positioned(
+                    bottom: 16,
+                    right: 16,
+                    child: Column(
+                      children: [
+                        FloatingActionButton.small(
+                          heroTag: 'zoom_in',
+                          onPressed: _zoomIn,
+                          backgroundColor: AppColors.primaryDark,
+                          child: const Icon(Icons.add_rounded, color: Colors.white),
+                        ),
+                        const SizedBox(height: 8),
+                        FloatingActionButton.small(
+                          heroTag: 'zoom_out',
+                          onPressed: _zoomOut,
+                          backgroundColor: AppColors.primaryDark,
+                          child: const Icon(Icons.remove_rounded, color: Colors.white),
+                        ),
+                        const SizedBox(height: 8),
+                        FloatingActionButton.small(
+                          heroTag: 'zoom_reset',
+                          onPressed: _resetZoom,
+                          backgroundColor: AppColors.textMuted,
+                          child: const Icon(Icons.center_focus_strong_rounded, color: Colors.white),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
