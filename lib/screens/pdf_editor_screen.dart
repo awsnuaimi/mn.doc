@@ -2544,6 +2544,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   Widget build(BuildContext context) {
+    // EditorState لم يكن مُقدَّمًا (Provided) لأي مكان بالشجرة من قبل —
+    // context.watch<EditorState>() يحتاج Provider أب فعلي، لا يكفي أن
+    // يكون editorState مجرد حقل عادي بالـState. نلفّ هون بـ
+    // ChangeNotifierProvider.value ثم نستخدم Builder للحصول على
+    // BuildContext جديد تحت الـProvider مباشرة (سياق الدالة الأصلي
+    // "context" هو الأب، ولا يصلح للبحث عن Provider نُدرجه بنفس الشجرة).
+    return ChangeNotifierProvider<EditorState>.value(
+      value: editorState,
+      child: Builder(
+        builder: (context) {
     final editor = context.watch<EditorState>();
 
     final hasSearchResult = _searchResult.hasResult;
@@ -3355,6 +3365,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         ],
       ),
       ),
+      ),
+    );
+        },
       ),
     );
   }
