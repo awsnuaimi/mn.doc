@@ -42,15 +42,6 @@ part 'pdf_editor/painters/snap_guide_painter.dart';
 part 'pdf_editor/painters/shape_painter.dart';
 part 'pdf_editor/painters/drawing_painter.dart';
 
-
-
-
-
-
-
-
-
-
 class PdfEditorScreen extends StatefulWidget {
   final String filePath;
   const PdfEditorScreen({super.key, required this.filePath});
@@ -70,7 +61,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   _DrawingStroke? _activeDrawingStroke;
   _ShapeAnnotation? _activeShape;
   _ShapeKind? _shapeMode;
-  bool _shapeEditMode = false;
   _ShapeAnnotation? _selectedShape;
   _ShapeAnnotation? _shapeClipboard;
   final List<_ShapeAnnotation> _selectedShapes = [];
@@ -81,13 +71,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   String? _shapeDragPart; // body | start | end
   Offset? _shapeDragLastPdf;
   bool _shapeEditGestureChanged = false;
-  bool _drawMode = false;
-  bool _eraserMode = false;
   bool _eraserGestureChanged = false;
   Color _drawColor = Colors.red;
   double _drawThickness = 2.5;
   Uint8List? _pendingImageBytes;
-  bool _addImageMode = false;
 
   // حركة الصورة تُعامل كعملية واحدة في Undo/Redo مهما كان عدد أحداث السحب.
   // لا نسجل لقطة عند مجرد لمس الصورة، بل فقط بعد أول حركة فعلية.
@@ -101,7 +88,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final Map<int, Size> _pdfPageSizes = <int, Size>{};
   final Map<int, _PdfPageTransform> _pageTransforms = <int, _PdfPageTransform>{};
 
-  bool _addTextMode = false;
   Timer? _autoSaveDebounce; // يجمّع عدة تعديلات متتالية سريعة بعملية تصدير واحدة بدل تصدير كامل لكل تعديل
   Future<void>? _saveQueue; // طابور تسلسلي واحد لكل عمليات الحفظ (يدوي + تلقائي) لمنع تعارضهم على نفس الملف
   int _autoSaveRetryCount = 0;
@@ -275,7 +261,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       _selectedAnnotation = null;
     });
 
-    if (!_addTextMode && !_addImageMode) return;
+    if (!editorState.addTextMode && !editorState.addImageMode) return;
 
     // pagePosition: الموضع الحقيقي بنقاط PDF (دقيق، يُستخدم للحفظ).
     // position: الموضع بكسلات عنصر العرض (تقريبي، للمعاينة الحيّة فقط).
@@ -284,7 +270,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
     // لو الضغطة وقعت خارج حدود الصفحة فعليًا (بالهوامش الفاضية حول
     // الصفحة مثلًا)، Syncfusion بترجع pageNumber = -1 وإحداثيات سالبة —
-    // نرفضها صراحة بدل ما نضيف/ننقل نص بمكان غير منطقي.
+    // نرفضها صريحة بدل ما نضيف/ننقل نص بمكان غير منطقي.
     if (pageNumber < 1 || pagePoint.dx < 0 || pagePoint.dy < 0) return;
 
     // نعاير تحويل الصفحة من الضغطة نفسها: Syncfusion يعطينا في الحدث ذاته
@@ -297,7 +283,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       viewerPoint: details.position,
     );
 
-    if (_addImageMode && _pendingImageBytes != null) {
+    if (editorState.addImageMode && _pendingImageBytes != null) {
       final pageSize = _pdfPageSizes[pageNumber];
       if (pageSize == null) return;
       const defaultWidth = 140.0;
@@ -311,7 +297,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           width: defaultWidth, height: defaultHeight, bytes: Uint8List.fromList(_pendingImageBytes!),
         ));
         _pendingImageBytes = null;
-        _addImageMode = false;
+        editorState.addImageMode = false;
       });
       _scheduleAutoSave();
       return;
@@ -332,13 +318,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _toggleDrawMode() {
     setState(() {
-      _drawMode = !_drawMode;
-      _eraserMode = false;
+      editorState.drawMode = !editorState.drawMode;
+      editorState.eraserMode = false;
       _shapeMode = null;
-      _shapeEditMode = false;
+      editorState.shapeEditMode = false;
       _selectedShape = null;
-      _addTextMode = false;
-      _addImageMode = false;
+      editorState.addTextMode = false;
+      editorState.addImageMode = false;
       _pendingImageBytes = null;
       _controller.annotationMode = PdfAnnotationMode.none;
     });
@@ -346,14 +332,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _toggleEraserMode() {
     setState(() {
-      _eraserMode = !_eraserMode;
-      _drawMode = false;
+      editorState.eraserMode = !editorState.eraserMode;
+      editorState.drawMode = false;
       _shapeMode = null;
-      _shapeEditMode = false;
+      editorState.shapeEditMode = false;
       _selectedShape = null;
       _activeDrawingStroke = null;
-      _addTextMode = false;
-      _addImageMode = false;
+      editorState.addTextMode = false;
+      editorState.addImageMode = false;
       _pendingImageBytes = null;
       _controller.annotationMode = PdfAnnotationMode.none;
     });
@@ -413,7 +399,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _eraseAt(PointerEvent event) {
-    if (!_eraserMode) return;
+    if (!editorState.eraserMode) return;
     final pdfPoint = _eventToPdfPoint(event, editorState.currentPage);
     if (pdfPoint == null) return;
 
@@ -451,19 +437,19 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _toggleShapeEditMode() {
     setState(() {
-      _shapeEditMode = !_shapeEditMode;
+      editorState.shapeEditMode = !editorState.shapeEditMode;
       _selectedShape = null;
       _selectedShapes.clear();
       _multiSelectMode = false;
       _shapeDragPart = null;
       _shapeDragLastPdf = null;
       _shapeMode = null;
-      _drawMode = false;
-      _eraserMode = false;
+      editorState.drawMode = false;
+      editorState.eraserMode = false;
       _activeDrawingStroke = null;
       _activeShape = null;
-      _addTextMode = false;
-      _addImageMode = false;
+      editorState.addTextMode = false;
+      editorState.addImageMode = false;
       _pendingImageBytes = null;
       _controller.annotationMode = PdfAnnotationMode.none;
     });
@@ -973,12 +959,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     });
   }
 
-
-
-
-
-
-
   void _centerSelectedShapesOnPage({required bool horizontal}) {
     if (_selectedShapes.isEmpty) return;
     final pageNumber = _selectedShapes.first.pageNumber;
@@ -1342,10 +1322,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     setState(() {
       _shapeAnnotations.add(pasted);
       _selectedShape = pasted;
-      _shapeEditMode = true;
+      editorState.shapeEditMode = true;
       _shapeMode = null;
-      _drawMode = false;
-      _eraserMode = false;
+      editorState.drawMode = false;
+      editorState.eraserMode = false;
     });
     _scheduleAutoSave();
   }
@@ -1422,14 +1402,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   void _toggleShapeMode(_ShapeKind kind) {
     setState(() {
       _shapeMode = _shapeMode == kind ? null : kind;
-      _shapeEditMode = false;
+      editorState.shapeEditMode = false;
       _selectedShape = null;
-      _drawMode = false;
-      _eraserMode = false;
+      editorState.drawMode = false;
+      editorState.eraserMode = false;
       _activeDrawingStroke = null;
       _activeShape = null;
-      _addTextMode = false;
-      _addImageMode = false;
+      editorState.addTextMode = false;
+      editorState.addImageMode = false;
       _pendingImageBytes = null;
       _controller.annotationMode = PdfAnnotationMode.none;
     });
@@ -1474,7 +1454,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _onDrawPointerDown(PointerDownEvent event) {
-    if (!_drawMode) return;
+    if (!editorState.drawMode) return;
     final transform =
         _pageTransforms[editorState.currentPage] ?? _fallbackPageTransform(editorState.currentPage);
     final pageSize = _pdfPageSizes[editorState.currentPage];
@@ -1505,7 +1485,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _onDrawPointerMove(PointerMoveEvent event) {
     final stroke = _activeDrawingStroke;
-    if (!_drawMode || stroke == null) return;
+    if (!editorState.drawMode || stroke == null) return;
     final transform =
         _pageTransforms[stroke.pageNumber] ?? _fallbackPageTransform(stroke.pageNumber);
     final pageSize = _pdfPageSizes[stroke.pageNumber];
@@ -1630,9 +1610,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     if (!mounted) return;
     setState(() {
       _pendingImageBytes = bytes;
-      _addImageMode = true;
-      _addTextMode = false;
-      _drawMode = false;
+      editorState.addImageMode = true;
+      editorState.addTextMode = false;
+      editorState.drawMode = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اضغط على المكان المطلوب داخل الصفحة لإضافة الصورة')));
   }
@@ -2698,12 +2678,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             onPressed: editor.saving ? null : _openPageManager,
           ),
           IconButton(
-            icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
+            icon: Icon(editorState.addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
             tooltip: tr('ed_addtext_tooltip'),
-            onPressed: () => setState(() { _addTextMode = !_addTextMode; if (_addTextMode) { _addImageMode = false; _pendingImageBytes = null; } }),
+            onPressed: () => setState(() { editorState.addTextMode = !editorState.addTextMode; if (editorState.addTextMode) { editorState.addImageMode = false; _pendingImageBytes = null; } }),
           ),
           IconButton(
-            icon: Icon(_addImageMode ? Icons.image_rounded : Icons.add_photo_alternate_outlined),
+            icon: Icon(editorState.addImageMode ? Icons.image_rounded : Icons.add_photo_alternate_outlined),
             tooltip: 'إضافة صورة إلى PDF',
             onPressed: _pickImageForPdf,
           ),
@@ -2812,13 +2792,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       avatar: Icon(
                         Icons.draw_rounded,
                         size: 18,
-                        color: _drawMode ? Colors.white : AppColors.primaryDark,
+                        color: editorState.drawMode ? Colors.white : AppColors.primaryDark,
                       ),
                       label: const Text('قلم'),
-                      selected: _drawMode,
+                      selected: editorState.drawMode,
                       selectedColor: AppColors.primaryDark,
                       labelStyle: TextStyle(
-                        color: _drawMode
+                        color: editorState.drawMode
                             ? Colors.white
                             : (Theme.of(context).brightness == Brightness.dark
                                 ? Colors.white70
@@ -2834,15 +2814,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       avatar: Icon(
                         Icons.auto_fix_off_rounded,
                         size: 18,
-                        color: _eraserMode
+                        color: editorState.eraserMode
                             ? Colors.white
                             : AppColors.primaryDark,
                       ),
                       label: const Text('ممحاة'),
-                      selected: _eraserMode,
+                      selected: editorState.eraserMode,
                       selectedColor: AppColors.primaryDark,
                       labelStyle: TextStyle(
-                        color: _eraserMode
+                        color: editorState.eraserMode
                             ? Colors.white
                             : (Theme.of(context).brightness == Brightness.dark
                                 ? Colors.white70
@@ -2858,15 +2838,15 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       avatar: Icon(
                         Icons.open_with_rounded,
                         size: 18,
-                        color: _shapeEditMode
+                        color: editorState.shapeEditMode
                             ? Colors.white
                             : AppColors.primaryDark,
                       ),
                       label: const Text('تعديل'),
-                      selected: _shapeEditMode,
+                      selected: editorState.shapeEditMode,
                       selectedColor: AppColors.primaryDark,
                       labelStyle: TextStyle(
-                        color: _shapeEditMode
+                        color: editorState.shapeEditMode
                             ? Colors.white
                             : (Theme.of(context).brightness == Brightness.dark
                                 ? Colors.white70
@@ -2876,13 +2856,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       onSelected: (_) => _toggleShapeEditMode(),
                     ),
                   ),
-                  if (_shapeEditMode && !_multiSelectMode && _shapeClipboard != null)
+                  if (editorState.shapeEditMode && !_multiSelectMode && _shapeClipboard != null)
                     IconButton(
                       icon: const Icon(Icons.content_paste_rounded),
                       tooltip: 'لصق الشكل',
                       onPressed: _pasteShape,
                     ),
-                  if (_shapeEditMode && !_multiSelectMode && _selectedShape != null) ...[
+                  if (editorState.shapeEditMode && !_multiSelectMode && _selectedShape != null) ...[
                     IconButton(icon: const Icon(Icons.copy_rounded), tooltip: 'نسخ الشكل', onPressed: _copySelectedShape),
                     IconButton(icon: const Icon(Icons.control_point_duplicate_rounded), tooltip: 'تكرار الشكل', onPressed: _duplicateSelectedShape),
                     IconButton(icon: const Icon(Icons.flip_to_front_rounded), tooltip: 'إحضار للأمام', onPressed: _bringSelectedShapeForward),
@@ -2890,7 +2870,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     IconButton(icon: const Icon(Icons.palette_outlined), tooltip: 'خصائص الشكل', onPressed: _editSelectedShapeProperties),
                     IconButton(icon: const Icon(Icons.delete_outline_rounded), tooltip: 'حذف الشكل المحدد', onPressed: _deleteSelectedShape),
                   ],
-                  if (_shapeEditMode)
+                  if (editorState.shapeEditMode)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: ChoiceChip(
@@ -2907,7 +2887,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         onSelected: (_) => _toggleMultiSelectMode(),
                       ),
                     ),
-                  if (_shapeEditMode && _multiSelectMode) ...[
+                  if (editorState.shapeEditMode && _multiSelectMode) ...[
                     IconButton(
                       icon: const Icon(Icons.done_all_rounded),
                       tooltip: 'تحديد كل أشكال الصفحة',
@@ -2925,13 +2905,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         onPressed: _clearShapeMultiSelection,
                       ),
                   ],
-                  if (_shapeEditMode && _multiSelectMode && _shapeClipboardGroup.isNotEmpty)
+                  if (editorState.shapeEditMode && _multiSelectMode && _shapeClipboardGroup.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.content_paste_rounded),
                       tooltip: 'لصق المجموعة',
                       onPressed: _pasteShapeGroup,
                     ),
-                  if (_shapeEditMode && _multiSelectMode && _selectedShapes.isNotEmpty) ...[
+                  if (editorState.shapeEditMode && _multiSelectMode && _selectedShapes.isNotEmpty) ...[
                     IconButton(
                       icon: const Icon(Icons.copy_all_rounded),
                       tooltip: 'نسخ المجموعة',
@@ -3041,7 +3021,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ],
               ),
             ),
-          if (_shapeEditMode)
+          if (editorState.shapeEditMode)
             Container(
               width: double.infinity,
               color: Colors.blue.withOpacity(0.08),
@@ -3081,7 +3061,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ],
               ),
             ),
-          if (_eraserMode)
+          if (editorState.eraserMode)
             Container(
               width: double.infinity,
               color: Colors.orange.withOpacity(0.10),
@@ -3100,7 +3080,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ],
               ),
             ),
-          if (_drawMode)
+          if (editorState.drawMode)
             Container(
               width: double.infinity,
               color: _drawColor.withOpacity(0.10),
@@ -3122,7 +3102,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ],
               ),
             ),
-          if (_addTextMode)
+          if (editorState.addTextMode)
             Container(
               width: double.infinity,
               color: AppColors.accent.withOpacity(0.12),
@@ -3252,49 +3232,49 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                     ),
                   );
                 }),
-                if (_drawMode || _eraserMode || _shapeMode != null || _shapeEditMode)
+                if (editorState.drawMode || editorState.eraserMode || _shapeMode != null || editorState.shapeEditMode)
                   Positioned.fill(
                     child: Listener(
                       behavior: HitTestBehavior.opaque,
                       onPointerDown: (event) {
-                        if (_shapeEditMode) {
+                        if (editorState.shapeEditMode) {
                           _onShapeEditPointerDown(event);
                         } else if (_shapeMode != null) {
                           _onShapePointerDown(event);
-                        } else if (_drawMode) {
+                        } else if (editorState.drawMode) {
                           _onDrawPointerDown(event);
                         } else {
                           _onEraserPointerDown(event);
                         }
                       },
                       onPointerMove: (event) {
-                        if (_shapeEditMode) {
+                        if (editorState.shapeEditMode) {
                           _onShapeEditPointerMove(event);
                         } else if (_shapeMode != null) {
                           _onShapePointerMove(event);
-                        } else if (_drawMode) {
+                        } else if (editorState.drawMode) {
                           _onDrawPointerMove(event);
                         } else {
                           _onEraserPointerMove(event);
                         }
                       },
                       onPointerUp: (_) {
-                        if (_shapeEditMode) {
+                        if (editorState.shapeEditMode) {
                           _finishShapeEditGesture();
                         } else if (_shapeMode != null) {
                           _finishShapeGesture();
-                        } else if (_drawMode) {
+                        } else if (editorState.drawMode) {
                           _finishDrawingStroke();
                         } else {
                           _finishEraserGesture();
                         }
                       },
                       onPointerCancel: (_) {
-                        if (_shapeEditMode) {
+                        if (editorState.shapeEditMode) {
                           _finishShapeEditGesture();
                         } else if (_shapeMode != null) {
                           _finishShapeGesture();
-                        } else if (_drawMode) {
+                        } else if (editorState.drawMode) {
                           _finishDrawingStroke();
                         } else {
                           _finishEraserGesture();
@@ -3818,12 +3798,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     );
   }
 }
-
-
-
-
-
-
 
 class _TextDialogResult {
   final String text;
