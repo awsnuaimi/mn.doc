@@ -21,6 +21,7 @@ import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
 import 'manage_pages_screen.dart';
+import 'pdf_editor/controllers/editor_state.dart';
 
 part 'pdf_editor/models/text_annotation.dart';
 part 'pdf_editor/models/image_annotation.dart';
@@ -55,6 +56,7 @@ class PdfEditorScreen extends StatefulWidget {
 }
 
 class _PdfEditorScreenState extends State<PdfEditorScreen> {
+  late final EditorState editorState;
   final PdfViewerController _controller = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
@@ -110,6 +112,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   // ------- تراجع/إعادة موحّد وقابل للتوسعة لكل عناصر المحرر -------
   final _EditorHistory _history = _EditorHistory(limit: 20);
+
+  @override
+  void initState() {
+    super.initState();
+    editorState = EditorState();
+  }
 
   _EditorSnapshot _captureEditorState() => _EditorSnapshot.capture(
         _annotations,
@@ -205,6 +213,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   @override
   void dispose() {
     _disposed = true;
+    editorState.dispose();
     _controller.dispose();
     _searchController.dispose();
     _searchResult.removeListener(_onSearchResultChanged);
