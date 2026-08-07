@@ -26,9 +26,9 @@ import 'pdf_editor/widgets/editor_toolbar.dart';
 import 'pdf_editor/widgets/floating_toolbar.dart';
 import 'pdf_editor/widgets/top_toolbar.dart';
 import 'pdf_editor/widgets/pdf_viewer_widget.dart';
+import 'models/image_annotation.dart';
 
 part 'pdf_editor/models/text_annotation.dart';
-part 'pdf_editor/models/image_annotation.dart';
 part 'pdf_editor/models/shape_annotation.dart';
 part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
@@ -55,7 +55,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final PdfViewerController _controller = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_TextAnnotation> _annotations = [];
-  final List<_ImageAnnotation> _imageAnnotations = [];
+  final List<ImageAnnotation> _imageAnnotations = [];
   final List<_DrawingStroke> _drawingStrokes = [];
   final List<_ShapeAnnotation> _shapeAnnotations = [];
   _DrawingStroke? _activeDrawingStroke;
@@ -79,7 +79,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   // حركة الصورة تُعامل كعملية واحدة في Undo/Redo مهما كان عدد أحداث السحب.
   // لا نسجل لقطة عند مجرد لمس الصورة، بل فقط بعد أول حركة فعلية.
   _EditorSnapshot? _imageDragBefore;
-  _ImageAnnotation? _draggingImage;
+  ImageAnnotation? _draggingImage;
   bool _imageDragChanged = false;
   final GlobalKey _viewerKey = GlobalKey();
 
@@ -290,7 +290,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       const defaultHeight = 100.0;
       _pushUndoState();
       setState(() {
-        _imageAnnotations.add(_ImageAnnotation(
+        _imageAnnotations.add(ImageAnnotation(
           pageNumber: pageNumber,
           dx: pagePoint.dx.clamp(0.0, (pageSize.width - defaultWidth).clamp(0.0, pageSize.width)).toDouble(),
           dy: pagePoint.dy.clamp(0.0, (pageSize.height - defaultHeight).clamp(0.0, pageSize.height)).toDouble(),
@@ -3466,7 +3466,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     );
   }
 
-  Widget _buildImageOverlay(_ImageAnnotation ann) {
+  Widget _buildImageOverlay(ImageAnnotation ann) {
     final transform = _pageTransforms[ann.pageNumber] ?? _fallbackPageTransform(ann.pageNumber);
     if (transform == null) return const SizedBox.shrink();
     final point = transform.pdfToViewer(Offset(ann.dx, ann.dy));
@@ -3511,7 +3511,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     );
   }
 
-  void _finishImageDrag(_ImageAnnotation ann) {
+  void _finishImageDrag(ImageAnnotation ann) {
     if (!identical(_draggingImage, ann)) return;
     final before = _imageDragBefore;
     final changed = _imageDragChanged;
@@ -3525,7 +3525,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _scheduleAutoSave();
   }
 
-  void _resizeImage(_ImageAnnotation ann, double factor) {
+  void _resizeImage(ImageAnnotation ann, double factor) {
     final pageSize = _pdfPageSizes[ann.pageNumber];
     if (pageSize == null) return;
     _pushUndoState();
@@ -3538,7 +3538,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _scheduleAutoSave();
   }
 
-  void _showImageActionSheet(_ImageAnnotation ann) {
+  void _showImageActionSheet(ImageAnnotation ann) {
     showModalBottomSheet(
       context: context,
       builder: (sheetContext) => SafeArea(child: Wrap(children: [
