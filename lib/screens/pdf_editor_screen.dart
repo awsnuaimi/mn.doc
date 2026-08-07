@@ -16,15 +16,14 @@ import '../services/app_settings.dart';
 import '../services/app_text.dart';
 import '../services/isolate_helpers.dart';
 import '../services/arabic_font_loader.dart';
-
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
 import 'manage_pages_screen.dart';
-
 import 'pdf_editor/controllers/editor_state.dart';
 import 'pdf_editor/widgets/editor_toolbar.dart';
+import 'pdf_editor/widgets/floating_toolbar.dart';
 
 part 'pdf_editor/models/text_annotation.dart';
 part 'pdf_editor/models/image_annotation.dart';
@@ -195,6 +194,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
   // ------- تحريك النص بالسحب المباشر -------
   _TextAnnotation? _movingAnnotation;
+  Offset? _toolbarPosition;
+  bool _showFloatingToolbar = false;
+  _TextAnnotation? _selectedAnnotation;
   _TextAnnotation? _moveSnapshot;
   List<_TextAnnotation>? _moveUndoSnapshot;
   Timer? _moveHoldTimer;
@@ -255,6 +257,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _handlePdfTap(PdfGestureDetails details) async {
+    setState(() {
+      _showFloatingToolbar = false;
+      _selectedAnnotation = null;
+    });
+
     if (!_addTextMode && !_addImageMode) return;
 
     // pagePosition: الموضع الحقيقي بنقاط PDF (دقيق، يُستخدم للحفظ).
@@ -3229,6 +3236,35 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       child: const SizedBox.expand(),
                     ),
                   ),
+                if (_showFloatingToolbar && _toolbarPosition != null)
+                  FloatingToolbar(
+                    position: _toolbarPosition!,
+                    onEdit: () {
+                      if (_selectedAnnotation == null) return;
+
+                      setState(() {
+                        _showFloatingToolbar = false;
+                      });
+
+                      _editAnnotation(_selectedAnnotation!);
+                    },
+                    onCopy: () {},
+                    onDelete: () {
+                      if (_selectedAnnotation == null) return;
+
+                      _pushUndoState();
+
+                      setState(() {
+                        _annotations.remove(_selectedAnnotation);
+                        _selectedAnnotation = null;
+                        _showFloatingToolbar = false;
+                      });
+
+                      _scheduleAutoSave();
+                    },
+                    onColor: () {},
+                    onFont: () {},
+                  ),
                 // أزرار التكبير/التصغير العائمة
                 Positioned(
                   bottom: 16,
@@ -3644,7 +3680,31 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   /// على نفس آلية الضغط الدقيقة المستخدمة بالإضافة (بدل السحب بالإصبع
   /// غير المضمون هندسيًا)، فيضغط المستخدم على المكان الجديد مباشرة.
   void _showAnnotationActionSheet(_TextAnnotation ann) {
-    final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
+
+    final transform =
+        _pageTransforms[ann.pageNumber] ??
+        _fallbackPageTransform(ann.pageNumber);
+
+    if (transform != null) {
+      final point = transform.pdfToViewer(
+        Offset(ann.dx, ann.dy),
+      );
+
+      setState(() {
+        _selectedAnnotation = ann;
+        _toolbarPosition = Offset(
+          point.dx,
+          point.dy - 55,
+        );
+        _showFloatingToolbar = true;
+      });
+    }
+
+    final lang = Provider.of<AppSettingsController>(
+      context,
+      listen: false,
+    ).languageCode;
+
     String tr(String key) => AppText.t(key, lang);
     showModalBottomSheet(
       context: context,
