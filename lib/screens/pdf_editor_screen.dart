@@ -16,12 +16,15 @@ import '../services/app_settings.dart';
 import '../services/app_text.dart';
 import '../services/isolate_helpers.dart';
 import '../services/arabic_font_loader.dart';
+
 import 'summarize_screen.dart';
 import 'ai_chat_screen.dart';
 import 'translate_screen.dart';
 import 'tts_reader_screen.dart';
 import 'manage_pages_screen.dart';
+
 import 'pdf_editor/controllers/editor_state.dart';
+import 'pdf_editor/widgets/editor_toolbar.dart';
 
 part 'pdf_editor/models/text_annotation.dart';
 part 'pdf_editor/models/image_annotation.dart';
