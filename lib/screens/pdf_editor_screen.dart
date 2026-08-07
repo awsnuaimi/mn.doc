@@ -98,7 +98,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   final Map<int, _PdfPageTransform> _pageTransforms = <int, _PdfPageTransform>{};
 
   bool _addTextMode = false;
-  bool _saving = false;
   Timer? _autoSaveDebounce; // يجمّع عدة تعديلات متتالية سريعة بعملية تصدير واحدة بدل تصدير كامل لكل تعديل
   Future<void>? _saveQueue; // طابور تسلسلي واحد لكل عمليات الحفظ (يدوي + تلقائي) لمنع تعارضهم على نفس الملف
   int _autoSaveRetryCount = 0;
@@ -107,8 +106,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   String? _lastExportedPath; // آخر مسار تصدير ناجح — تستخدمه ميزات الذكاء الاصطناعي لقراءة أحدث نسخة
   bool _flattenFormsOnSave = false;
   bool _hasFormFields = false;
-  int _currentPage = 1;
-  double _zoomLevel = 1.0;
 
   // ------- تراجع/إعادة موحّد وقابل للتوسعة لكل عناصر المحرر -------
   final _EditorHistory _history = _EditorHistory(limit: 20);
@@ -165,28 +162,27 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _zoomIn() {
-    setState(() => _zoomLevel = (_zoomLevel + 0.25).clamp(1.0, 3.0));
-    _controller.zoomLevel = _zoomLevel;
+    editorState.setZoom((editorState.zoomLevel + 0.25).clamp(1.0, 3.0));
+    _controller.zoomLevel = editorState.zoomLevel;
   }
 
   void _zoomOut() {
-    setState(() => _zoomLevel = (_zoomLevel - 0.25).clamp(1.0, 3.0));
-    _controller.zoomLevel = _zoomLevel;
+    editorState.setZoom((editorState.zoomLevel - 0.25).clamp(1.0, 3.0));
+    _controller.zoomLevel = editorState.zoomLevel;
   }
 
   void _resetZoom() {
-    setState(() => _zoomLevel = 1.0);
+    editorState.setZoom(1.0);
     _controller.zoomLevel = 1.0;
   }
 
   // ------- تتبّع التعديلات غير المحفوظة -------
-  bool _hasUnsavedChanges = false;
   int _documentRevision = 0;
   int _savedRevision = 0;
 
   void _markDocumentChanged() {
     _documentRevision++;
-    _hasUnsavedChanges = _documentRevision != _savedRevision;
+    editorState.setUnsaved(_documentRevision != _savedRevision);
 
     // بعض التعديلات (خصوصًا تعليقات Syncfusion وحقول النماذج) تصل عبر
     // callbacks لا يسبقها setState من كودنا. يجب إعادة بناء PopScope فورًا
@@ -354,7 +350,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   bool _strokeHitTest(_DrawingStroke stroke, Offset pdfPoint) {
     if (stroke.points.isEmpty) return false;
-    final tolerance = 10.0 / _zoomLevel + stroke.thickness / 2;
+    final tolerance = 10.0 / editorState.zoomLevel + stroke.thickness / 2;
     if (stroke.points.length == 1) {
       return (stroke.points.first - pdfPoint).distance <= tolerance;
     }
@@ -395,13 +391,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _eraseAt(PointerEvent event) {
     if (!_eraserMode) return;
-    final pdfPoint = _eventToPdfPoint(event, _currentPage);
+    final pdfPoint = _eventToPdfPoint(event, editorState.currentPage);
     if (pdfPoint == null) return;
 
     final hits = _drawingStrokes
         .where(
           (stroke) =>
-              stroke.pageNumber == _currentPage &&
+              stroke.pageNumber == editorState.currentPage &&
               _strokeHitTest(stroke, pdfPoint),
         )
         .toList(growable: false);
@@ -475,9 +471,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   _ShapeAnnotation? _hitShape(Offset pdfPoint) {
     _ShapeAnnotation? best;
-    var bestDistance = 12.0 / _zoomLevel;
+    var bestDistance = 12.0 / editorState.zoomLevel;
     for (final shape in _shapeAnnotations.reversed) {
-      if (shape.pageNumber != _currentPage) continue;
+      if (shape.pageNumber != editorState.currentPage) continue;
       final d = _shapeDistance(shape, pdfPoint);
       if (d <= bestDistance) {
         bestDistance = d;
@@ -488,12 +484,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   void _onShapeEditPointerDown(PointerDownEvent event) {
-    final pdf = _eventToPdfPoint(event, _currentPage);
+    final pdf = _eventToPdfPoint(event, editorState.currentPage);
     if (pdf == null) return;
 
     final selected = _selectedShape;
     if (selected != null) {
-      final handleRadius = 14.0 / _zoomLevel;
+      final handleRadius = 14.0 / editorState.zoomLevel;
       if ((pdf - selected.start).distance <= handleRadius) {
         _pushUndoState();
         _shapeDragPart = 'start';
@@ -560,7 +556,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       moving: moving,
       pageSize: _pdfPageSizes[pageNumber],
       shapes: _shapeAnnotations,
-      zoomLevel: _zoomLevel,
+      zoomLevel: editorState.zoomLevel,
     );
     _snapGuideX = result.guideX;
     _snapGuideY = result.guideY;
@@ -907,7 +903,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _selectAllShapesOnCurrentPage() {
     final pageShapes = _shapeAnnotations
-        .where((shape) => shape.pageNumber == _currentPage)
+        .where((shape) => shape.pageNumber == editorState.currentPage)
         .toList(growable: false);
     setState(() {
       _selectedShapes
@@ -919,7 +915,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
 
   void _invertShapeSelectionOnCurrentPage() {
     final pageShapes = _shapeAnnotations
-        .where((shape) => shape.pageNumber == _currentPage)
+        .where((shape) => shape.pageNumber == editorState.currentPage)
         .toList(growable: false);
     final previouslySelected = _selectedShapes.toSet();
 
@@ -1062,8 +1058,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     for (final source in _shapeClipboardGroup) {
       final item = source.copy();
       final sourceSize = _pdfPageSizes[source.pageNumber];
-      final targetSize = _pdfPageSizes[_currentPage];
-      if (source.pageNumber != _currentPage &&
+      final targetSize = _pdfPageSizes[editorState.currentPage];
+      if (source.pageNumber != editorState.currentPage &&
           sourceSize != null &&
           targetSize != null &&
           sourceSize.width > 0 &&
@@ -1073,7 +1069,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         item.start = Offset(source.start.dx * sx, source.start.dy * sy);
         item.end = Offset(source.end.dx * sx, source.end.dy * sy);
       }
-      item.pageNumber = _currentPage;
+      item.pageNumber = editorState.currentPage;
       item.start += const Offset(14, 14);
       item.end += const Offset(14, 14);
       pasted.add(item);
@@ -1305,7 +1301,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final source = _shapeClipboard;
     if (source == null) return;
     final pasted = source.copy();
-    final targetPage = _currentPage;
+    final targetPage = editorState.currentPage;
     final sourceSize = _pdfPageSizes[source.pageNumber];
     final targetSize = _pdfPageSizes[targetPage];
     if (source.pageNumber != targetPage && sourceSize != null && targetSize != null &&
@@ -1419,12 +1415,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   void _onShapePointerDown(PointerDownEvent event) {
     final kind = _shapeMode;
     if (kind == null) return;
-    final pdf = _eventToPdfPoint(event, _currentPage);
+    final pdf = _eventToPdfPoint(event, editorState.currentPage);
     if (pdf == null) return;
     _pushUndoState();
     setState(() {
       _activeShape = _ShapeAnnotation(
-        pageNumber: _currentPage,
+        pageNumber: editorState.currentPage,
         start: pdf,
         end: pdf,
         kind: kind,
@@ -1457,8 +1453,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   void _onDrawPointerDown(PointerDownEvent event) {
     if (!_drawMode) return;
     final transform =
-        _pageTransforms[_currentPage] ?? _fallbackPageTransform(_currentPage);
-    final pageSize = _pdfPageSizes[_currentPage];
+        _pageTransforms[editorState.currentPage] ?? _fallbackPageTransform(editorState.currentPage);
+    final pageSize = _pdfPageSizes[editorState.currentPage];
     if (transform == null || pageSize == null || transform.scale <= 0) return;
 
     final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
@@ -1475,7 +1471,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     _pushUndoState();
     setState(() {
       _activeDrawingStroke = _DrawingStroke(
-        pageNumber: _currentPage,
+        pageNumber: editorState.currentPage,
         points: <Offset>[pdf],
         color: _drawColor,
         thickness: _drawThickness,
@@ -1909,7 +1905,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final scaleX = viewport.width / pageSize.width;
     final scaleY = viewport.height / pageSize.height;
     final baseScale = scaleX < scaleY ? scaleX : scaleY;
-    final scale = baseScale * _zoomLevel;
+    final scale = baseScale * editorState.zoomLevel;
     final origin = viewerPoint - pdfPoint * scale;
 
     _pageTransforms[pageNumber] = _PdfPageTransform(scale: scale, origin: origin);
@@ -1926,7 +1922,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     final scaleX = viewport.width / pageSize.width;
     final scaleY = viewport.height / pageSize.height;
     final baseScale = scaleX < scaleY ? scaleX : scaleY;
-    final scale = baseScale * _zoomLevel;
+    final scale = baseScale * editorState.zoomLevel;
     final rendered = Size(pageSize.width * scale, pageSize.height * scale);
     final scroll = _controller.scrollOffset;
 
@@ -2260,7 +2256,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   Future<void> _performSave({required bool showResult}) async {
     if (_disposed) return;
     _autoSaveDebounce?.cancel();
-    if (showResult && mounted) setState(() => _saving = true);
+    if (showResult && mounted) editorState.setSaving(true);
 
     String? outPath;
     Object? error;
@@ -2270,10 +2266,10 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       _lastExportedPath = outPath;
       if (!_disposed) {
         _savedRevision = revisionBeingSaved;
-        _hasUnsavedChanges = _documentRevision != _savedRevision;
+        editorState.setUnsaved(_documentRevision != _savedRevision);
         _autoSaveRetryCount = 0;
         // لو حصل تعديل أثناء التصدير، لا نعتبره محفوظًا ونجدول نسخة لاحقة.
-        if (_hasUnsavedChanges) _scheduleAutoSave(markChanged: false);
+        if (editorState.hasUnsavedChanges) _scheduleAutoSave(markChanged: false);
       }
     } catch (e, stack) {
       error = e;
@@ -2283,14 +2279,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       // في حلقة تصدير لا نهائية عند خطأ دائم (مساحة تخزين/صلاحيات/ملف تالف).
       if (!showResult &&
           !_disposed &&
-          _hasUnsavedChanges &&
+          editorState.hasUnsavedChanges &&
           _autoSaveRetryCount < _maxAutoSaveRetries) {
         _autoSaveRetryCount++;
         _autoSaveDebounce?.cancel();
         _autoSaveDebounce = Timer(
           Duration(seconds: 2 * _autoSaveRetryCount),
           () {
-            if (!_disposed && _hasUnsavedChanges) {
+            if (!_disposed && editorState.hasUnsavedChanges) {
               unawaited(_runQueuedSave(showResult: false));
             }
           },
@@ -2306,7 +2302,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     if (_disposed || !mounted) return;
 
     if (showResult) {
-      setState(() => _saving = false);
+      editorState.setSaving(false);
       final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
       String tr(String key) => AppText.t(key, lang);
 
@@ -2361,12 +2357,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   }
 
   Future<void> _saveDocument() async {
-    if (_disposed || _saving) return;
+    if (_disposed || editorState.saving) return;
 
     // الحفظ اليدوي يجب أن يعني "احفظ أحدث Revision"، لا مجرد Revision كان
     // موجودًا لحظة الضغط على الزر. قد يعدّل المستخدم المستند أثناء عملية
     // التصدير الأولى، لذلك نثبّت أحدث حالة أولًا ثم نعرض نتيجة الحفظ.
-    setState(() => _saving = true);
+    editorState.setSaving(true);
     _autoSaveDebounce?.cancel();
 
     Object? error;
@@ -2389,7 +2385,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         }
       }
 
-      if (outPath == null || _hasUnsavedChanges) {
+      if (outPath == null || editorState.hasUnsavedChanges) {
         throw StateError('تعذر تثبيت أحدث نسخة من المستند.');
       }
     } catch (e, stack) {
@@ -2401,7 +2397,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
 
     if (_disposed || !mounted) return;
-    setState(() => _saving = false);
+    editorState.setSaving(false);
 
     final lang =
         Provider.of<AppSettingsController>(context, listen: false).languageCode;
@@ -2460,7 +2456,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     await (_saveQueue ?? Future.value()).catchError((_) {});
     if (_disposed || !mounted) return false;
 
-    final needsExport = _hasUnsavedChanges ||
+    final needsExport = editorState.hasUnsavedChanges ||
         _annotations.isNotEmpty ||
         _imageAnnotations.isNotEmpty ||
         _drawingStrokes.isNotEmpty ||
@@ -2537,7 +2533,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     return Directionality(
       textDirection: settings.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: PopScope(
-        canPop: !_hasUnsavedChanges,
+        canPop: !editor.hasUnsavedChanges,
         onPopInvoked: (didPop) async {
           if (didPop) return;
           final shouldDiscard = await showDialog<bool>(
@@ -2567,7 +2563,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           if (shouldDiscard == true) {
             // خروج صريح بدون حفظ.
             _autoSaveDebounce?.cancel();
-            _hasUnsavedChanges = false;
+            editor.hasUnsavedChanges = false;
             Navigator.pop(context);
             return;
           }
@@ -2577,7 +2573,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
             final saved = await _flushLatestRevisionForStructuralOperation();
             if (!context.mounted) return;
 
-            if (saved && !_hasUnsavedChanges) {
+            if (saved && !editor.hasUnsavedChanges) {
               Navigator.pop(context);
             } else {
               final lang = Provider.of<AppSettingsController>(
@@ -2622,7 +2618,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           IconButton(
             icon: const Icon(Icons.grid_view_rounded),
             tooltip: 'إدارة الصفحات بالصور المصغرة',
-            onPressed: _saving ? null : _openPageManager,
+            onPressed: editor.saving ? null : _openPageManager,
           ),
           IconButton(
             icon: Icon(_addTextMode ? Icons.text_fields_rounded : Icons.text_fields_outlined),
@@ -2645,7 +2641,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               PopupMenuItem(value: 'read_aloud', child: Text(tr('tool_tts_t'))),
             ],
           ),
-          _saving
+          editor.saving
               ? const Padding(
                   padding: EdgeInsets.all(16),
                   child: SizedBox(
@@ -2656,7 +2652,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 )
               : IconButton(
                   icon: Badge(
-                    isLabelVisible: _hasUnsavedChanges,
+                    isLabelVisible: editor.hasUnsavedChanges,
                     smallSize: 8,
                     backgroundColor: Colors.orangeAccent,
                     child: const Icon(Icons.save_rounded),
@@ -3099,12 +3095,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   pageLayoutMode: PdfPageLayoutMode.single,
                   onPageChanged: (details) {
                     if (!mounted) return;
-                    setState(() => _currentPage = details.newPageNumber);
+                    editor.setCurrentPage(details.newPageNumber);
                   },
                   onZoomLevelChanged: (details) {
                     if (!mounted) return;
+                    editor.setZoom(details.newZoomLevel);
                     setState(() {
-                      _zoomLevel = details.newZoomLevel;
                       // أي تغيير Zoom يغيّر إسقاط الصفحة على الشاشة، لذلك
                       // نبطل أي معايرة قديمة. fallback يعيد حساب Scale/Origin
                       // من zoomLevel + scrollOffset حتى أثناء التكبير.
@@ -3123,14 +3119,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 ),
                 // طبقة عرض النصوص المضافة على الصفحة الحالية فقط
                 ..._annotations
-                    .where((a) => a.pageNumber == _currentPage)
+                    .where((a) => a.pageNumber == editor.currentPage)
                     .map((ann) => _buildAnnotationOverlay(ann)),
                 ..._imageAnnotations
-                    .where((a) => a.pageNumber == _currentPage)
+                    .where((a) => a.pageNumber == editor.currentPage)
                     .map((ann) => _buildImageOverlay(ann)),
                 if ((_snapGuideX != null || _snapGuideY != null) &&
-                    (_pageTransforms[_currentPage] ??
-                            _fallbackPageTransform(_currentPage)) !=
+                    (_pageTransforms[editor.currentPage] ??
+                            _fallbackPageTransform(editor.currentPage)) !=
                         null)
                   Positioned.fill(
                     child: IgnorePointer(
@@ -3138,14 +3134,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                         painter: _PdfSnapGuidePainter(
                           guideX: _snapGuideX,
                           guideY: _snapGuideY,
-                          transform: (_pageTransforms[_currentPage] ??
-                              _fallbackPageTransform(_currentPage))!,
+                          transform: (_pageTransforms[editor.currentPage] ??
+                              _fallbackPageTransform(editor.currentPage))!,
                         ),
                       ),
                     ),
                   ),
                 ..._shapeAnnotations
-                    .where((s) => s.pageNumber == _currentPage)
+                    .where((s) => s.pageNumber == editor.currentPage)
                     .map((shape) {
                   final transform = _pageTransforms[shape.pageNumber] ??
                       _fallbackPageTransform(shape.pageNumber);
@@ -3163,7 +3159,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   );
                 }),
                 ..._drawingStrokes
-                    .where((s) => s.pageNumber == _currentPage)
+                    .where((s) => s.pageNumber == editor.currentPage)
                     .map((stroke) {
                   final transform = _pageTransforms[stroke.pageNumber] ??
                       _fallbackPageTransform(stroke.pageNumber);
