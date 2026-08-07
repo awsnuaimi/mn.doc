@@ -13,9 +13,14 @@ class PdfViewerWidget extends StatelessWidget {
   final PdfPageChangedCallback? onPageChanged;
   final PdfZoomLevelChangedCallback? onZoomLevelChanged;
   final PdfDocumentLoadedCallback? onDocumentLoaded;
-  final PdfAnnotationAddedCallback? onAnnotationAdded;
-  final PdfAnnotationEditedCallback? onAnnotationEdited;
-  final PdfAnnotationRemovedCallback? onAnnotationRemoved;
+  // syncfusion_flutter_pdfviewer لا يصدّر typedef باسم PdfAnnotationAddedCallback
+  // (ولا Edited/Removed) — نستخدم توقيع دالة عام بمعامل dynamic بدل الاسم
+  // المخصص. بفضل التباين العكسي (contravariance) بلغة Dart، دالة بمعامل
+  // dynamic قابلة للتمرير بأي مكان يتوقع دالة بمعامل أكثر تحديدًا (Annotation)،
+  // فهذا يعمل بغض النظر عن التوقيع الحقيقي الداخلي بالمكتبة أو رقم إصدارها.
+  final void Function(dynamic annotation)? onAnnotationAdded;
+  final void Function(dynamic annotation)? onAnnotationEdited;
+  final void Function(dynamic annotation)? onAnnotationRemoved;
   final PdfFormFieldValueChangedCallback? onFormFieldValueChanged;
 
   const PdfViewerWidget({
