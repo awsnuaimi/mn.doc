@@ -56,4 +56,35 @@ abstract final class _ShapeTransformGeometry {
     start: flipVertical(shape.start, centerY),
     end: flipVertical(shape.end, centerY),
   );
+
+
+  static Rect calculateSelectionBounds(
+    Iterable<_ShapeAnnotation> shapes,
+  ) {
+    if (shapes.isEmpty) return Rect.zero;
+
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = double.negativeInfinity;
+    double maxY = double.negativeInfinity;
+
+    for (final shape in shapes) {
+      final pts = [shape.start, shape.end];
+      for (final p in pts) {
+        if (p.dx < minX) minX = p.dx;
+        if (p.dy < minY) minY = p.dy;
+        if (p.dx > maxX) maxX = p.dx;
+        if (p.dy > maxY) maxY = p.dy;
+      }
+    }
+
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  static Offset calculateGroupCenter(
+    Iterable<_ShapeAnnotation> shapes,
+  ) {
+    return calculateSelectionBounds(shapes).center;
+  }
+
 }
