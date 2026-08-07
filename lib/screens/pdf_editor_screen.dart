@@ -1,3 +1,4 @@
+import 'pdf_editor/widgets/annotation_toolbar.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:math' as math;
