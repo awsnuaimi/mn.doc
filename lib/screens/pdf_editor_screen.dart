@@ -2668,8 +2668,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
       // نمنع تغيّر حجم الشاشة عند ظهور لوحة المفاتيح — هذا يضمن بقاء
       // موضع النصوص المضافة مستقرًا بصريًا حتى أثناء فتح نافذة التعديل.
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        title: Text(widget.filePath.split('/').last, overflow: TextOverflow.ellipsis),
+      appBar: TopToolbar(
+        title: widget.filePath.split('/').last,
         actions: [
           IconButton(
             icon: const Icon(Icons.undo_rounded),
@@ -2737,7 +2737,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   onPressed: _saveDocument,
                 ),
         ],
-      ),
+),
       body: Column(
         children: [
           if (editor.searchVisible)
