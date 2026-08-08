@@ -39,6 +39,9 @@ part 'pdf_editor/models/shape_drawing_module.dart';
 part 'pdf_editor/models/shape_multiselect_module.dart';
 part 'pdf_editor/models/shape_layout_module.dart';
 part 'pdf_editor/models/shape_properties_module.dart';
+part 'pdf_editor/models/ai_module.dart';
+part 'pdf_editor/models/form_module.dart';
+part 'pdf_editor/models/gesture_module.dart';
 part 'pdf_editor/models/shape_annotation.dart';
 part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
@@ -60,22 +63,15 @@ class PdfEditorScreen extends StatefulWidget {
   State<PdfEditorScreen> createState() => _PdfEditorScreenState();
 }
 
-class _PdfEditorScreenState extends State<PdfEditorScreen> with SearchModule, DrawingModule, SaveModule, TextModule, ImageModule, ShapeSelectionModule, ShapeDrawingModule, ShapeMultiselectModule, ShapeLayoutModule, ShapePropertiesModule {
+class _PdfEditorScreenState extends State<PdfEditorScreen> with SearchModule, DrawingModule, SaveModule, TextModule, ImageModule, ShapeSelectionModule, ShapeDrawingModule, ShapeMultiselectModule, ShapeLayoutModule, ShapePropertiesModule, AiModule, FormModule, GestureModule {
   late final EditorState editorState;
   final PdfViewerController _controller = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerStateKey = GlobalKey();
   final List<_DrawingStroke> _drawingStrokes = [];
   bool _eraserGestureChanged = false;
-  final GlobalKey _viewerKey = GlobalKey();
-
-  // أبعاد الصفحات الأصلية بنقاط PDF + التحويل الحالي للصفحة المعروضة.
-  // لا تُخزّن إحداثيات الشاشة داخل _TextAnnotation إطلاقًا.
-  final Map<int, Size> _pdfPageSizes = <int, Size>{};
-  final Map<int, _PdfPageTransform> _pageTransforms = <int, _PdfPageTransform>{};
 
   bool _disposed = false; // نمنع أي حفظ أو setState بعد التخلص من الشاشة
   late final bool _fileExists; // يُفحص مرة واحدة عند فتح الشاشة — يحمي من انهيار البناء لو الملف المُختار (خصوصًا من مدير ملفات خارجي) غير موجود فعليًا على القرص
-  bool _hasFormFields = false;
 
   // ------- تراجع/إعادة موحّد وقابل للتوسعة لكل عناصر المحرر -------
   final _EditorHistory _history = _EditorHistory(limit: 20);
@@ -169,273 +165,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> with SearchModule, Dr
     super.dispose();
   }
 
-  void _handlePdfTap(PdfGestureDetails details) async {
-    setState(() {
-      _showFloatingToolbar = false;
-      _selectedAnnotation = null;
-    });
-
-    if (!editorState.addTextMode && !editorState.addImageMode) return;
-
-    // pagePosition: الموضع الحقيقي بنقاط PDF (دقيق، يُستخدم للحفظ).
-    // position: الموضع بكسلات عنصر العرض (تقريبي، للمعاينة الحيّة فقط).
-    final pagePoint = details.pagePosition;
-    final pageNumber = details.pageNumber;
-
-    // لو الضغطة وقعت خارج حدود الصفحة فعليًا (بالهوامش الفاضية حول
-    // الصفحة مثلًا)، Syncfusion بترجع pageNumber = -1 وإحداثيات سالبة —
-    // نرفضها صريحة بدل ما نضيف/ننقل نص بمكان غير منطقي.
-    if (pageNumber < 1 || pagePoint.dx < 0 || pagePoint.dy < 0) return;
-
-    // نعاير تحويل الصفحة من الضغطة نفسها: Syncfusion يعطينا في الحدث ذاته
-    // النقطة في نظام الصفحة (pagePosition) والنقطة المناظرة داخل الـViewer
-    // (position). نستخدم أبعاد الصفحة الحقيقية لحساب المقياس، ثم نستخرج
-    // origin بحيث تكون النقطة المضغوطة متطابقة رياضيًا 100% في النظامين.
-    _calibratePageTransform(
-      pageNumber: pageNumber,
-      pdfPoint: pagePoint,
-      viewerPoint: details.position,
-    );
-
-    if (editorState.addImageMode && _pendingImageBytes != null) {
-      final pageSize = _pdfPageSizes[pageNumber];
-      if (pageSize == null) return;
-      const defaultWidth = 140.0;
-      const defaultHeight = 100.0;
-      _pushUndoState();
-      setState(() {
-        _imageAnnotations.add(ImageAnnotation(
-          pageNumber: pageNumber,
-          dx: pagePoint.dx.clamp(0.0, (pageSize.width - defaultWidth).clamp(0.0, pageSize.width)).toDouble(),
-          dy: pagePoint.dy.clamp(0.0, (pageSize.height - defaultHeight).clamp(0.0, pageSize.height)).toDouble(),
-          width: defaultWidth, height: defaultHeight, bytes: Uint8List.fromList(_pendingImageBytes!),
-        ));
-        _pendingImageBytes = null;
-        editorState.addImageMode = false;
-      });
-      _scheduleAutoSave();
-      return;
-    }
-
-    final result = await _showTextDialog();
-    if (result == null || result.text.trim().isEmpty) return;
-
-    _pushUndoState();
-    setState(() {
-      _annotations.add(_TextAnnotation(
-        pageNumber: pageNumber, dx: pagePoint.dx, dy: pagePoint.dy, text: result.text,
-        fontSize: result.fontSize, color: result.color, alignment: result.alignment,
-      ));
-    });
-    _scheduleAutoSave();
-  }
-
-  void _toggleDrawMode() {
-    setState(() {
-      editorState.drawMode = !editorState.drawMode;
-      editorState.eraserMode = false;
-      _shapeMode = null;
-      editorState.shapeEditMode = false;
-      _selectedShape = null;
-      editorState.addTextMode = false;
-      editorState.addImageMode = false;
-      _pendingImageBytes = null;
-      _controller.annotationMode = PdfAnnotationMode.none;
-    });
-  }
-
-  void _toggleEraserMode() {
-    setState(() {
-      editorState.eraserMode = !editorState.eraserMode;
-      editorState.drawMode = false;
-      _shapeMode = null;
-      editorState.shapeEditMode = false;
-      _selectedShape = null;
-      _activeDrawingStroke = null;
-      editorState.addTextMode = false;
-      editorState.addImageMode = false;
-      _pendingImageBytes = null;
-      _controller.annotationMode = PdfAnnotationMode.none;
-    });
-  }
-
-  double _distanceToSegment(Offset p, Offset a, Offset b) {
-    final ab = b - a;
-    final lengthSquared = ab.dx * ab.dx + ab.dy * ab.dy;
-    if (lengthSquared <= 0.0001) return (p - a).distance;
-    final ap = p - a;
-    final t = ((ap.dx * ab.dx + ap.dy * ab.dy) / lengthSquared)
-        .clamp(0.0, 1.0)
-        .toDouble();
-    final closest = a + ab * t;
-    return (p - closest).distance;
-  }
-
-  bool _strokeHitTest(_DrawingStroke stroke, Offset pdfPoint) {
-    if (stroke.points.isEmpty) return false;
-    final tolerance = 10.0 / editorState.zoomLevel + stroke.thickness / 2;
-    if (stroke.points.length == 1) {
-      return (stroke.points.first - pdfPoint).distance <= tolerance;
-    }
-    for (var i = 1; i < stroke.points.length; i++) {
-      if (_distanceToSegment(
-            pdfPoint,
-            stroke.points[i - 1],
-            stroke.points[i],
-          ) <=
-          tolerance) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  Offset? _eventToPdfPoint(PointerEvent event, int pageNumber) {
-    final transform =
-        _pageTransforms[pageNumber] ?? _fallbackPageTransform(pageNumber);
-    final pageSize = _pdfPageSizes[pageNumber];
-    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
-    if (transform == null ||
-        pageSize == null ||
-        box == null ||
-        transform.scale <= 0) {
-      return null;
-    }
-    final local = box.globalToLocal(event.position);
-    final pdf = transform.viewerToPdf(local);
-    if (pdf.dx < 0 ||
-        pdf.dy < 0 ||
-        pdf.dx > pageSize.width ||
-        pdf.dy > pageSize.height) {
-      return null;
-    }
-    return pdf;
-  }
-
-  void _eraseAt(PointerEvent event) {
-    if (!editorState.eraserMode) return;
-    final pdfPoint = _eventToPdfPoint(event, editorState.currentPage);
-    if (pdfPoint == null) return;
-
-    final hits = _drawingStrokes
-        .where(
-          (stroke) =>
-              stroke.pageNumber == editorState.currentPage &&
-              _strokeHitTest(stroke, pdfPoint),
-        )
-        .toList(growable: false);
-    if (hits.isEmpty) return;
-
-    if (!_eraserGestureChanged) {
-      _pushUndoState();
-      _eraserGestureChanged = true;
-    }
-    setState(() => _drawingStrokes.removeWhere(hits.contains));
-  }
-
-  void _onEraserPointerDown(PointerDownEvent event) {
-    _eraserGestureChanged = false;
-    _eraseAt(event);
-  }
-
-  void _onEraserPointerMove(PointerMoveEvent event) {
-    _eraseAt(event);
-  }
-
-  void _finishEraserGesture() {
-    if (_eraserGestureChanged) {
-      _scheduleAutoSave();
-    }
-    _eraserGestureChanged = false;
-  }
-
-
-  /// يستخرج كامل النص من ملف الـPDF الحالي بخيط منفصل (Isolate) بالخلفية
-  /// عبر compute() — لتفادي تجميد الواجهة مع ملفات PDF كبيرة، لاستخدامه
-  /// بميزات الذكاء الاصطناعي (التلخيص/الدردشة/الترجمة/القراءة الصوتية).
-  /// يحدّد أفضل مسار نقرأ منه النص لميزات الذكاء الاصطناعي. لو فيه أي
-  /// تعديلات محتملة (نصوص مضافة أو حقول نماذج بالملف)، ننفّذ تصديرًا
-  /// طازجًا عبر طابور الحفظ نفسه أولًا لضمان قراءة أحدث حالة فعليًا —
-  /// وليس مجرد التحقق من وجود نسخة محفوظة قد تكون قديمة.
-  Future<String> _currentBestFilePath() async {
-    if ((_annotations.isNotEmpty ||
-            _imageAnnotations.isNotEmpty ||
-            _drawingStrokes.isNotEmpty ||
-            _shapeAnnotations.isNotEmpty) ||
-        _hasFormFields) {
-      try {
-        return await _runQueuedSave(showResult: false).then((_) => _lastExportedPath ?? widget.filePath);
-      } catch (_) {
-        // فشل التصدير الطازج: نرجع لأفضل نسخة محفوظة سابقًا إن وُجدت
-      }
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    final rawName = widget.filePath.split('/').last;
-    var originalName = rawName.toLowerCase().endsWith('.pdf')
-        ? rawName.substring(0, rawName.length - 4)
-        : rawName;
-    const revisionSuffix = '_MN-Doc';
-    while (originalName.toLowerCase().endsWith(revisionSuffix.toLowerCase())) {
-      originalName =
-          originalName.substring(0, originalName.length - revisionSuffix.length);
-    }
-    if (originalName.trim().isEmpty) originalName = 'document';
-    final savedPath = '${dir.path}/${originalName}_MN-Doc.pdf';
-    if (await File(savedPath).exists()) return savedPath;
-    return widget.filePath;
-  }
-
-  Future<String> _extractFullText() async {
-    final path = await _currentBestFilePath();
-    final bytes = await File(path).readAsBytes();
-    return compute(extractPdfTextIsolate, bytes);
-  }
-
-  Future<void> _openAiFeature(String feature) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-    String text = '';
-    bool extractionFailed = false;
-    try {
-      text = await _extractFullText();
-    } catch (_) {
-      extractionFailed = true;
-    }
-    if (!mounted) return;
-    Navigator.pop(context); // إغلاق مؤشر التحميل
-
-    // نص فارغ أو استخراج فاشل: نوضّح السبب للمستخدم بدل ما ننتقل بصمت
-    // لشاشة الذكاء الاصطناعي وهو يظن أن الميزة معطوبة.
-    if (extractionFailed || text.trim().isEmpty) {
-      final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppText.t('ed_extract_failed', lang))),
-      );
-      if (extractionFailed) return;
-      // لو النص فاضي فعليًا (مو خطأ) بس المستخدم لسا يقدر يكمل — الميزات
-      // التالية أصلاً بتتعامل مع نص فاضي بشكل معقول (تلخيص/ترجمة فاضية).
-    }
-
-    final title = widget.filePath.split('/').last;
-    switch (feature) {
-      case 'summarize':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => SummarizeScreen(initialText: text)));
-        break;
-      case 'chat':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(documentText: text, documentTitle: title)));
-        break;
-      case 'translate':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => TranslateScreen(initialText: text)));
-        break;
-      case 'read_aloud':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => TtsReaderScreen(initialText: text, title: title)));
-        break;
-    }
-  }
-
   Future<void> _loadPdfPageSizes() async {
     sf.PdfDocument? document;
     try {
@@ -462,81 +191,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> with SearchModule, Dr
     }
   }
 
-  void _calibratePageTransform({
-    required int pageNumber,
-    required Offset pdfPoint,
-    required Offset viewerPoint,
-  }) {
-    final pageSize = _pdfPageSizes[pageNumber];
-    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
-    if (pageSize == null || box == null || pageSize.width <= 0 || pageSize.height <= 0) {
-      return;
-    }
-
-    final viewport = box.size;
-    if (viewport.width <= 0 || viewport.height <= 0) return;
-
-    // في pageLayoutMode.single نحسب مقياس fit الأساسي ثم نضربه بمستوى
-    // التكبير الحالي. لا نعتمد
-    // على هوامش مفترضة: الـorigin يُستخرج من النقطة الفعلية التي أعادها
-    // Syncfusion، لذلك أي padding داخلي يدخل في المعايرة تلقائيًا.
-    final scaleX = viewport.width / pageSize.width;
-    final scaleY = viewport.height / pageSize.height;
-    final baseScale = scaleX < scaleY ? scaleX : scaleY;
-    final scale = baseScale * editorState.zoomLevel;
-    final origin = viewerPoint - pdfPoint * scale;
-
-    _pageTransforms[pageNumber] = _PdfPageTransform(scale: scale, origin: origin);
-  }
-
-  _PdfPageTransform? _fallbackPageTransform(int pageNumber) {
-    final pageSize = _pdfPageSizes[pageNumber];
-    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
-    if (pageSize == null || box == null || pageSize.width <= 0 || pageSize.height <= 0) {
-      return null;
-    }
-    final viewport = box.size;
-    if (viewport.width <= 0 || viewport.height <= 0) return null;
-    final scaleX = viewport.width / pageSize.width;
-    final scaleY = viewport.height / pageSize.height;
-    final baseScale = scaleX < scaleY ? scaleX : scaleY;
-    final scale = baseScale * editorState.zoomLevel;
-    final rendered = Size(pageSize.width * scale, pageSize.height * scale);
-    final scroll = _controller.scrollOffset;
-
-    // عند التكبير، Syncfusion يحرك الصفحة داخل viewport بواسطة scrollOffset.
-    // نعيد بناء نفس التحويل: تمركز المحور إن بقيت الصفحة أصغر من viewport،
-    // وإلا يبدأ من حافة المحتوى ثم نطرح إزاحة التمرير الحالية.
-    final centeredX =
-        rendered.width < viewport.width ? (viewport.width - rendered.width) / 2 : 0.0;
-    final centeredY =
-        rendered.height < viewport.height ? (viewport.height - rendered.height) / 2 : 0.0;
-
-    return _PdfPageTransform(
-      scale: scale,
-      origin: Offset(
-        centeredX - scroll.dx,
-        centeredY - scroll.dy,
-      ),
-    );
-  }
-
   void _onDocumentLoaded(PdfDocumentLoadedDetails details) {
     unawaited(_loadPdfPageSizes());
-    final formFields = _controller.getFormFields();
-    if (formFields.isNotEmpty) {
-      setState(() => _hasFormFields = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final lang = Provider.of<AppSettingsController>(context, listen: false).languageCode;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppText.t('ed_form_fields_detected', lang)} (${formFields.length})'),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      });
-    }
+    _handleFormFieldsDetected(_controller.getFormFields().length);
   }
 
   void _setAnnotationMode(PdfAnnotationMode mode) {
