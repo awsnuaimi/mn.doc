@@ -152,6 +152,103 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> with SearchModule, Dr
     _controller.zoomLevel = 1.0;
   }
 
+  void _toggleDrawMode() {
+    setState(() {
+      editorState.drawMode = !editorState.drawMode;
+      editorState.eraserMode = false;
+      _shapeMode = null;
+      editorState.shapeEditMode = false;
+      _selectedShape = null;
+      editorState.addTextMode = false;
+      editorState.addImageMode = false;
+      _pendingImageBytes = null;
+      _controller.annotationMode = PdfAnnotationMode.none;
+    });
+  }
+
+  void _toggleEraserMode() {
+    setState(() {
+      editorState.eraserMode = !editorState.eraserMode;
+      editorState.drawMode = false;
+      _shapeMode = null;
+      editorState.shapeEditMode = false;
+      _selectedShape = null;
+      _activeDrawingStroke = null;
+      editorState.addTextMode = false;
+      editorState.addImageMode = false;
+      _pendingImageBytes = null;
+      _controller.annotationMode = PdfAnnotationMode.none;
+    });
+  }
+
+  double _distanceToSegment(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final lengthSquared = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (lengthSquared <= 0.0001) return (p - a).distance;
+    final ap = p - a;
+    final t = ((ap.dx * ab.dx + ap.dy * ab.dy) / lengthSquared)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final closest = a + ab * t;
+    return (p - closest).distance;
+  }
+
+  bool _strokeHitTest(_DrawingStroke stroke, Offset pdfPoint) {
+    if (stroke.points.isEmpty) return false;
+    final tolerance = 10.0 / editorState.zoomLevel + stroke.thickness / 2;
+    if (stroke.points.length == 1) {
+      return (stroke.points.first - pdfPoint).distance <= tolerance;
+    }
+    for (var i = 1; i < stroke.points.length; i++) {
+      if (_distanceToSegment(
+            pdfPoint,
+            stroke.points[i - 1],
+            stroke.points[i],
+          ) <=
+          tolerance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _eraseAt(PointerEvent event) {
+    if (!editorState.eraserMode) return;
+    final pdfPoint = _eventToPdfPoint(event, editorState.currentPage);
+    if (pdfPoint == null) return;
+
+    final hits = _drawingStrokes
+        .where(
+          (stroke) =>
+              stroke.pageNumber == editorState.currentPage &&
+              _strokeHitTest(stroke, pdfPoint),
+        )
+        .toList(growable: false);
+    if (hits.isEmpty) return;
+
+    if (!_eraserGestureChanged) {
+      _pushUndoState();
+      _eraserGestureChanged = true;
+    }
+    setState(() => _drawingStrokes.removeWhere(hits.contains));
+  }
+
+  void _onEraserPointerDown(PointerDownEvent event) {
+    _eraserGestureChanged = false;
+    _eraseAt(event);
+  }
+
+  void _onEraserPointerMove(PointerMoveEvent event) {
+    _eraseAt(event);
+  }
+
+  void _finishEraserGesture() {
+    if (_eraserGestureChanged) {
+      _scheduleAutoSave();
+    }
+    _eraserGestureChanged = false;
+  }
+
   @override
   void dispose() {
     _disposed = true;
