@@ -26,9 +26,9 @@ import 'pdf_editor/widgets/editor_toolbar.dart';
 import 'pdf_editor/widgets/floating_toolbar.dart';
 import 'pdf_editor/widgets/top_toolbar.dart';
 import 'pdf_editor/widgets/pdf_viewer_widget.dart';
-import 'models/image_annotation.dart';
 
 part 'pdf_editor/models/text_annotation.dart';
+part 'pdf_editor/models/image_annotation.dart';
 part 'pdf_editor/models/shape_annotation.dart';
 part 'pdf_editor/models/drawing_stroke.dart';
 part 'pdf_editor/models/editor_snapshot.dart';
@@ -3141,40 +3141,39 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               ),
             ),
           Expanded(
-            child: PdfViewerWidget(
-              child: Stack(
-                key: _viewerKey,
-                children: [
-                  SfPdfViewer.file(
-                    File(widget.filePath),
-                    key: _pdfViewerStateKey,
-                    controller: _controller,
-                    // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
-                    pageLayoutMode: PdfPageLayoutMode.single,
-                    onPageChanged: (details) {
-                      if (!mounted) return;
-                      editor.setCurrentPage(details.newPageNumber);
-                    },
-                    onZoomLevelChanged: (details) {
-                      if (!mounted) return;
-                      editor.setZoom(details.newZoomLevel);
-                      setState(() {
-                        // أي تغيير Zoom يغيّر إسقاط الصفحة على الشاشة، لذلك
-                        // نبطل أي معايرة قديمة. fallback يعيد حساب Scale/Origin
-                        // من zoomLevel + scrollOffset حتى أثناء التكبير.
-                        _pageTransforms.clear();
-                      });
-                    },
-                    onDocumentLoaded: _onDocumentLoaded,
-                    onTap: _handlePdfTap,
-                    // تعليقات Syncfusion المدمجة (تظليل/تسطير/شطب/ملاحظة لاصقة)
-                    // وتعبئة حقول النماذج لا تمر بكودنا الخاص إطلاقًا — بدون
-                    // هذه الاستدعاءات، أي تعديل منها ما كان رح يُحفَظ تلقائيًا.
-                    onAnnotationAdded: (_) => _scheduleAutoSave(),
-                    onAnnotationEdited: (_) => _scheduleAutoSave(),
-                    onAnnotationRemoved: (_) => _scheduleAutoSave(),
-                    onFormFieldValueChanged: (_) => _scheduleAutoSave(),
-                  ),
+            child: Stack(
+              key: _viewerKey,
+              children: [
+                PdfViewerWidget(
+                  filePath: widget.filePath,
+                  controller: _controller,
+                  pdfViewerStateKey: _pdfViewerStateKey,
+                  // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
+                  pageLayoutMode: PdfPageLayoutMode.single,
+                  onPageChanged: (details) {
+                    if (!mounted) return;
+                    editor.setCurrentPage(details.newPageNumber);
+                  },
+                  onZoomLevelChanged: (details) {
+                    if (!mounted) return;
+                    editor.setZoom(details.newZoomLevel);
+                    setState(() {
+                      // أي تغيير Zoom يغيّر إسقاط الصفحة على الشاشة، لذلك
+                      // نبطل أي معايرة قديمة. fallback يعيد حساب Scale/Origin
+                      // من zoomLevel + scrollOffset حتى أثناء التكبير.
+                      _pageTransforms.clear();
+                    });
+                  },
+                  onDocumentLoaded: _onDocumentLoaded,
+                  onTap: _handlePdfTap,
+                  // تعليقات Syncfusion المدمجة (تظليل/تسطير/شطب/ملاحظة لاصقة)
+                  // وتعبئة حقول النماذج لا تمر بكودنا الخاص إطلاقًا — بدون
+                  // هذه الاستدعاءات، أي تعديل منها ما كان رح يُحفَظ تلقائيًا.
+                  onAnnotationAdded: (_) => _scheduleAutoSave(),
+                  onAnnotationEdited: (_) => _scheduleAutoSave(),
+                  onAnnotationRemoved: (_) => _scheduleAutoSave(),
+                  onFormFieldValueChanged: (_) => _scheduleAutoSave(),
+                ),
                   // طبقة عرض النصوص المضافة على الصفحة الحالية فقط
                   ..._annotations
                       .where((a) => a.pageNumber == editor.currentPage)
@@ -3344,7 +3343,6 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                   ),
                 ],
               ),
-            ),
           ),
         ],
       ),
