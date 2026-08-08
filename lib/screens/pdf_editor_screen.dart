@@ -2380,13 +2380,13 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> with SearchModule, Dr
               ),
             ),
           Expanded(
-            child: Stack(
+            child: PdfViewerWidget(
               key: _viewerKey,
               children: [
-                PdfViewerWidget(
-                  filePath: widget.filePath,
+                SfPdfViewer.file(
+                  File(widget.filePath),
+                  key: _pdfViewerStateKey,
                   controller: _controller,
-                  pdfViewerStateKey: _pdfViewerStateKey,
                   // عرض صفحة واحدة في كل مرة لضمان دقة وضع النصوص المضافة
                   pageLayoutMode: PdfPageLayoutMode.single,
                   onPageChanged: (details) {
