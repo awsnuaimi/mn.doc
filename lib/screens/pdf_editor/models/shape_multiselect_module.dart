@@ -8,6 +8,7 @@ mixin ShapeMultiselectModule on State<PdfEditorScreen> {
   Map<int, Size> get _pdfPageSizes;
   void _pushUndoState();
   void _scheduleAutoSave({bool markChanged = true});
+  Offset _shapePasteOffset(_ShapeAnnotation source);
 
   // حقول مملوكة فعليًا بـShapeSelectionModule.
   List<_ShapeAnnotation> get _shapeAnnotations;
