@@ -7,11 +7,19 @@ part of '../../pdf_editor_screen.dart';
 /// كـgetters/setters مجرّدة. نُقل من pdf_editor_screen.dart لتقليل حجمها.
 mixin ShapeSelectionModule on State<PdfEditorScreen> {
   EditorState get editorState;
+  PdfViewerController get _controller;
   Map<int, Size> get _pdfPageSizes;
   Offset? _eventToPdfPoint(PointerEvent event, int pageNumber);
+  double _distanceToSegment(Offset p, Offset a, Offset b);
   void _pushUndoState();
   void _scheduleAutoSave({bool markChanged = true});
   void _toggleShapeInMultiSelection(_ShapeAnnotation shape);
+
+  // حقول من وحدات أخرى تُصفَّر عند الدخول لوضع تعديل الأشكال.
+  _DrawingStroke? get _activeDrawingStroke;
+  set _activeDrawingStroke(_DrawingStroke? value);
+  Uint8List? get _pendingImageBytes;
+  set _pendingImageBytes(Uint8List? value);
 
   // ------- الحقول المشتركة لكل وحدات الأشكال -------
   final List<_ShapeAnnotation> _shapeAnnotations = [];
